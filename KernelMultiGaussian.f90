@@ -19,7 +19,8 @@ module KernelMultiGaussianModule
     type, public :: KernelMultiGaussianType
 
         ! Properties
-        integer :: nx, ny, nz  
+        integer :: nx, ny, nz
+        integer, dimension(3)                          :: kernelSizes 
         integer, dimension(:,:,:), allocatable         :: xGrid, yGrid, zGrid
         doubleprecision, dimension(:), allocatable     :: smoothing, binSize
         doubleprecision, dimension(:,:,:), allocatable :: matrix
@@ -34,7 +35,11 @@ module KernelMultiGaussianModule
         procedure :: Reset         => prReset 
         procedure :: GenerateGrid  => prGenerateGrid
         procedure :: ComputeMatrix => prComputeMatrix
+        procedure :: ComputeGridEstimateSpans => prComputeGridEstimateSpans
         procedure :: ComputeSecondDerivatives => prComputeSecondDerivatives
+        procedure, private :: prGridEstimateInt
+        procedure, private :: prGridEstimateDP
+        generic            :: GridEstimate  => prGridEstimateInt, prGridEstimateDP
 
     end type
     
@@ -64,6 +69,9 @@ contains
 
         this%smoothing = smoothing 
         this%binSize   = binSize 
+
+        this%kernelSizes(:) = [ 2*nx + 1, 2*ny + 1, 2*nz + 1 ]
+
 
         call this%GenerateGrid(nx, ny, nz)
 
@@ -317,365 +325,116 @@ contains
 
 
 
+    subroutine prGridEstimateInt( this, gridData, gridShape, activeGridIds, nActiveGridIds, outputGridEstimate )
+        !------------------------------------------------------------------------------
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType) :: this
+        integer, dimension(:,:,:), intent(in) :: gridData 
+        integer, dimension(:,:), intent(in) :: activeGridIds
+        integer, intent(in) :: nActiveGridIds
+        doubleprecision, dimension(:,:,:), intent(inout) :: outputGridEstimate ! should be allocated 
+        integer, dimension(2) :: iXGSpan, iYGSpan, iZGSpan
+        integer, dimension(2) :: iXKSpan, iYKSpan, iZKSpan
+        integer, dimension(3) :: gridShape
+        integer :: n
+        !------------------------------------------------------------------------------
+
+
+        ! This could be parallelized with OpenMP
+        do n = 1, nActiveGridIds 
+
+            ! Determine spans
+            call this%ComputeGridEstimateSpans( activeGridIds( n, : ), gridShape, &
+                                                       iXGSpan, iYGSpan, iZGSpan, & 
+                                                       iXKSpan, iYKSpan, iZKSpan  ) 
+
+            ! Compute estimate
+            outputGridEstimate( activeGridIds( n, 1 ), activeGridIds( n, 2 ), activeGridIds( n, 3 ) ) = sum( &
+                gridData( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                this%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+
+        end do
+
+
+    end subroutine prGridEstimateInt
+
+
+
+    subroutine prGridEstimateDP( this, gridData, gridShape, activeGridIds, nActiveGridIds, outputGridEstimate )
+        !------------------------------------------------------------------------------
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType) :: this
+        doubleprecision, dimension(:,:,:), intent(in) :: gridData 
+        integer, dimension(:,:), intent(in) :: activeGridIds
+        integer, intent(in) :: nActiveGridIds
+        doubleprecision, dimension(:,:,:), intent(inout) :: outputGridEstimate ! should be allocated 
+        integer, dimension(2) :: iXGSpan, iYGSpan, iZGSpan
+        integer, dimension(2) :: iXKSpan, iYKSpan, iZKSpan
+        integer, dimension(3) :: gridShape
+        integer :: n
+        !------------------------------------------------------------------------------
+
+
+        ! This could be parallelized with OpenMP
+        do n = 1, nActiveGridIds 
+
+            ! Determine spans
+            call this%ComputeGridEstimateSpans( activeGridIds( n, : ), gridShape, &
+                                                       iXGSpan, iYGSpan, iZGSpan, & 
+                                                       iXKSpan, iYKSpan, iZKSpan  ) 
+
+            ! Compute estimate
+            outputGridEstimate( activeGridIds( n, 1 ), activeGridIds( n, 2 ), activeGridIds( n, 3 ) ) = sum( &
+                gridData( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                this%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+
+        end do
+
+
+    end subroutine prGridEstimateDP
+
+    
+
+    subroutine prComputeGridEstimateSpans( this, gridIndexes, gridShape, &
+                                              iXGSpan, iYGSpan, iZGSpan, &
+                                              iXKSpan, iYKSpan, iZKSpan  )
+        !------------------------------------------------------------------------------
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType) :: this
+        integer, dimension(3), intent(in) :: gridShape
+        integer, dimension(3), intent(in) :: gridIndexes
+        integer, dimension(2), intent(inout) :: iXGSpan, iYGSpan, iZGSpan
+        integer, dimension(2), intent(inout) :: iXKSpan, iYKSpan, iZKSpan
+        !------------------------------------------------------------------------------
+
+        ! Spans in grid 
+        iXGSpan(1) = max( gridIndexes(1) - this%nx, 1)
+        iXGSpan(2) = min( gridIndexes(1) + this%nx, gridShape(1) )
+        iYGSpan(1) = max( gridIndexes(2) - this%ny, 1)
+        iYGSpan(2) = min( gridIndexes(2) + this%ny, gridShape(2) )
+        iZGSpan(1) = max( gridIndexes(3) - this%nz, 1)
+        iZGSpan(2) = min( gridIndexes(3) + this%nz, gridShape(3) )
+
+        ! Spans in kernel matrix
+        iXKSpan = iXGSpan + this%nx - gridIndexes(1) + 1
+        iYKSpan = iYGSpan + this%ny - gridIndexes(2) + 1
+        iZKSpan = iZGSpan + this%nz - gridIndexes(3) + 1
+
+
+    end subroutine prComputeGridEstimateSpans
+
+
+
 end module KernelMultiGaussianModule
-
-
-
-!! THRASH !!
-
-    !        % Loop over dimensions
-    !        for ii=1:d
-    !
-    !            Vi       = V(:,:,:,ii);
-    !
-    !            % This is the weighting of positive values, Eq. A.2
-    !            Vi(Vi>0) = -( sum( Vi(Vi<0) )/sum( Vi(Vi>0) ) )*Vi( Vi>0 );
-    !
-    !            % This is the kernel correction at Appendix A. Eq A.5 
-    !            % to preserve L2-norm
-    !            Vi       = Vi*sqrt( 3/( ( 2^(d+2) )*( pi^( d/2 ) )*( g_div_l(ii,ii)^5 )*sum( sum( sum(Vi.^2,1) , 2 ), 3 ) ) );
-    !
-    !            oth      = 1:d;
-    !
-    !            % Empties the current dimension index, why 
-    !            oth(ii)  = [];
-    !            for jj = oth;
-    !                Vi = Vi/sqrt( g_div_l(ii,jj) );
-    !            end
-    !
-    !            V(:,:,:,ii) = Vi;
-    !
-    !        end
-    !
-    !    end
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    !            ( this%yGrid + 0.5 )*exp( -1*( ( this%yGrid + 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) -  &
-    !            ( this%yGrid - 0.5 )*exp( -1*( ( this%yGrid - 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) )*(&
-    !            ( this%zGrid + 0.5 )*exp( -1*( ( this%zGrid + 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) -  &
-    !            ( this%zGrid - 0.5 )*exp( -1*( ( this%zGrid - 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) )
-    !    
-    !    V(:,:,:,ii) = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( g_div_l(ii,ii)**3 ) ) )*(&
-    !            ( this%xGrid + 0.5 )*exp( -1*( ( this%xGrid + 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) -  &
-    !            ( this%xGrid - 0.5 )*exp( -1*( ( this%xGrid - 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) )*(&
-    !            ( this%yGrid + 0.5 )*exp( -1*( ( this%yGrid + 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) -  &
-    !            ( this%yGrid - 0.5 )*exp( -1*( ( this%yGrid - 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) )*(&
-    !            ( this%zGrid + 0.5 )*exp( -1*( ( this%zGrid + 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) -  &
-    !            ( this%zGrid - 0.5 )*exp( -1*( ( this%zGrid - 0.5 )**2 )/( 2*( g_div_l(ii,ii)**2 ) ) ) )
-    !
-    !
-    !            oth     =1:d;
-    !            oth(ii) =[];
-    !
-    !            % Again ?
-    !            for jj = oth;
-    !                V(:,:,:,ii) = V(:,:,:,ii).*( erf( (z{jj}+1/2)/(g_div_l(ii,jj)*sqrt(2)) )-erf( (z{jj}-1/2)/(g_div_l(ii,jj)*sqrt(2)) ) );
-    !            end
-    !
-    !        end
-
-        ! TOO COMPLICATED, VERIFY IF ANY EFFICIENCY AT ALL
-        !allocate( this%matrix( 2*this%nx + 1, 2*this%ny + 1, 2*this%nz + 1 ) )
-        ! Unfold zeroPositiveMatrix into matrix
-        !W = [ flip(W,1); W(2:end,:,:) ];
-        !W = [flip(W,2), W(:,2:end,:)];
-        !W = cat( 3, flip(W,3), W(:,:,2:end) );
-        !this%matrix( 1:nx,  1:ny+1, 1:nz+1 ) = zeroPositiveMatrix( nx+1:2:-1, :, : )
-        !this%matrix( nx+1:, ny+2: , nz+2:  ) = zeroPositiveMatrix( :, :, : )
-        !this%matrix( nx+1:, ny+2: , nz+2:  ) = zeroPositiveMatrix( :, :, : )
-        !zeroPositiveMatrix = (0.5**nDim)*( &
-        !        ( erf( ( this%xGrid + 0.5 )/( normSmoothing(1)*sqrt(2) ) ) - erf( ( this%xGrid - 0.5 )/( normSmoothing(1)*sqrt(2) ) ) )* &
-        !        ( erf( ( this%yGrid + 0.5 )/( normSmoothing(2)*sqrt(2) ) ) - erf( ( this%yGrid - 0.5 )/( normSmoothing(2)*sqrt(2) ) ) )* &
-        !        ( erf( ( this%zGrid + 0.5 )/( normSmoothing(3)*sqrt(2) ) ) - erf( ( this%zGrid - 0.5 )/( normSmoothing(3)*sqrt(2) ) ) )* &
-        !    )
-
-
-
-    !        ! UNFOLDING SHIT COULD BE IGNORED NOW
-    !        V = [flip(V,1); V(2:end,:,:,:)];
-    !        if d>1;
-    !            V = [flip(V,2),V(:,2:end,:,:)];
-    !        end
-    !        if d>2;
-    !            V = cat(3,flip(V,3),V(:,:,2:end,:));
-    !        end
-    !
-
-
-
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! SOURCE 
-!function kernelDB(d, type, iso, prec, minmax, ranges)
-!    global KDB
-!
-!    disp('kernelDB: entered module')
-!
-!    % Process arguments
-!    if nargin < 2;
-!        type= 'log';
-!    end
-!
-!    if nargin < 3;
-!        % Default 0 1
-!        iso = [ false, true ];
-!    end
-!
-!    if nargin < 4;
-!        prec = 0.05;
-!    end
-!
-!    if nargin < 5;
-!        minmax = [0.25, 20];
-!    end
-!
-!    if nargin < 6;
-!        ranges = [ 3, 4 ];
-!    end
-!
-!    if d == 1;
-!        iso(:) = true;
-!    end
-!
-!    if numel(iso) == 1;
-!        iso = [ iso, iso ];
-!    end
-!    % End process arguments
-!
-!    % Initialize KDB
-!    KDB        = struct();
-!    KDB.type   = type;
-!    KDB.minmax = minmax;
-!
-!    % KDB size is given by discretization between min and max
-!    if strcmp(type,'linear')
-!
-!        hr       = minmax(1):prec:minmax(2);
-!        KDB.sz   = length(hr);
-!        KDB.prec = prec;
-!
-!    elseif strcmp(type,'log')
-!
-!        KDB.sz   = ceil( log( minmax(2)/minmax(1) )/log( 1+prec ) ) + 1;
-!        hr       = logspace( log10( minmax(1) ), log10( minmax(2) ), KDB.sz ); % Generates log spaced vector
-!        KDB.prec = log( hr(2)/hr(1) );
-!
-!    end
-!   
-!
-!    % So, hr is a set of ratios of h over 
-!    % bin size, then objective of this method
-!    % is the generation of a set of precomputed
-!    % values for h/lambda, which are then used 
-!    % to speed up concentration reconstruction
-!
-!
-!    % celldim appears to be the size
-!    % of the local kernel domain
-!    celldim      = ones(1,3);
-!    celldim(1:d) = KDB.sz;
-!
-!    KDB.dens     = cell(celldim);
-!    KDB.curv     = KDB.dens;
-!    skip         = false(1,2);
-!
-!
-!    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-!    disp('kernelDB: loop over celldims ')
-!    for i=1:celldim(1)
-!        for j=1:min(celldim(2),i)
-!            for k=1:celldim(3)
-!                
-!                % An Index
-!                I = [i,j,k];
-!
-!                % Skip to false, again
-!                skip(:) = false;
-!
-!                % Enters with default parameters 
-!                if (d>1) && any(iso);
-!                    if ~all( I(1:d) == i );
-!                        skip( iso ) = true;
-!                    end;
-!                end
-!
-!                % Compute density, corrected
-!                if ~skip(1);
-!                    KDB.dens{i,j,k} = kernelmat( hr(I), ranges(1) );
-!                end
-!
-!                % Compute second dervivate/curvature
-!                if ~skip(2);
-!                    KDB.curv{i,j,k} = kernelmat_curv( repmat( hr(I), [d,1] ),ranges(2) );
-!                end
-!
-!                %keyboard
-!                    
-!            end
-!        end
-!    end
-!
-!    % not
-!    %keyboard
-!    %imshow(KDB.dens{:,:})
-!
-!
-!    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%5
-!    function W = kernelmat( h_div_l, range )
-!        % 
-!        % h_div_l: ratio between smoothing and lambda (bin size)
-!        % 
-!
-!        % Process arguments
-!        if numel(h_div_l) == 1;
-!            h_div_l = h_div_l*ones(1,d);
-!        end
-!
-!        if nargin < 3
-!            range = 3;
-!        end
-!        % End process arguments
-!
-!        % Initialize variables
-!        z = cell( d, 1);
-!        for ii = 1:d
-!            z{ii} = ( 0:1:( range*h_div_l(ii) ) )';
-!        end
-!
-!        % Initialize s with zeros
-!        % and then fill with ones those 
-!        % entries beyond spatial dimensions
-!        s            = zeros(1,d);
-!        s( (d+1):3 ) = 1;
-!
-!        %keyboard
-!
-!        for ii=1:d
-!            s(ii) = length(z{ii});
-!        end
-!
-!        % ndgrid creates a rectangular grid in NDSpace
-!        if d==2;
-!            [ z{1}, z{2} ]       = ndgrid( z{1},z{2} );
-!        elseif d==3;
-!            [ z{1}, z{2}, z{3} ] = ndgrid( z{1},z{2},z{3} );
-!        end
-!
-!        % MultiGaussian kernel evaluation
-!        ii = 1;
-!        W  = ( 1/(2^d) )*( erf( ( z{ii} + 1/2 )/( h_div_l(ii)*sqrt(2) ) )- erf( ( z{ii}-1/2 )/( h_div_l(ii)*sqrt(2) ) ) );
-!        for ii = 2:d;
-!            W = W.*( erf( ( z{ii} + 1/2 )/( h_div_l(ii)*sqrt(2) ) )-erf( (z{ii} - 1/2 )/( h_div_l(ii)*sqrt(2) ) ) );
-!        end
-!
-!        W = [ flip(W,1); W(2:end,:,:) ];
-!
-!        if d>1;
-!            W = [flip(W,2), W(:,2:end,:)];
-!        end
-!
-!        if d>2;
-!            W = cat( 3, flip(W,3), W(:,:,2:end) );
-!        end
-!
-!        % This is the unit volume correction, Eq. A.1
-!        W = W/sum( W(:) );
-!
-!        %if length(z{1}) > 20
-!        %    disp('length z is good')
-!        %    keyboard
-!        %end
-!
-!    end
-!    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-!
-!
-!    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-!    function V = kernelmat_curv(g_div_l,range)
-!
-!        %disp('kernelDB:kernelmat_curv: entered function')
-!
-!        if numel(g_div_l)==1;
-!            g_div_l = g_div_l*ones(d);
-!        end
-!        if nargin<3
-!            range=4;
-!        end
-!
-!        z = cell(d,1);
-!
-!        for ii=1:d
-!            z{ii} = (0:1:(range*max(g_div_l(:,ii))))';
-!        end
-!
-!        s          = zeros(1,d);
-!        s((d+1):3) = 1;
-!
-!        for ii=1:d
-!            s(ii) = length(z{ii});
-!        end
-!
-!        if d==2;
-!            [z{1},z{2}]      = ndgrid(z{1},z{2});
-!        elseif d==3;
-!            [z{1},z{2},z{3}] = ndgrid(z{1},z{2},z{3});
-!        end
-!
-!        V = repmat(zeros(s),[1,1,1,d]);
-!
-!        % Loop over spatial dimensions
-!        for ii = 1:d
-!
-!            V(:,:,:,ii)= -( 1/((2^(d-1/2))*sqrt(pi)*(g_div_l(ii,ii)^3)) )*( (z{ii}+1/2).*exp(-((z{ii}+1/2).^2)/(2*(g_div_l(ii,ii)^2))) - (z{ii}-1/2).*exp( -((z{ii}-1/2).^2)/(2*(g_div_l(ii,ii)^2)) ) );
-!
-!            oth     =1:d;
-!            oth(ii) =[];
-!
-!            % Again ?
-!            for jj = oth;
-!                V(:,:,:,ii) = V(:,:,:,ii).*( erf( (z{jj}+1/2)/(g_div_l(ii,jj)*sqrt(2)) )-erf( (z{jj}-1/2)/(g_div_l(ii,jj)*sqrt(2)) ) );
-!            end
-!
-!        end
-!
-!        V = [flip(V,1); V(2:end,:,:,:)];
-!        if d>1;
-!            V = [flip(V,2),V(:,2:end,:,:)];
-!        end
-!
-!        if d>2;
-!            V = cat(3,flip(V,3),V(:,:,2:end,:));
-!        end
-!
-!        % Loop over dimensions
-!        for ii=1:d
-!
-!            Vi       = V(:,:,:,ii);
-!
-!            % This is the weighting of positive values, Eq. A.2
-!            Vi(Vi>0) = -( sum(Vi(Vi<0) )/sum( Vi(Vi>0) ) )*Vi( Vi>0 );
-!
-!            % This is the kernel correction at Appendix A. Eq A.5 
-!            % to preserve L2-norm
-!            Vi       = Vi*sqrt( 3/( (2^(d+2))*(pi^(d/2))*( g_div_l(ii,ii)^5 )*sum( sum(sum(Vi.^2,1),2),3) ) );
-!
-!            oth      = 1:d;
-!
-!            % Empties the current dimension index, why 
-!            oth(ii)  = [];
-!            for jj = oth;
-!                Vi = Vi/sqrt( g_div_l(ii,jj) );
-!            end
-!
-!            V(:,:,:,ii) = Vi;
-!
-!        end
-!
-!    end
-!    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-!
-! 
-!end
-
