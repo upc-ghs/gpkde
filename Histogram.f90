@@ -111,8 +111,6 @@ contains
             iy = floor( dataPoints( np, 2 )/this%binSizes(2) ) + 1 
             iz = floor( dataPoints( np, 3 )/this%binSizes(3) ) + 1 
 
-            print *, ix, iy, iz, dataPoints( np, : )
-
             ! Increase counter
             this%counts( ix, iy, iz ) = this%counts( ix, iy, iz ) + 1
 
