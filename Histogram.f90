@@ -16,6 +16,8 @@ module HistogramModule
         integer, dimension(:), allocatable         :: nBins
         doubleprecision, dimension(:), allocatable :: binSizes
         doubleprecision                            :: binVolume
+        integer, dimension(:,:), allocatable       :: activeBinIds
+        integer                                    :: nActiveBins
 
     contains
 
@@ -24,6 +26,7 @@ module HistogramModule
         procedure :: Reset         => prReset
         procedure :: ComputeCounts => prComputeCounts
         procedure :: Export        => prExport
+        procedure :: ComputeActiveBinIds => prComputeActiveBinIds
 
     end type 
 
@@ -69,12 +72,14 @@ contains
         class(HistogramType) :: this
         !------------------------------------------------------------------------------
 
-        this%nBins     = 0
-        this%binSizes  = 0d0
-        this%binVolume = 0d0
+        this%nBins       = 0
+        this%nActiveBins = 0 
+        this%binSizes    = 0d0
+        this%binVolume   = 0d0
 
         deallocate( this%counts )
-
+        deallocate( this%activeBinIds ) 
+        
 
     end subroutine prReset
 
@@ -96,7 +101,7 @@ contains
         !------------------------------------------------------------------------------
 
         nPointsShape = shape(dataPoints)
-      
+        
         ! Verify the 1D, 2D case
 
         ! This could be done with OpenMP 
@@ -106,6 +111,8 @@ contains
             iy = floor( dataPoints( np, 2 )/this%binSizes(2) ) + 1 
             iz = floor( dataPoints( np, 3 )/this%binSizes(3) ) + 1 
 
+            print *, ix, iy, iz, dataPoints( np, : )
+
             ! Increase counter
             this%counts( ix, iy, iz ) = this%counts( ix, iy, iz ) + 1
 
@@ -113,6 +120,39 @@ contains
        
 
     end subroutine prComputeCounts
+
+
+
+    subroutine prComputeActiveBinIds( this )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class(HistogramType) :: this
+        integer              :: ix, iy, iz
+        integer              :: icount = 1 
+        !------------------------------------------------------------------------------
+
+        this%nActiveBins = count( this%counts/=0 )
+
+        allocate( this%activeBinIds( this%nActiveBins , 3 ) )
+        
+        ! This could be in parallel with OpenMP (?)
+        do ix = 1, this%nBins(1)
+            do iy = 1, this%nBins(2)
+                do iz = 1, this%nBins(3)
+                    if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
+                    this%activeBinIds( icount , : ) = [ ix, iy, iz ]
+                    icount = icount + 1
+                end do
+            end do
+        end do
+
+
+    end subroutine prComputeActiveBinIds
 
 
 
