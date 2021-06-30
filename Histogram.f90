@@ -14,7 +14,7 @@ module HistogramModule
         ! Properties
         integer, dimension(:,:,:), allocatable     :: counts 
         integer, dimension(:), allocatable         :: nBins
-        doubleprecision, dimension(:), allocatable :: binSizes
+        doubleprecision, dimension(:), allocatable :: binSize
         doubleprecision                            :: binVolume
         integer, dimension(:,:), allocatable       :: activeBinIds
         integer                                    :: nActiveBins
@@ -35,7 +35,7 @@ module HistogramModule
 contains
 
 
-    subroutine prInitialize( this, nBins, binSizes )
+    subroutine prInitialize( this, nBins, binSize )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -45,12 +45,12 @@ contains
         implicit none 
         class(HistogramType)          :: this
         integer, dimension(:)         :: nBins
-        doubleprecision, dimension(:) :: binSizes
+        doubleprecision, dimension(:) :: binSize
         !------------------------------------------------------------------------------
 
         this%nBins     = nBins
-        this%binSizes  = binSizes
-        this%binVolume = product( binSizes )
+        this%binSize   = binSize
+        this%binVolume = product( binSize )
 
         ! Verify what happens in the 2D case
 
@@ -74,7 +74,7 @@ contains
 
         this%nBins       = 0
         this%nActiveBins = 0 
-        this%binSizes    = 0d0
+        this%binSize     = 0d0
         this%binVolume   = 0d0
 
         deallocate( this%counts )
@@ -95,7 +95,7 @@ contains
         implicit none 
         class(HistogramType) :: this
         doubleprecision, dimension(:,:)    :: dataPoints
-        integer                            :: nPoints
+        !integer                            :: nPoints
         integer, dimension(2)              :: nPointsShape
         integer                            :: np, ix, iy, iz
         !------------------------------------------------------------------------------
@@ -107,9 +107,9 @@ contains
         ! This could be done with OpenMP 
         do np = 1, nPointsShape(1)
             
-            ix = floor( dataPoints( np, 1 )/this%binSizes(1) ) + 1 
-            iy = floor( dataPoints( np, 2 )/this%binSizes(2) ) + 1 
-            iz = floor( dataPoints( np, 3 )/this%binSizes(3) ) + 1 
+            ix = floor( dataPoints( np, 1 )/this%binSize(1) ) + 1 
+            iy = floor( dataPoints( np, 2 )/this%binSize(2) ) + 1 
+            iz = floor( dataPoints( np, 3 )/this%binSize(3) ) + 1 
 
             ! Increase counter
             this%counts( ix, iy, iz ) = this%counts( ix, iy, iz ) + 1
