@@ -22,10 +22,16 @@ module KernelMultiGaussianModule
         ! Properties
         integer :: nx, ny, nz
         integer :: snx, sny, snz
-        integer, dimension(3)                          :: kernelSize 
-        integer, dimension(:,:,:), allocatable         :: xGrid, yGrid, zGrid
-        doubleprecision, dimension(:), allocatable     :: smoothing, binSize
+        integer :: curvatureGridSize = 0 
+        integer, dimension(3) :: positiveGridSize = 0 
+        doubleprecision, dimension(3) :: binSize     = 0d0
+        doubleprecision, dimension(3) :: smoothing   = 0d0
+        doubleprecision, dimension(3) :: gBandwidths = 0d0
+        integer, dimension(:,:,:), allocatable :: xGrid, yGrid, zGrid
+        integer, dimension(:,:,:), allocatable :: zpxGrid, zpyGrid, zpzGrid
+        integer, dimension(:,:,:), allocatable :: sDXGrid, sDYGrid, sDZGrid
         doubleprecision, dimension(:,:,:), allocatable :: matrix
+        doubleprecision, dimension(:,:,:), allocatable :: zpmatrix
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeX
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeY
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeZ
@@ -33,16 +39,17 @@ module KernelMultiGaussianModule
     contains
 
         ! Procedures
-        procedure :: Initialize    => prInitialize 
-        procedure :: Reset         => prReset 
-        procedure :: GenerateGrid  => prGenerateGrid
-        procedure :: InitializeGrid  => prInitializeGrid
-        procedure :: ComputeMatrix => prComputeMatrix
+        procedure :: Initialize       => prInitialize 
+        procedure :: Reset            => prReset 
+        procedure :: GenerateGrid     => prGenerateGrid
+        procedure :: InitializeGrid   => prInitializeGrid
+        procedure :: InitializeSDGrid => prInitializeSDGrid
+        procedure :: ComputeMatrix    => prComputeMatrix
         procedure :: ComputeSecondDerivatives => prComputeSecondDerivatives
         procedure :: ComputeGridEstimateSpans => prComputeGridEstimateSpans
         procedure :: ComputeGridEstimateSpansSecond => prComputeGridEstimateSpansSecond
-        procedure :: ComputeCurvatureGridEstimates => prComputeCurvatureGridEstimates
-        procedure :: ComputeRoughnessGridEstimates => prComputeRoughnessGridEstimates
+        procedure :: ComputeCurvatureGridEstimates  => prComputeCurvatureGridEstimates
+        procedure :: ComputeRoughnessGridEstimates  => prComputeRoughnessGridEstimates
 
         procedure, private :: prGridEstimateInt
         procedure, private :: prGridEstimateDP
@@ -54,6 +61,10 @@ module KernelMultiGaussianModule
                                                     prGridEstimateDPMulti
 
         procedure :: Setup => prSetup
+        procedure :: SetupSecondDerivatives => prSetupSecondDerivatives
+
+        procedure :: GenerateZeroPositiveGrid  => prGenerateZeroPositiveGrid
+        procedure :: ComputeZeroPositiveMatrix => prComputeZeroPositiveMatrix
 
     end type
     
@@ -119,32 +130,86 @@ contains
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class(KernelMultiGaussianType) :: this 
+        class(KernelMultiGaussianType)            :: this 
         doubleprecision, dimension(3), intent(in) :: smoothing
-        !integer, intent(in) :: nx, ny, nz 
-        integer, dimension(3) :: positiveGridSize 
-        !doubleprecision, dimension(:) :: binSize
+        integer, dimension(3) :: positiveGridSize
+        logical               :: newSmoothing, newGrid = .false. 
         !------------------------------------------------------------------------------
-
-        this%smoothing   = smoothing
 
         ! THIS 3 COMES FROM THE RANGE INPUT VARIABLE AT BAKS
         positiveGridSize = floor( 3*smoothing/this%binSize )
 
-        ! Assign binSize 
-        !this%binSize = binSize 
+        ! If the grid size remains, do not rebuild
+        if ( all( positiveGridSize .ne. this%positiveGridSize ) ) then 
+            newGrid = .true.
+            this%positiveGridSize = positiveGridSize
+            call this%GenerateGrid( positiveGridSize(1), positiveGridSize(2), positiveGridSize(3) )
+        end if
 
-        !this%nx = nx
-        !this%ny = ny
-        !this%nz = nz
-        !this%smoothing = smoothing 
-        !this%kernelSize(:) = [ 2*nx + 1, 2*ny + 1, 2*nz + 1 ]
-        !call this%GenerateGrid(nx, ny, nz)
-        call this%GenerateGrid( positiveGridSize(1), positiveGridSize(2), positiveGridSize(3) )
-        call this%ComputeMatrix()
+        ! If the smoothing remains do not reassign
+        if ( all( smoothing .ne. this%smoothing ) ) then 
+            newSmoothing = .true.
+            this%smoothing = smoothing
+        end if
+
+        ! If any of the above, recompute matrix
+        if ( newSmoothing .or. newGrid ) then 
+            call this%ComputeMatrix()
+        end if
+
+
+        return
 
 
     end subroutine prSetup
+
+
+    
+    subroutine prSetupSecondDerivatives( this, gBandwidths )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType)            :: this 
+        doubleprecision, dimension(3), intent(in) :: gBandwidths
+        integer :: curvatureGridSize
+        logical :: newBandwidth, newGrid = .false. 
+        !------------------------------------------------------------------------------
+
+        ! Value 4 in this place comes from a RANGE argument in BAKS
+        ! Compute the size
+        curvatureGridSize = max( &
+            maxval( floor( 4*gBandwidths(1)/this%binSize ) ), &
+            maxval( floor( 4*gBandwidths(2)/this%binSize ) ), & 
+            maxval( floor( 4*gBandwidths(3)/this%binSize ) ) )
+
+        ! If the size remains, do not rebuild
+        if ( curvatureGridSize .ne. this%curvatureGridSize ) then 
+            ! Initialize grid
+            newGrid = .true.
+            this%curvatureGridSize = curvatureGridSize
+            call this%InitializeSDGrid( curvatureGridSize )
+        end if
+
+        ! If the bandwidth remains, do not reassign
+        !if ( all( gBandwidths .ne. this%gBandwidths ) ) then
+            newBandwidth = .true.
+            this%gBandwidths = gBandwidths
+        !end if
+
+        ! If any of the above, recompute derivatives
+        !if ( newBandwidth .or. newGrid ) then
+            call this%ComputeSecondDerivatives( gBandwidths )
+        !end if
+
+
+        return
+
+
+    end subroutine prSetupSecondDerivatives
 
 
 
@@ -158,7 +223,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class(KernelMultiGaussianType) :: this 
-        doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(:), allocatable :: hLambda
         !------------------------------------------------------------------------------
 
         ! Suppose initialized grid
@@ -176,7 +241,8 @@ contains
             ( erf( ( this%zGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( this%zGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
 
         ! Normalization correction
-        this%matrix = this%matrix/sum( this%matrix )
+        ! REACTIVATE
+        !this%matrix = this%matrix/sum( this%matrix )
 
 
 
@@ -184,7 +250,44 @@ contains
 
 
 
-    subroutine prComputeSecondDerivatives( this, bandwidths )
+    subroutine prComputeZeroPositiveMatrix( this )
+        !------------------------------------------------------------------------------
+        ! Evaluate averaged MultiGaussian kernel in a 2D or 3D matrix depending
+        ! on the number of spatial dimensions
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType) :: this 
+        doubleprecision, dimension(:), allocatable :: hLambda
+        !------------------------------------------------------------------------------
+
+        ! Suppose initialized grid
+        ! Note: grid initialization requires a ratio h/lambda and a "range"
+        ! which define nx, ny, nz, that is, the maximum integer value of 
+        ! the zero positive grid. Both h/lambda and range could be dimension
+        ! dependent.
+
+        ! Compute normalized smoothing h/lambda
+        hLambda = this%smoothing/this%binSize
+
+        this%zpmatrix = (0.5**nDim)*( &
+            ( erf( ( this%zpxGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( this%zpxGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
+            ( erf( ( this%zpyGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( this%zpyGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
+            ( erf( ( this%zpzGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( this%zpzGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
+
+        ! Normalization correction
+        !this%zpmatrix = this%zpmatrix/sum( this%zpmatrix )
+
+
+
+    end subroutine prComputeZeroPositiveMatrix
+
+
+
+
+    subroutine prComputeSecondDerivatives( this, gBandwidths )
         !------------------------------------------------------------------------------
         ! 
         ! 
@@ -194,13 +297,11 @@ contains
         !------------------------------------------------------------------------------
         implicit none 
         class(KernelMultiGaussianType) :: this 
+        doubleprecision, dimension(3), intent(in)      :: gBandwidths
+        doubleprecision, dimension(3)                  :: gLambda
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeX
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeY
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeZ
-        doubleprecision, dimension(:), allocatable     :: gLambda
-        integer, dimension(:,:,:), allocatable         :: xGrid, yGrid, zGrid
-        integer :: gridSize
-        doubleprecision, dimension(:) :: bandwidths
         doubleprecision :: aXDenom, aXNum, aXCoeff
         doubleprecision :: aYDenom, aYNum, aYCoeff
         doubleprecision :: aZDenom, aZNum, aZCoeff
@@ -209,47 +310,17 @@ contains
         ! Grid size for these derivatives is not necessarily 
         ! the same as kernel matrix
 
-        gLambda  = bandwidths(1)/this%binSize
-        ! Value 4 in this place comes from a RANGE argument in BAKS
-        gridSize = max( maxval( floor( 4*bandwidths(1)/this%binSize ) ), &
-            maxval( floor( 4*bandwidths(2)/this%binSize ) ), & 
-            maxval( floor( 4*bandwidths(3)/this%binSize ) ) )
-
-        ! Initialize grid
-        call this%InitializeGrid( gridSize, xGrid, yGrid, zGrid )
-
         ! X
+        gLambda = gBandwidths(1)/this%binSize
         secondDerivativeX = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(1)**3 ) ) )*(&
-            ( xGrid + 0.5 )*exp( -1*( ( xGrid + 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) - &
-            ( xGrid - 0.5 )*exp( -1*( ( xGrid - 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) )*&
-            ( erf( ( yGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
-              erf( ( yGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )*&
-            ( erf( ( zGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
-              erf( ( zGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
+            ( this%sDXGrid + 0.5 )*exp( -1*( ( this%sDXGrid + 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) - &
+            ( this%sDXGrid - 0.5 )*exp( -1*( ( this%sDXGrid - 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) )*&
+            ( erf( ( this%sDYGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
+              erf( ( this%sDYGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )*&
+            ( erf( ( this%sDZGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
+              erf( ( this%sDZGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
 
-        ! Y
-        gLambda           = bandwidths(2)/this%binSize
-        secondDerivativeY = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(2)**3 ) ) )*(&
-            ( yGrid + 0.5 )*exp( -1*( ( yGrid + 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) - &
-            ( yGrid - 0.5 )*exp( -1*( ( yGrid - 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) )*&
-            ( erf( ( xGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
-              erf( ( xGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( zGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
-              erf( ( zGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
-
-        ! Z
-        gLambda           = bandwidths(3)/this%binSize
-        secondDerivativeZ = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(3)**3 ) ) )*(&
-            ( zGrid + 0.5 )*exp( -1*( ( zGrid + 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) - &
-            ( zGrid - 0.5 )*exp( -1*( ( zGrid - 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) )*&
-            ( erf( ( xGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
-              erf( ( xGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( yGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
-              erf( ( yGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )
-
-
-        ! Compute kernel corrections 
-        ! X
+        ! X kernel corrections 
         aXNum   = sum( secondDerivativeX, mask=( secondDerivativeX < 0 ) )
         aXDenom = sum( secondDerivativeX, mask=( secondDerivativeX > 0 ) )
         aXCoeff = -1*aXNum/aXDenom
@@ -263,7 +334,18 @@ contains
             )
         secondDerivativeX = secondDerivativeX/sqrt( gLambda(2) )/sqrt( gLambda(3) )
 
+
         ! Y
+        gLambda = gBandwidths(2)/this%binSize
+        secondDerivativeY = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(2)**3 ) ) )*(&
+            ( this%sDYGrid + 0.5 )*exp( -1*( ( this%sDYGrid + 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) - &
+            ( this%sDYGrid - 0.5 )*exp( -1*( ( this%sDYGrid - 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) )*&
+            ( erf( ( this%sDXGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
+              erf( ( this%sDXGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
+            ( erf( ( this%sDZGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
+              erf( ( this%sDZGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
+
+        ! Y kernel corrections
         aYNum   = sum( secondDerivativeY, mask=( secondDerivativeY < 0 ) )
         aYDenom = sum( secondDerivativeY, mask=( secondDerivativeY > 0 ) )
         aYCoeff = -1*aYNum/aYDenom
@@ -277,7 +359,18 @@ contains
             )
         secondDerivativeY = secondDerivativeY/sqrt( gLambda(1) )/sqrt( gLambda(3) )
 
+
         ! Z
+        gLambda = gBandwidths(3)/this%binSize
+        secondDerivativeZ = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(3)**3 ) ) )*(&
+            ( this%sDZGrid + 0.5 )*exp( -1*( ( this%sDZGrid + 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) - &
+            ( this%sDZGrid - 0.5 )*exp( -1*( ( this%sDZGrid - 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) )*&
+            ( erf( ( this%sDXGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
+              erf( ( this%sDXGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
+            ( erf( ( this%sDYGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
+              erf( ( this%sDYGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )
+
+        ! Z kernel corrections
         aZNum   = sum( secondDerivativeZ, mask=( secondDerivativeZ < 0 ) )
         aZDenom = sum( secondDerivativeZ, mask=( secondDerivativeZ > 0 ) )
         aZCoeff = -1*aZNum/aZDenom
@@ -306,6 +399,40 @@ contains
 
     end subroutine prComputeSecondDerivatives
 
+
+
+    subroutine prInitializeSDGrid( this, gridSize )
+        !------------------------------------------------------------------------------
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType) :: this 
+        integer :: nx, ny, nz  
+        integer :: gridSize
+        integer :: i 
+        !------------------------------------------------------------------------------
+
+
+        nx = gridSize
+        ny = gridSize
+        nz = gridSize
+
+        this%sDXGrid = spread( spread( [(i, i= -nx, nx, 1)], 2, 2*ny + 1 ), 3, 2*nz + 1 )
+        this%sDYGrid = spread( spread( [(i, i= -ny, ny, 1)], 1, 2*nx + 1 ), 3, 2*nz + 1 )
+        this%sDZGrid = reshape(spread( [(i, i= -nz, nz, 1)], 1, (2*nx + 1)*( 2*ny + 1 )  ), &
+                                                    [ 2*nx + 1, 2*ny + 1, 2*nz + 1 ] )
+
+        ! WILL BE RENAMED/REMOVED
+        this%snx = gridSize
+        this%sny = gridSize
+        this%snz = gridSize
+
+        return
+
+
+    end subroutine prInitializeSDGrid
 
 
 
@@ -353,6 +480,9 @@ contains
 
 
 
+
+
+
     subroutine prGenerateGrid(this, nx, ny, nz)
         !------------------------------------------------------------------------------
         ! Generate grid indexes, both negative and positive, 
@@ -372,9 +502,12 @@ contains
         integer :: i 
         !------------------------------------------------------------------------------
 
+        ! WILL BE REMOVED
         this%nx = nx
         this%ny = ny
         this%nz = nz
+
+
 
         this%xGrid = spread( spread( [(i, i= -nx, nx, 1)], 2, 2*ny + 1 ), 3, 2*nz + 1 )
         this%yGrid = spread( spread( [(i, i= -ny, ny, 1)], 1, 2*nx + 1 ), 3, 2*nz + 1 )
@@ -404,9 +537,9 @@ contains
         !------------------------------------------------------------------------------
 
         ! The quarter grid
-        this%xGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
-        this%yGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
-        this%zGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 )  ), [ nx + 1, ny + 1, nz + 1 ] )
+        this%zpxGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
+        this%zpyGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
+        this%zpzGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 )  ), [ nx + 1, ny + 1, nz + 1 ] )
 
     end subroutine prGenerateZeroPositiveGrid
 
@@ -561,7 +694,6 @@ contains
 
 
 
-
     subroutine prGridEstimateIntMulti( this, gridData, gridShape, &
         nActiveGridIds, activeGridIds, smoothing, outputGridEstimate )
         !------------------------------------------------------------------------------
@@ -591,17 +723,13 @@ contains
             iY = activeGridIds( n, 2 )
             iZ = activeGridIds( n, 3 )
 
-            ! At this point verify if there is 
-            ! a change in grid size. If there is, 
-            ! recompute size
+            ! Setup kernel matrix
             call this%Setup( smoothing( n, : ) )
 
             ! Determine spans
             call this%ComputeGridEstimateSpans( activeGridIds( n, : ), gridShape, &
                                                        iXGSpan, iYGSpan, iZGSpan, & 
                                                        iXKSpan, iYKSpan, iZKSpan  ) 
-
-            
 
             ! Compute estimate
             outputGridEstimate( iX, iY, iZ ) = sum( &
@@ -644,9 +772,7 @@ contains
             iY = activeGridIds( n, 2 )
             iZ = activeGridIds( n, 3 )
 
-            ! At this point verify if there is 
-            ! a change in grid size. If there is, 
-            ! recompute size
+            ! Setup kernel matrix
             call this%Setup( smoothing( n, : ) )
 
             ! Determine spans
@@ -690,20 +816,22 @@ contains
         !------------------------------------------------------------------------------
 
 
-        ! REMEMBER THAT SOULD BE DIVIDED BY BIN VOLUME
-        ! REMEMBER THAT THIS EMPLOYS G SMOOTHING FOR SECOND DERS
-
         ! This could be parallelized with OpenMP
+        ! NOT WORKING
+        !!$omp parallel do &
+        !!$omp private(iX, iY, iZ)                & 
+        !!$omp private(iXGSpan, iYGSpan, iZGSpan) &
+        !!$omp private(iXKSpan, iYKSpan, iZKSpan) &
+        !!$omp firstprivate( this )
         do n = 1, nActiveGridIds 
     
-            
-            call this%ComputeSecondDerivatives( gBandwidths( n, : ) )
-
-
             ! Local indexes
             iX = activeGridIds( n, 1 )
             iY = activeGridIds( n, 2 )
             iZ = activeGridIds( n, 3 )
+
+            ! Setup second derivatives
+            call this%SetupSecondDerivatives( gBandwidths( n, : ) )
 
             ! Determine spans
             call this%ComputeGridEstimateSpansSecond( activeGridIds( n, : ), gridShape, &
@@ -724,6 +852,7 @@ contains
                 this%secondDerivativeZ( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
 
         end do
+        !!$omp end parallel do 
 
 
     end subroutine prComputeCurvatureGridEstimates
@@ -830,6 +959,19 @@ end module KernelMultiGaussianModule
 
 
 
+            ! THIS SHOULD BE EXECUTED ONLY IF
+            ! THE GRID SIZE IS DIFFERENT
+            ! THE METHOD FOR SECOND DERIVATIVES PERFORM 
+            ! THE VERIFICATION WITHIN ITSELF
+
+            !! Value 4 in this place comes from a RANGE argument in BAKS
+            !gridSize = max( maxval( floor( 4*bandwidths(1)/this%binSize ) ), &
+            !    maxval( floor( 4*bandwidths(2)/this%binSize ) ), & 
+            !    maxval( floor( 4*bandwidths(3)/this%binSize ) ) )
+
+            !! Initialize grid
+            !call this%InitializeGrid( gridSize, xGrid, yGrid, zGrid )
+            !call this%ComputeSecondDerivatives( gBandwidths( n, : ) )
 
 
 

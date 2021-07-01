@@ -11,8 +11,12 @@ program testgpkde
     doubleprecision, dimension(3)             :: binSize            = [ 1.0, 1.0, 1.0 ]
     doubleprecision, dimension(10000,3)       :: dataPoints
     integer :: n, ix, iy, iz
+    integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+    doubleprecision :: elapsedTime
     !----------------------------------------------------------------------
 
+    ! TIC
+    call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
     ! Define data points
     call random_number(dataPoints)
@@ -37,9 +41,14 @@ program testgpkde
         print *, gpkde%histogram%counts( ix, iy, iz ), '|', gpkde%densityEstimate(n)
     end do
 
-
     if (allocated(gpkde)) deallocate(gpkde)
 
+    ! TOC
+    call system_clock(clockCountStop, clockCountRate, clockCountMax)
+
+    ! Write elapsedTime
+    elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+    write(*, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
 
 
 end program testgpkde

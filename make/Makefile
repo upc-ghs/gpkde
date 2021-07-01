@@ -18,6 +18,7 @@ ${SOURCEDIR1}
 # Define the Fortran compile flags
 FC = gfortran
 FFLAGS = -g -pg -fbacktrace -fopenmp -Wall -Wextra -fbounds-check
+#FFLAGS = -O2 -g -pg -fbacktrace -fopenmp 
 #FFLAGS = -O2 -fbacktrace -fopenmp 
 
 # Define the C compile flags
@@ -31,7 +32,8 @@ OBJECTS = \
 $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridProjectedKDE.o \
-$(OBJDIR)/testgpkde.o
+$(OBJDIR)/testunfoldmatrix.o
+#$(OBJDIR)/testgpkde.o
 
 # Define task functions
 
