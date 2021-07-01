@@ -1,3 +1,6 @@
 *.o
 *.mod
-
+*.swp
+*.swo
+make/objtemp
+make/gpkde

@@ -158,12 +158,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class(KernelMultiGaussianType) :: this 
-        !integer, intent(in) :: nx, ny, nz  
-        ! integer :: nDimensions
-        !integer :: nDim
-        !doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         doubleprecision, dimension(:), allocatable     :: hLambda
-        !doubleprecision :: sqrtTwo 
         !------------------------------------------------------------------------------
 
         ! Suppose initialized grid
@@ -171,10 +166,6 @@ contains
         ! which define nx, ny, nz, that is, the maximum integer value of 
         ! the zero positive grid. Both h/lambda and range could be dimension
         ! dependent.
-        !sqrtTwo = sqrt(2.0)
-
-        ! Should come from the outside
-        !nDim = 3
 
         ! Compute normalized smoothing h/lambda
         hLambda = this%smoothing/this%binSize
@@ -834,6 +825,14 @@ contains
 
 
 end module KernelMultiGaussianModule
+
+
+
+
+
+
+
+
 
 
 
