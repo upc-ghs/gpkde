@@ -139,9 +139,12 @@ contains
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
 
         doubleprecision, dimension(:,:), allocatable   :: kernelSmoothing
+        doubleprecision, dimension(:,:), allocatable   :: oldKernelSmoothing
         doubleprecision, dimension(:),   allocatable   :: kernelSmoothingScale
         doubleprecision, dimension(:,:), allocatable   :: kernelSigmaSupport
         doubleprecision, dimension(:),   allocatable   :: kernelSigmaSupportScale
+        doubleprecision, dimension(:,:), allocatable   :: relativeSmoothingChange
+        
 
         doubleprecision, dimension(:,:), allocatable   :: curvatureBandwidth
 
@@ -170,7 +173,7 @@ contains
         ! THAT, THE VARIABLE IS "FLATTENED"
 
         integer :: n, m
-        integer :: nOptLoops = 10
+        integer :: nOptLoops = 5
         integer :: iXG, iYG, iZG
 
         !------------------------------------------------------------------------------
@@ -180,6 +183,8 @@ contains
         call this%histogram%ComputeCounts( dataPoints )
         print *, '*** Computing histogram active ids' 
         call this%histogram%ComputeActiveBinIds()
+        print *, this%histogram%nActiveBins
+        print *, '**********************************' 
 
         ! Allocate array variables
         allocate( kernelSmoothing( this%histogram%nActiveBins, nDim ) )
@@ -211,6 +216,7 @@ contains
 
         ! Initialize smoothing and sigma support
         kernelSmoothing         = spread( this%initialSmoothing, 1, this%histogram%nActiveBins )
+        oldKernelSmoothing      = kernelSmoothing
         kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
         kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
@@ -312,7 +318,18 @@ contains
                          roughnessXXActive, roughnessYYActive, roughnessZZActive, &
                                            kernelSmoothing, kernelSmoothingScale  )
         
-            print *, kernelSmoothing(1,:) 
+
+            print *, kernelSmoothing(1,:)
+
+            relativeSmoothingChange = abs( ( kernelSmoothing - oldKernelSmoothing )/oldKernelSmoothing )
+
+            print *, 'MAX CHANGE  ', maxval( relativeSmoothingChange )
+            print *, 'MIN CHANGE  ', minval( relativeSmoothingChange )
+            print *, 'MEAN CHANGE ', sum( relativeSmoothingChange )/(3*this%histogram%nActiveBins)
+
+            oldKernelSmoothing = kernelSmoothing
+
+
         ! End Optimization Loop !
         end do
 
@@ -337,6 +354,7 @@ contains
 
         ! Deallocate things
         deallocate( kernelSmoothing )
+        deallocate( oldKernelSmoothing )
         deallocate( kernelSigmaSupport )
 
         ! Arrays
