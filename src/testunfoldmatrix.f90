@@ -22,10 +22,9 @@ program testkernel
 
     !----------------------------------------------------------------------
 
-
     nx = 100
-    ny = 100
-    nz = 10
+    ny = 50
+    nz = 40
 
     allocate( dpzpxarray( 2*nx + 1, 2*ny +1, 2*nz +1 ) )
 
@@ -39,8 +38,6 @@ program testkernel
     !-------------------------------------------------------------
     call kernel%GenerateGrid( nx, ny, nz )
     call kernel%ComputeMatrix()
-
-
     !-------------------------------------------------------------
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)
@@ -49,7 +46,7 @@ program testkernel
     write(*, '(1X,A,E15.10,A)') 'NORMAL Elapsed time = ', elapsedTime, ' seconds'
     !-------------------------------------------------------------
 
-    !print *, '*****************************************'
+    print *, '*****************************************'
     !do m= 1, 2*nz+1
     !    print *, '::',m, '------------------------------'
     !    do n= 1, 2*nx+1
@@ -67,14 +64,14 @@ program testkernel
 
     call kernel%GenerateZeroPositiveGrid( nx, ny, nz )
     call kernel%ComputeZeroPositiveMatrix()
-    dpzpxarray( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = kernel%zpmatrix                                   ! Cuadrant III 
-    dpzpxarray( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = kernel%zpmatrix(nx+1:2:-1, :         , :        ) ! Cuadrant OII
-    dpzpxarray( nx+1:2*nx+1 , 1:ny        , nz+1:2*nz+1 ) = kernel%zpmatrix(:        , ny+1:2:-1 , :        ) ! Cuadrant IOI
-    dpzpxarray( 1:nx        , 1:ny        , nz+1:2*nz+1 ) = kernel%zpmatrix(nx+1:2:-1, ny+1:2:-1 , :        ) ! Cuadrant OOI
-    dpzpxarray( nx+1:2*nx+1 , ny+1:2*ny+1 , 1:nz        ) = kernel%zpmatrix(:        , :         , nz+1:2:-1) ! Cuadrant IIO 
-    dpzpxarray( 1:nx        , ny+1:2*ny+1 , 1:nz        ) = kernel%zpmatrix(nx+1:2:-1, :         , nz+1:2:-1) ! Cuadrant OIO
-    dpzpxarray( nx+1:2*nx+1 , 1:ny        , 1:nz        ) = kernel%zpmatrix(:        , ny+1:2:-1 , nz+1:2:-1) ! Cuadrant IOO
-    dpzpxarray( 1:nx        , 1:ny        , 1:nz        ) = kernel%zpmatrix(nx+1:2:-1, ny+1:2:-1 , nz+1:2:-1) ! Cuadrant OOO
+    !dpzpxarray( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = kernel%zpmatrix                                   ! Cuadrant III 
+    !dpzpxarray( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = kernel%zpmatrix(nx+1:2:-1, :         , :        ) ! Cuadrant OII
+    !dpzpxarray( nx+1:2*nx+1 , 1:ny        , nz+1:2*nz+1 ) = kernel%zpmatrix(:        , ny+1:2:-1 , :        ) ! Cuadrant IOI
+    !dpzpxarray( 1:nx        , 1:ny        , nz+1:2*nz+1 ) = kernel%zpmatrix(nx+1:2:-1, ny+1:2:-1 , :        ) ! Cuadrant OOI
+    !dpzpxarray( nx+1:2*nx+1 , ny+1:2*ny+1 , 1:nz        ) = kernel%zpmatrix(:        , :         , nz+1:2:-1) ! Cuadrant IIO 
+    !dpzpxarray( 1:nx        , ny+1:2*ny+1 , 1:nz        ) = kernel%zpmatrix(nx+1:2:-1, :         , nz+1:2:-1) ! Cuadrant OIO
+    !dpzpxarray( nx+1:2*nx+1 , 1:ny        , 1:nz        ) = kernel%zpmatrix(:        , ny+1:2:-1 , nz+1:2:-1) ! Cuadrant IOO
+    !dpzpxarray( 1:nx        , 1:ny        , 1:nz        ) = kernel%zpmatrix(nx+1:2:-1, ny+1:2:-1 , nz+1:2:-1) ! Cuadrant OOO
 
     !-------------------------------------------------------------
     ! TOC
@@ -89,14 +86,15 @@ program testkernel
     !do m= 1, 2*nz+1
     !    print *, '::',m, '------------------------------'
     !    do n= 1, 2*nx+1
-    !        print *, dpzpxarray(n,:,m)
+    !        print *, kernel%matrix(n,:,m)
+    !        !print *, dpzpxarray(n,:,m)
     !    end do
     !end do
 
     
-    if ( all( dpzpxarray == kernel%matrix ) ) then 
-        print *, 'YES'
-    end if 
+    !if ( all( dpzpxarray == kernel%matrix ) ) then 
+    !    print *, 'YES'
+    !end if 
 
     print *, 'RATIO: ', elapsedTime/elapsedTime2
 

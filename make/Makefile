@@ -32,8 +32,8 @@ OBJECTS = \
 $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridProjectedKDE.o \
-$(OBJDIR)/testunfoldmatrix.o
-#$(OBJDIR)/testgpkde.o
+$(OBJDIR)/testgpkde.o
+#$(OBJDIR)/testunfoldmatrix.o
 
 # Define task functions
 

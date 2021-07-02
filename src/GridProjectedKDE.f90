@@ -167,7 +167,7 @@ contains
         ! THAT, THE VARIABLE IS "FLATTENED"
 
         integer :: n, m
-        integer :: nOptLoops = 20
+        integer :: nOptLoops = 10
         integer :: iXG, iYG, iZG
 
         !------------------------------------------------------------------------------

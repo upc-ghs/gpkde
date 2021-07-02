@@ -61,10 +61,12 @@ module KernelMultiGaussianModule
                                                     prGridEstimateDPMulti
 
         procedure :: Setup => prSetup
+        procedure :: SetupMatrix => prSetupMatrix
         procedure :: SetupSecondDerivatives => prSetupSecondDerivatives
 
         procedure :: GenerateZeroPositiveGrid  => prGenerateZeroPositiveGrid
         procedure :: ComputeZeroPositiveMatrix => prComputeZeroPositiveMatrix
+        procedure :: UnfoldZeroPositiveMatrix  => prUnfoldZeroPositiveMatrix
 
     end type
     
@@ -89,7 +91,9 @@ contains
         ! Assign binSize 
         this%binSize = binSize 
 
+
     end subroutine prInitialize
+
 
 
     subroutine prReset( this )
@@ -122,6 +126,7 @@ contains
     end subroutine prReset
 
 
+
     subroutine prSetup( this, smoothing )
         !------------------------------------------------------------------------------
         ! 
@@ -146,6 +151,7 @@ contains
             call this%GenerateGrid( positiveGridSize(1), positiveGridSize(2), positiveGridSize(3) )
         end if
 
+        ! REPLACE BY SOME RELATIVE CHANGE
         ! If the smoothing remains do not reassign
         if ( all( smoothing .ne. this%smoothing ) ) then 
             newSmoothing = .true.
@@ -164,7 +170,51 @@ contains
     end subroutine prSetup
 
 
-    
+
+    subroutine prSetupMatrix( this, smoothing )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType)            :: this 
+        doubleprecision, dimension(3), intent(in) :: smoothing
+        integer, dimension(3) :: positiveGridSize
+        logical               :: newSmoothing, newGrid = .false. 
+        !------------------------------------------------------------------------------
+
+        ! THIS 3 COMES FROM THE RANGE INPUT VARIABLE AT BAKS
+        positiveGridSize = floor( 3*smoothing/this%binSize )
+
+        ! If the grid size remains, do not rebuild
+        if ( all( positiveGridSize .ne. this%positiveGridSize ) ) then 
+            newGrid = .true.
+            this%positiveGridSize = positiveGridSize
+            call this%GenerateZeroPositiveGrid( positiveGridSize(1), positiveGridSize(2), positiveGridSize(3) )
+        end if
+
+        ! REPLACE BY SOME RELATIVE CHANGE
+        ! If the smoothing remains do not reassign
+        if ( all( smoothing .ne. this%smoothing ) ) then 
+            newSmoothing = .true.
+            this%smoothing = smoothing
+        end if
+
+        ! If any of the above, recompute matrix
+        if ( newSmoothing .or. newGrid ) then 
+            call this%ComputeZeroPositiveMatrix()
+        end if
+
+
+        return
+
+
+    end subroutine prSetupMatrix
+
+
+
     subroutine prSetupSecondDerivatives( this, gBandwidths )
         !------------------------------------------------------------------------------
         ! 
@@ -194,6 +244,7 @@ contains
             call this%InitializeSDGrid( curvatureGridSize )
         end if
 
+        ! REPLACE BY SOME RELATIVE CHANGE
         ! If the bandwidth remains, do not reassign
         !if ( all( gBandwidths .ne. this%gBandwidths ) ) then
             newBandwidth = .true.
@@ -241,15 +292,14 @@ contains
             ( erf( ( this%zGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( this%zGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
 
         ! Normalization correction
-        ! REACTIVATE
-        !this%matrix = this%matrix/sum( this%matrix )
+        this%matrix = this%matrix/sum( this%matrix )
 
 
 
     end subroutine prComputeMatrix
 
 
-
+    ! CONSIDER ADDING SMOOTHING AS INPUT PARAMETER
     subroutine prComputeZeroPositiveMatrix( this )
         !------------------------------------------------------------------------------
         ! Evaluate averaged MultiGaussian kernel in a 2D or 3D matrix depending
@@ -261,30 +311,71 @@ contains
         implicit none
         class(KernelMultiGaussianType) :: this 
         doubleprecision, dimension(:), allocatable :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         !------------------------------------------------------------------------------
 
-        ! Suppose initialized grid
-        ! Note: grid initialization requires a ratio h/lambda and a "range"
-        ! which define nx, ny, nz, that is, the maximum integer value of 
-        ! the zero positive grid. Both h/lambda and range could be dimension
-        ! dependent.
 
         ! Compute normalized smoothing h/lambda
         hLambda = this%smoothing/this%binSize
 
-        this%zpmatrix = (0.5**nDim)*( &
+        ! Compute kernel
+        zeroPositiveMatrix = (0.5**nDim)*( &
             ( erf( ( this%zpxGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( this%zpxGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
             ( erf( ( this%zpyGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( this%zpyGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
             ( erf( ( this%zpzGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( this%zpzGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
 
-        ! Normalization correction
-        !this%zpmatrix = this%zpmatrix/sum( this%zpmatrix )
+        ! Unfold
+        call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
 
+        ! Normalization correction
+        this%matrix = this%matrix/sum( this%matrix )
 
 
     end subroutine prComputeZeroPositiveMatrix
 
 
+
+    subroutine prUnfoldZeroPositiveMatrix( this, sourceZeroPositive, targetMatrix )
+        !------------------------------------------------------------------------------
+        ! 
+        ! 
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType) :: this
+        doubleprecision, dimension(:,:,:) :: sourceZeroPositive
+        doubleprecision, dimension(:,:,:) :: targetMatrix
+        integer :: nx, ny, nz 
+        !------------------------------------------------------------------------------
+        ! VERIFY WHAT HAPPENS WITH OCTANTS IN 2D
+
+
+        nx = this%nx 
+        ny = this%ny 
+        nz = this%nz 
+
+        
+        !print *, nx, ny ,nz
+        !print *, shape( sourceZeroPositive )
+
+
+        targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive                                   ! Octant III 
+        targetMatrix( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, :         , :        ) ! Octant OII
+        targetMatrix( nx+1:2*nx+1 , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(:        , ny+1:2:-1 , :        ) ! Octant IOI
+        targetMatrix( 1:nx        , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , :        ) ! Octant OOI
+        targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(:        , :         , nz+1:2:-1) ! Octant IIO 
+        targetMatrix( 1:nx        , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, :         , nz+1:2:-1) ! Octant OIO
+        targetMatrix( nx+1:2*nx+1 , 1:ny        , 1:nz        ) = sourceZeroPositive(:        , ny+1:2:-1 , nz+1:2:-1) ! Octant IOO
+        targetMatrix( 1:nx        , 1:ny        , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , nz+1:2:-1) ! Octant OOO
+
+
+        return
+
+
+    end subroutine prUnfoldZeroPositiveMatrix
+    
 
 
     subroutine prComputeSecondDerivatives( this, gBandwidths )
@@ -480,9 +571,6 @@ contains
 
 
 
-
-
-
     subroutine prGenerateGrid(this, nx, ny, nz)
         !------------------------------------------------------------------------------
         ! Generate grid indexes, both negative and positive, 
@@ -508,7 +596,6 @@ contains
         this%nz = nz
 
 
-
         this%xGrid = spread( spread( [(i, i= -nx, nx, 1)], 2, 2*ny + 1 ), 3, 2*nz + 1 )
         this%yGrid = spread( spread( [(i, i= -ny, ny, 1)], 1, 2*nx + 1 ), 3, 2*nz + 1 )
         this%zGrid = reshape(spread( [(i, i= -nz, nz, 1)], 1, (2*nx + 1)*( 2*ny + 1 )  ), [ 2*nx + 1, 2*ny + 1, 2*nz + 1 ] )
@@ -517,8 +604,7 @@ contains
 
 
 
-
-    subroutine prGenerateZeroPositiveGrid(this, nx, ny, nz)
+    subroutine prGenerateZeroPositiveGrid( this, nx, ny, nz )
         !------------------------------------------------------------------------------
         ! Generate grid points for evaluation of kernel matrix 
         !
@@ -536,10 +622,20 @@ contains
         integer :: i
         !------------------------------------------------------------------------------
 
+        ! WILL BE REMOVED
+        this%nx = nx
+        this%ny = ny
+        this%nz = nz
+
         ! The quarter grid
         this%zpxGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
         this%zpyGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
         this%zpzGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 )  ), [ nx + 1, ny + 1, nz + 1 ] )
+
+
+        if ( allocated( this%matrix ) ) deallocate( this%matrix )
+        allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
 
     end subroutine prGenerateZeroPositiveGrid
 
@@ -724,7 +820,8 @@ contains
             iZ = activeGridIds( n, 3 )
 
             ! Setup kernel matrix
-            call this%Setup( smoothing( n, : ) )
+            !call this%Setup( smoothing( n, : ) )
+            call this%SetupMatrix( smoothing( n, : ) )
 
             ! Determine spans
             call this%ComputeGridEstimateSpans( activeGridIds( n, : ), gridShape, &
@@ -773,7 +870,8 @@ contains
             iZ = activeGridIds( n, 3 )
 
             ! Setup kernel matrix
-            call this%Setup( smoothing( n, : ) )
+            !call this%Setup( smoothing( n, : ) )
+            call this%SetupMatrix( smoothing( n, : ) )
 
             ! Determine spans
             call this%ComputeGridEstimateSpans( activeGridIds( n, : ), gridShape, &
@@ -909,7 +1007,8 @@ contains
             ! At this point verify if there is 
             ! a change in grid size. If there is, 
             ! recompute size
-            call this%Setup( kernelSigmaSupport( n, : ) )
+            !call this%Setup( kernelSigmaSupport( n, : ) )
+            call this%SetupMatrix( kernelSigmaSupport( n, : ) )
 
             ! Determine spans
             call this%ComputeGridEstimateSpans( activeGridIds( n, : ), gridShape, &
