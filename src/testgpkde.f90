@@ -9,7 +9,7 @@ program testgpkde
     doubleprecision, dimension(3)             :: pointsDomainSize   = [ 10.0 , 5.0 , 2.5   ]
     doubleprecision, dimension(3)             :: pointsDomainOffset = [ 45.0 , 7.5 , 3.725 ]
     doubleprecision, dimension(3)             :: binSize            = [ 1.0, 1.0, 1.0 ]
-    doubleprecision, dimension(10000,3)       :: dataPoints
+    doubleprecision, dimension(100000,3)       :: dataPoints
     integer :: n, ix, iy, iz
     integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
     doubleprecision :: elapsedTime

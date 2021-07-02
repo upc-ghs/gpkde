@@ -58,6 +58,7 @@ contains
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
+        implicit none
         class( GridProjectedKDEType ) :: this
         doubleprecision, dimension(3), intent(in) :: domainSize
         doubleprecision, dimension(3), intent(in) :: binSize
@@ -95,6 +96,7 @@ contains
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
+        implicit none
         class( GridProjectedKDEType ) :: this
         !------------------------------------------------------------------------------
 
@@ -132,6 +134,7 @@ contains
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
+        implicit none
         class( GridProjectedKDEType ) :: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
 
@@ -373,6 +376,7 @@ contains
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
+        implicit none
         class( GridProjectedKDEType ) :: this
         doubleprecision, dimension(:), intent(in)    :: kernelSmoothingScale
         doubleprecision, dimension(:), intent(in)    :: densityEstimate
@@ -403,6 +407,7 @@ contains
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
+        implicit none
         class( GridProjectedKDEType ) :: this
 
         doubleprecision, dimension(:),   intent(in)    :: nEstimate
@@ -483,6 +488,7 @@ contains
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
+        implicit none
         class( GridProjectedKDEType) :: this
         integer, intent(in) :: nActiveGridIds 
         integer, dimension(:,:), intent(in) :: activeGridIds 
@@ -530,6 +536,7 @@ contains
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
+        implicit none
         class( GridProjectedKDEType) :: this
         doubleprecision, dimension(:), intent(in)      :: nEstimate 
         doubleprecision, dimension(:), intent(in)      :: netRoughness 
