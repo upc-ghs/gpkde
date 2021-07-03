@@ -136,12 +136,14 @@ contains
 
         this%nActiveBins = count( this%counts/=0 )
 
+        ! MANAGE WHAT TO DO WITH ALLOCATED ARRAY 
         allocate( this%activeBinIds( this%nActiveBins , 3 ) )
-        
+       
+        ! Following column-major nesting
         ! This could be in parallel with OpenMP (?)
-        do ix = 1, this%nBins(1)
+        do iz = 1, this%nBins(3)
             do iy = 1, this%nBins(2)
-                do iz = 1, this%nBins(3)
+                do ix = 1, this%nBins(1)
                     if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
                     this%activeBinIds( icount , : ) = [ ix, iy, iz ]
                     icount = icount + 1

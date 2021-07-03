@@ -85,6 +85,7 @@ module KernelMultiGaussianModule
 contains
 
 
+    ! CONSIDER RESTORING SMOOTHING
     subroutine prInitialize( this, binSize )
         !------------------------------------------------------------------------------
         ! 
@@ -104,6 +105,28 @@ contains
 
 
     end subroutine prInitialize
+
+
+
+    !subroutine prInitialize( this, binSize )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType) :: this 
+    !    !integer, intent(in) :: nx, ny, nz  
+    !    !doubleprecision, dimension(:) :: smoothing
+    !    doubleprecision, dimension(:) :: binSize
+    !    !------------------------------------------------------------------------------
+
+    !    ! Assign binSize 
+    !    this%binSize = binSize 
+
+
+    !end subroutine prInitialize
 
 
 
