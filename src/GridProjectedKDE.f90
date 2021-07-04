@@ -38,7 +38,7 @@ module GridProjectedKDEModule
         ! Procedures
         procedure :: Initialize          => prInitialize 
         procedure :: Reset               => prReset 
-        procedure :: ComputeDensity      => prComputeDensity
+        !procedure :: ComputeDensity      => prComputeDensity
         procedure :: ComputeSupportScale => prComputeSupportScale
         procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
         procedure :: ComputeNetRoughness             => prComputeNetRoughness
@@ -173,7 +173,7 @@ contains
         ! THINK OF A GRID HOLDER FOR COMPUTATION AND AFTER
         ! THAT, THE VARIABLE IS "FLATTENED"
         integer :: n, m
-        integer :: nOptLoops = 5
+        integer :: nOptLoops = 10
         integer :: iX, iY, iZ
         integer, dimension(2) :: iXGSpan, iYGSpan, iZGSpan
         integer, dimension(2) :: iXKSpan, iYKSpan, iZKSpan
@@ -257,6 +257,8 @@ contains
                 ! Assign pointer 
                 gc => activeGridCells(n)
 
+                if (gc%convergence) cycle
+                
                 ! Setup kernel matrix
                 call gc%kernel%SetupMatrix( kernelSmoothing( n, : ) )
 
@@ -287,6 +289,8 @@ contains
                 ! Assign pointer 
                 gc => activeGridCells(n)
 
+                if (gc%convergence) cycle
+
                 ! Setup kernel matrix
                 call gc%kernel%SetupMatrix( kernelSigmaSupport( n, : ) )
 
@@ -313,7 +317,7 @@ contains
             kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
 
             ! Update n estimate
-            nEstimateGrid = 0d0
+            ! nEstimateGrid = 0d0
             !$omp parallel do &        
             !$omp private( gc ) & 
             !$omp private(iXGSpan, iYGSpan, iZGSpan) &
@@ -322,6 +326,10 @@ contains
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
+
+                
+                if (gc%convergence) cycle
+
 
                 ! Setup kernel matrix
                 call gc%kernel%SetupMatrix( kernelSigmaSupport( n, : ) )
@@ -357,7 +365,9 @@ contains
     
                 ! Assign pointer 
                 gc => activeGridCells(n)
-    
+   
+                if (gc%convergence) cycle
+
                 ! Setup second derivatives
                 call gc%kernel%SetupSecondDerivativesMatrix( curvatureBandwidth( n, : ) )
     
@@ -369,22 +379,22 @@ contains
                 ! Compute curvature grid estimates
                 curvatureXGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
                     this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-                    gc%kernel%secondDerivativeX( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+                    gc%kernel%secondDerivativeX( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
+                    /this%histogram%binVolume
     
                 curvatureYGrid( gc%id(1), gc%id(2), gc%id(3) )  = sum( &
                     this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-                    gc%kernel%secondDerivativeY( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+                    gc%kernel%secondDerivativeY( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
+                    /this%histogram%binVolume
     
                 curvatureZGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
                     this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-                    gc%kernel%secondDerivativeZ( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+                    gc%kernel%secondDerivativeZ( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
+                    /this%histogram%binVolume
     
             end do
             !$omp end parallel do 
     
-            curvatureXGrid = curvatureXGrid/this%histogram%binVolume
-            curvatureYGrid = curvatureYGrid/this%histogram%binVolume
-            curvatureZGrid = curvatureZGrid/this%histogram%binVolume
     
 
             ! --- STEP 4 --- !
@@ -397,6 +407,8 @@ contains
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
+
+                if (gc%convergence) cycle
 
                 ! Define local indexes
                 iX = gc%id( 1 )
@@ -459,10 +471,27 @@ contains
                             roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                            kernelSmoothing, kernelSmoothingScale  )
 
-            print *, kernelSmoothing(1,:)
+            !print *, kernelSmoothing(1,:)
 
             relativeSmoothingChange = abs( ( kernelSmoothing - oldKernelSmoothing )/oldKernelSmoothing )
 
+            !!$omp parallel do   &
+            !!$omp private( gc )  
+            !do n = 1, this%histogram%nActiveBins
+
+            !    ! Assign pointer 
+            !    gc => activeGridCells(n)
+
+            !    if ( all( relativeSmoothingChange(n, :) < 0.01 ) .and. (.not. gc%convergence) ) then
+            !        gc%convergence = .true.
+            !    !else if (  gc%convergence  .and.  any( relativeSmoothingChange(n, :) > 0.01 )  ) then
+            !    !    print *, '## LEFT CONVERGENCE ##', gc%id, relativeSmoothingChange(n,:)
+            !    !    gc%convergence = .false.
+            !    end if
+
+            !end do
+            !!$omp end parallel do 
+            
             print *, 'MAX CHANGE  ', maxval( relativeSmoothingChange )
             print *, 'MIN CHANGE  ', minval( relativeSmoothingChange )
             print *, 'MEAN CHANGE ', sum( relativeSmoothingChange )/(3*this%histogram%nActiveBins)

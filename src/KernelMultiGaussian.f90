@@ -50,19 +50,12 @@ module KernelMultiGaussianModule
         procedure :: ComputeCurvatureGridEstimates  => prComputeCurvatureGridEstimates
         procedure :: ComputeRoughnessGridEstimates  => prComputeRoughnessGridEstimates
 
-
-        procedure, private :: prGridEstimateIntMulti
-        procedure, private :: prGridEstimateDPMulti
-        generic            :: GridEstimateMulti  => prGridEstimateIntMulti, &
-                                                    prGridEstimateDPMulti
-
         procedure :: SetupMatrix => prSetupMatrix
         procedure :: SetupSecondDerivativesMatrix => prSetupSecondDerivativesMatrix
-
-        procedure :: GenerateZeroPositiveGrid   => prGenerateZeroPositiveGrid
-        procedure :: GenerateZeroPositiveSDGrid => prGenerateZeroPositiveSDGrid
-        procedure :: ComputeZeroPositiveMatrix  => prComputeZeroPositiveMatrix
-        procedure :: UnfoldZeroPositiveMatrix   => prUnfoldZeroPositiveMatrix
+        procedure :: GenerateZeroPositiveGrid     => prGenerateZeroPositiveGrid
+        procedure :: GenerateZeroPositiveSDGrid   => prGenerateZeroPositiveSDGrid
+        procedure :: ComputeZeroPositiveMatrix    => prComputeZeroPositiveMatrix
+        procedure :: UnfoldZeroPositiveMatrix     => prUnfoldZeroPositiveMatrix
 
 
         !! DEPRECATION WARNING
@@ -76,6 +69,10 @@ module KernelMultiGaussianModule
         procedure, private :: prGridEstimateInt
         procedure, private :: prGridEstimateDP
         generic            :: GridEstimate  => prGridEstimateInt, prGridEstimateDP
+        procedure, private :: prGridEstimateIntMulti
+        procedure, private :: prGridEstimateDPMulti
+        generic            :: GridEstimateMulti  => prGridEstimateIntMulti, &
+                                                    prGridEstimateDPMulti
         !! DEPRECATION WARNING
 
 
@@ -157,6 +154,17 @@ contains
         deallocate( this%yGrid )
         deallocate( this%zGrid )
 
+        deallocate(this%zpxGrid)
+        deallocate(this%zpyGrid)
+        deallocate(this%zpzGrid)
+        deallocate(this%sDXGrid)
+        deallocate(this%sDYGrid)
+        deallocate(this%sDZGrid)
+        deallocate(this%zpsDXGrid)
+        deallocate(this%zpsDYGrid)
+        deallocate(this%zpsDZGrid)
+
+
     end subroutine prReset
 
 
@@ -177,6 +185,7 @@ contains
         !------------------------------------------------------------------------------
 
 
+        ! THIS 3 COMES FROM THE RANGE INPUT VARIABLE AT BAKS
         matrixPositiveShape = floor( 3*smoothing/this%binSize )
 
         ! If the grid size remains, do not rebuild
@@ -186,8 +195,6 @@ contains
             call this%GenerateZeroPositiveGrid( matrixPositiveShape(1), matrixPositiveShape(2), matrixPositiveShape(3) )
         end if
 
-
-        ! THIS 3 COMES FROM THE RANGE INPUT VARIABLE AT BAKS
         !positiveGridSize = floor( 3*smoothing/this%binSize )
         !if ( all( positiveGridSize .ne. this%positiveGridSize ) ) then 
         !    newGrid = .true.
@@ -198,15 +205,16 @@ contains
 
         ! REPLACE BY SOME RELATIVE CHANGE
         ! If the smoothing remains do not reassign
-        if ( all( smoothing .ne. this%smoothing ) ) then 
+        !if ( any( abs( smoothing - this%smoothing )/this%smoothing > 0.01 ) ) then 
+        !if ( all( smoothing .ne. this%smoothing ) ) then 
             newSmoothing = .true.
             this%smoothing = smoothing
-        end if
+        !end if
 
         ! If any of the above, recompute matrix
-        if ( newSmoothing .or. newGrid ) then 
+        !if ( newSmoothing .or. newGrid ) then 
             call this%ComputeZeroPositiveMatrix()
-        end if
+        !end if
 
 
         return
@@ -250,6 +258,7 @@ contains
 
         ! REPLACE BY SOME RELATIVE CHANGE
         ! If the bandwidth remains, do not reassign
+        !if ( any( abs( gBandwidths - this%gBandwidths )/this%gBandwidths > 0.01 ) ) then
         !if ( all( gBandwidths .ne. this%gBandwidths ) ) then
             newBandwidth = .true.
             this%gBandwidths = gBandwidths
@@ -257,7 +266,7 @@ contains
 
         ! If any of the above, recompute derivatives
         !if ( newBandwidth .or. newGrid ) then
-            call this%ComputeSecondDerivativesUnfold( gBandwidths )
+           call this%ComputeSecondDerivativesUnfold( gBandwidths )
         !end if
 
 
@@ -486,7 +495,7 @@ contains
         this%snz = gridSize
 
 
-        ! The quarter grid
+        ! The octant grid
         this%zpsDXGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
         this%zpsDYGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
         this%zpsDZGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 ) ), &
@@ -616,6 +625,7 @@ contains
 
 
 
+    !! DEPRECATION WARNING
     subroutine prGridEstimateIntMulti( this, gridData, gridShape, &
         nActiveGridIds, activeGridIds, smoothing, outputGridEstimate )
         !------------------------------------------------------------------------------
@@ -665,7 +675,7 @@ contains
     end subroutine prGridEstimateIntMulti
 
 
-
+    !! DEPRECATION WARNING
     subroutine prGridEstimateDPMulti( this, gridData, gridShape, &
         nActiveGridIds, activeGridIds, smoothing, outputGridEstimate )
         !------------------------------------------------------------------------------
@@ -715,7 +725,7 @@ contains
     end subroutine prGridEstimateDPMulti
 
 
-
+    !! DEPRECATION WARNING
     subroutine prComputeCurvatureGridEstimates( this, gridData, gridShape, &
                                nActiveGridIds, activeGridIds, gBandwidths, & 
                                         curvatureX, curvatureY, curvatureZ )
@@ -783,7 +793,7 @@ contains
     end subroutine prComputeCurvatureGridEstimates
 
 
-
+    !! DEPRECATION WARNING
     subroutine prComputeRoughnessGridEstimates( this, curvatureX, curvatureY, curvatureZ, & 
                             gridShape, nActiveGridIds, activeGridIds, kernelSigmaSupport, & 
                                                    roughnessXX, roughnessXY, roughnessXZ, & 
