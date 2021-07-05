@@ -137,6 +137,7 @@ contains
         this%nActiveBins = count( this%counts/=0 )
 
         ! MANAGE WHAT TO DO WITH ALLOCATED ARRAY 
+        if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
         allocate( this%activeBinIds( this%nActiveBins , 3 ) )
        
         ! Following column-major nesting
