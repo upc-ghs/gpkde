@@ -1,6 +1,6 @@
 module GridCellModule
 
-    use KernelMultiGaussianModule, only : KernelMultiGaussianType
+    use KernelMultiGaussianModule, only : KernelMultiGaussianType, KernelSecondDerivativesType
     implicit none
 
     type GridCellType
@@ -8,8 +8,9 @@ module GridCellModule
         integer, dimension(3) :: id
         logical               :: convergence = .false.
 
-        type( KernelMultiGaussianType )          :: kernel
-        type( KernelMultiGaussianType ), pointer :: kernelPointer
+        type( KernelMultiGaussianType ), pointer :: kernel
+        type( KernelSecondDerivativesType ), pointer :: kernelSD
+        !type( KernelMultiGaussianType ), pointer :: kernelPointer
 
     contains
 
