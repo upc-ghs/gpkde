@@ -11,16 +11,18 @@ PROGRAM = gpkde
 SOURCEDIR1=../src
 
 VPATH = \
-${SOURCEDIR1} 
+${SOURCEDIR1}
+
 
 .SUFFIXES: .c .cpp .f .f90 .F90 .fpp .o
 
 # Define the Fortran compile flags
 FC = gfortran
 #FFLAGS = -O2 -g -pg -fbacktrace -fopenmp -Wall -Wextra -fbounds-check -fcheck=bounds -fcheck=all
-#FFLAGS = -O2 -g -pg -fbacktrace -fopenmp
+#FFLAGS =  -g -pg -fbacktrace -fopenmp
+FFLAGS = -O2 -g -pg -fbacktrace -fopenmp
 #FFLAGS = -g -pg -fbacktrace -fopenmp -Wextra -fcheck=bounds -fcheck=all
-FFLAGS = -O2 -fbacktrace -fopenmp
+#FFLAGS = -O2 -fbacktrace -fopenmp
 
 # Define the C compile flags
 CC = gcc
@@ -34,7 +36,7 @@ $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridCell.o \
 $(OBJDIR)/GridProjectedKDE.o \
-$(OBJDIR)/testkerneldb.o
+$(OBJDIR)/testkerneldbreal.o
 #$(OBJDIR)/testgpkdeomp.o
 #$(OBJDIR)/testgpkde.o
 #$(OBJDIR)/testunfoldmatrix.o

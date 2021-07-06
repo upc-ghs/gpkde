@@ -1,6 +1,8 @@
 program testkernel
     use KernelMultiGaussianModule,only : KernelMultiGaussianType
     use GridProjectedKDEModule, only : GridProjectedKDEType
+
+
     implicit none
 
     type( GridProjectedKDEType ), allocatable:: gpkde
@@ -26,39 +28,63 @@ program testkernel
     real, dimension(:), allocatable :: zarray
     integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
     doubleprecision :: elapsedTime
+    integer :: res
+    integer :: line_no, ix
+    integer :: nlines = 863870
+    doubleprecision, dimension(863870,3) :: data_array
+    !doubleprecision, dimension(3) :: temp_array
     !-------------------------------------------------------------
 
+    open(10, file="particles.csv",access='sequential',form="formatted",iostat=res)
 
-    ! Define data points
-    call random_number(dataPoints)
-    dataPoints(:,1) = dataPoints(:,1)*pointsDomainSize(1) + pointsDomainOffset(1)
-    dataPoints(:,2) = dataPoints(:,2)*pointsDomainSize(2) + pointsDomainOffset(2)
-    dataPoints(:,3) = dataPoints(:,3)*pointsDomainSize(3) + pointsDomainOffset(3)
+    do ix = 1, nlines
+        read(10,*) data_array( ix, : )
+        print *, data_array( ix, : )
+    end do
 
-
-    ! Initialize gpkde
-    print *, '** Initializing kde' 
-    allocate( gpkde )
-    call gpkde%Initialize( domainSize, binSize )
-
-    ! TIC
-    call system_clock(clockCountStart, clockCountRate, clockCountMax)
-    print *, '** Initializing kerneldatabase' 
-    call gpkde%InitializeKernelDatabase()
-    ! TOC
-    call system_clock(clockCountStop, clockCountRate, clockCountMax)
-    elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-    write(*, '(1X,A,E15.5,A)') 'KDEDB Elapsed time = ', elapsedTime, ' seconds'
+    !print *, temp_array
+    
 
 
-    call system_clock(clockCountStart, clockCountRate, clockCountMax)
+    !! Define data points
+    !call random_number(dataPoints)
+    !dataPoints(:,1) = dataPoints(:,1)*pointsDomainSize(1) + pointsDomainOffset(1)
+    !dataPoints(:,2) = dataPoints(:,2)*pointsDomainSize(2) + pointsDomainOffset(2)
+    !dataPoints(:,3) = dataPoints(:,3)*pointsDomainSize(3) + pointsDomainOffset(3)
 
-    call gpkde%ComputeDensityDatabase( dataPoints )
 
-    ! TOC
-    call system_clock(clockCountStop, clockCountRate, clockCountMax)
-    elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-    write(*, '(1X,A,E15.5,A)') 'OPT Elapsed time = ', elapsedTime, ' seconds'
+    !! Initialize gpkde
+    !print *, '** Initializing kde' 
+    !allocate( gpkde )
+    !call gpkde%Initialize( domainSize, binSize )
+
+    !! TIC
+    !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+    !print *, '** Initializing kerneldatabase' 
+    !call gpkde%InitializeKernelDatabase()
+    !! TOC
+    !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+    !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+    !write(*, '(1X,A,E15.5,A)') 'KDEDB Elapsed time = ', elapsedTime, ' seconds'
+
+
+    !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+
+    !call gpkde%ComputeDensityDatabase( dataPoints )
+
+    !! TOC
+    !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+    !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+    !write(*, '(1X,A,E15.5,A)') 'OPT Elapsed time = ', elapsedTime, ' seconds'
+
+
+    
+    !deallocate( gpkde )
+
+
+
+
+end program testkernel
 
 
     !! TIC
@@ -76,10 +102,3 @@ program testkernel
     !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
     !write(*, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
 
-    
-    deallocate( gpkde )
-
-
-
-
-end program testkernel
