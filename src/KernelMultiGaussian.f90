@@ -41,6 +41,16 @@ module KernelMultiGaussianModule
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeY
         doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeZ
 
+        
+        ! Grid spans
+        integer, dimension(2) :: xGridSpan   = 0
+        integer, dimension(2) :: yGridSpan   = 0
+        integer, dimension(2) :: zGridSpan   = 0
+        integer, dimension(2) :: xKernelSpan = 0
+        integer, dimension(2) :: yKernelSpan = 0
+        integer, dimension(2) :: zKernelSpan = 0
+
+
     contains
 
         ! Procedures
@@ -64,6 +74,7 @@ module KernelMultiGaussianModule
 
 
         !! DEPRECATION WARNING
+        procedure :: ComputeGridSpans          => prComputeGridSpans
         !procedure :: ComputeCurvatureGridEstimates  => prComputeCurvatureGridEstimates
         !procedure :: ComputeRoughnessGridEstimates  => prComputeRoughnessGridEstimates
         !procedure :: GenerateGrid     => prGenerateGrid
@@ -400,6 +411,81 @@ contains
 
 
     end subroutine prComputeGridEstimateSpans
+
+
+
+    !! DEPRECATION WARNING
+    subroutine prComputeGridSpans( this, gridIndexes, gridShape )
+        !------------------------------------------------------------------------------
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class(KernelMultiGaussianType)    :: this
+        integer, dimension(3), intent(in) :: gridShape
+        integer, dimension(3), intent(in) :: gridIndexes
+        !------------------------------------------------------------------------------
+
+        ! Spans in grid 
+        this%xGridSpan(1) = max( gridIndexes(1) - this%nx, 1)
+        this%xGridSpan(2) = min( gridIndexes(1) + this%nx, gridShape(1) )
+        this%yGridSpan(1) = max( gridIndexes(2) - this%ny, 1)
+        this%yGridSpan(2) = min( gridIndexes(2) + this%ny, gridShape(2) )
+        this%zGridSpan(1) = max( gridIndexes(3) - this%nz, 1)
+        this%zGridSpan(2) = min( gridIndexes(3) + this%nz, gridShape(3) )
+
+        ! Spans in kernel matrix
+        this%xKernelSpan = this%xGridSpan + this%nx - gridIndexes(1) + 1
+        this%yKernelSpan = this%yGridSpan + this%ny - gridIndexes(2) + 1
+        this%zKernelSpan = this%zGridSpan + this%nz - gridIndexes(3) + 1
+
+
+        !if ( any( this%xKernelSpan > (2*this%nx+1) ) .or. any( this%xKernelSpan < 0 ) ) then 
+        !    print *, 'KERNEL SPAN FAIL IN X'
+        !    print *, gridShape
+        !    print *, gridIndexes
+        !    print *, this%xKernelSpan, '--', 2*this%nx+1
+        !    print *, 'gridspan:', this%xGridSpan  
+
+
+
+        !end if 
+
+
+        !if ( any( this%yKernelSpan > (2*this%ny+1) ) .or. any( this%yKernelSpan < 0 )) then 
+        !    print *, 'KERNEL SPAN FAIL IN Y'
+        !    print *, gridShape
+        !    print *, gridIndexes
+        !    print *, this%yKernelSpan, '--', 2*this%ny +1
+        !    print *, 'gridspan:', this%yGridSpan  
+        !end if 
+
+        !if ( any( this%zKernelSpan > (2*this%nz+1) ) .or. any( this%zKernelSpan < 0 )) then 
+        !    print *, 'KERNEL SPAN FAIL IN Y'
+        !    print *, gridShape
+        !    print *, gridIndexes
+        !    print *, this%zKernelSpan, '--', 2*this%nz + 1
+        !    print *, 'gridspan:', this%zGridSpan  
+        !end if  
+
+
+        !if ( all( gridIndexes - (/196,80,73/) .eq. 0 ) ) then 
+        !    print *, '************************ COMPUTEGRIDSPANS THIS IS THE SHIT'
+        !    print *, gridIndexes
+        !    print *, gridShape
+        !    print *, this%xGridSpan
+        !    print *, this%nx, this%ny, this%nz
+        !    print *, '**************************************'
+        !end if 
+
+        
+        return
+    
+
+    end subroutine prComputeGridSpans
+
+
 
 
 

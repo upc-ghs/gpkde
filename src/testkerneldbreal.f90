@@ -13,7 +13,8 @@ program testkernel
     !doubleprecision, dimension(3) :: domainSize = [ 100.0, 50.0, 10.0 ]
     !doubleprecision, dimension(3) :: binSize    = [ 1.0, 1.0, 1.0 ]
 
-    doubleprecision, dimension(3)             :: domainSize         = [ 750.0 , 150.0 , 10.0 ] 
+    doubleprecision, dimension(3)             :: domainSize         = [ 300.0 , 150.0 , 100.0 ] 
+    !doubleprecision, dimension(3)             :: domainSize         = [ 750.0 , 150.0 , 10.0 ] 
     doubleprecision, dimension(3)             :: pointsDomainSize   = [ 100.0  , 50.0 , 5.0  ]
     doubleprecision, dimension(3)             :: pointsDomainOffset = [ 45.0   , 7.5  , 15.0 ]
     doubleprecision, dimension(3)             :: binSize            = [ 1.0    , 1.0  , 1.0  ]
@@ -30,7 +31,8 @@ program testkernel
     doubleprecision :: elapsedTime
     integer :: res
     integer :: line_no, ix
-    integer :: nlines = 863870
+    character(len=200) :: particlesFileName = 'particles_4.csv'
+    integer            :: nlines = 999999
     doubleprecision, dimension(:,:), allocatable :: dataArray
     !-------------------------------------------------------------
 
@@ -42,7 +44,7 @@ program testkernel
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
     print *, '** READING PARTICLES FILE'
     ! CAN IT BE READ IN PARALLEL WITH OPENMP ?
-    open(10, file="particles_3.csv",access='sequential',form="formatted",iostat=res)
+    open(10, file=particlesFileName,access='sequential',form="formatted",iostat=res)
     do ix = 1, nlines
         read(10,*) dataArray( ix, : )
     end do

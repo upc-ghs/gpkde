@@ -8,9 +8,37 @@ module GridCellModule
         integer, dimension(3) :: id
         logical               :: convergence = .false.
 
-        type( KernelMultiGaussianType ), pointer :: kernel
-        type( KernelSecondDerivativesType ), pointer :: kernelSD
+        type( KernelMultiGaussianType ), pointer     :: kernel      => null()
+        type( KernelMultiGaussianType ), pointer     :: kernelSigma => null()
+        type( KernelSecondDerivativesType ), pointer :: kernelSD    => null()
         !type( KernelMultiGaussianType ), pointer :: kernelPointer
+
+        ! Kernel indexes
+        integer, dimension(3) :: kernelDBIndexes      = 0
+        integer, dimension(3) :: kernelSigmaDBIndexes = 0
+        integer, dimension(3) :: kernelSDDBIndexes    = 0
+
+        ! Spans
+        integer, dimension(2) :: kernelXGSpan = 0
+        integer, dimension(2) :: kernelYGSpan = 0
+        integer, dimension(2) :: kernelZGSpan = 0
+        integer, dimension(2) :: kernelXMSpan = 0
+        integer, dimension(2) :: kernelYMSpan = 0
+        integer, dimension(2) :: kernelZMSpan = 0
+
+        integer, dimension(2) :: kernelSigmaXGSpan = 0
+        integer, dimension(2) :: kernelSigmaYGSpan = 0
+        integer, dimension(2) :: kernelSigmaZGSpan = 0
+        integer, dimension(2) :: kernelSigmaXMSpan = 0
+        integer, dimension(2) :: kernelSigmaYMSpan = 0
+        integer, dimension(2) :: kernelSigmaZMSpan = 0
+
+        integer, dimension(2) :: kernelSDXGSpan = 0
+        integer, dimension(2) :: kernelSDYGSpan = 0
+        integer, dimension(2) :: kernelSDZGSpan = 0
+        integer, dimension(2) :: kernelSDXMSpan = 0
+        integer, dimension(2) :: kernelSDYMSpan = 0
+        integer, dimension(2) :: kernelSDZMSpan = 0
 
     contains
 
