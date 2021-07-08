@@ -15,7 +15,7 @@ module GridProjectedKDEModule
     integer, parameter         :: nDim         = 3
     doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
-    integer, parameter         :: nOptLoops    = 350
+    integer, parameter         :: nOptLoops    = 20
 
 
     ! Set default access status to private
@@ -50,22 +50,15 @@ module GridProjectedKDEModule
         ! Procedures
         procedure :: Initialize          => prInitialize 
         procedure :: Reset               => prReset 
-        procedure :: ComputeSupportScale => prComputeSupportScale
+        procedure :: InitializeModuleConstants       => prInitializeModuleConstants
+        procedure :: InitializeKernelDatabase        => prInitializeKernelDatabase
+        procedure :: ComputeDensity                  => prComputeDensity
+        procedure :: ComputeDensityFromDatabase      => prComputeDensityFromDatabase
+        procedure :: ComputeKernelDatabaseIndexes    => prComputeKernelDatabaseIndexes
+        procedure :: ComputeSupportScale             => prComputeSupportScale
         procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
         procedure :: ComputeOptimalSmoothing         => prComputeOptimalSmoothing
-
-        ! Dev
-        procedure :: ComputeDensityDatabase   => prComputeDensityDatabase
-        procedure :: InitializeKernelDatabase => prInitializeKernelDatabase
-        procedure :: ComputeKernelDatabaseIndexes => prComputeKernelDatabaseIndexes
-        procedure :: ComputeKernelDatabaseIndexesFunction => prComputeKernelDatabaseIndexesFunction
-        procedure :: InitializeModuleConstants    => prInitializeModuleConstants
-        procedure :: ExportDensity => prExportDensity
-
-        !! DEPRECATION WARNING 
-        !procedure :: ComputeDensity      => prComputeDensity
-        !procedure :: ComputeDensityParallel   => prComputeDensityParallel
-        !procedure :: ComputeNetRoughness             => prComputeNetRoughness
+        procedure :: ExportDensity                   => prExportDensity
 
     end type
     
@@ -95,7 +88,7 @@ contains
         this%nBins      = ceiling( domainSize/binSize )
     
         ! Initialize histogram
-        print *, '*** Initializing histogram' 
+        print *, '## GPKDE: init histogram' 
         call this%histogram%Initialize( this%nBins, this%binSize )
 
         ! Initialize kernel
@@ -105,9 +98,10 @@ contains
             this%initialSmoothing = ( this%histogram%binVolume )**( 1d0/nDim )
         end if 
      
-        print *, '*** Initializing kernel' 
-        call this%kernel%Initialize( this%binSize )
+        !print *, '## GPKDE: init kernel' 
+        !call this%kernel%Initialize( this%binSize )
 
+        print *, '## GPKDE: init constants' 
         call this%InitializeModuleConstants() 
 
 
@@ -165,7 +159,8 @@ contains
 
 
 
-    subroutine prInitializeKernelDatabase( this )
+    subroutine prInitializeKernelDatabase( this, minDeltaHOverLambda, &
+                                maxDeltaHOverLambda, deltaHOverLambda )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -174,24 +169,18 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
+        doubleprecision, intent(in)   :: deltaHOverLambda
+        doubleprecision, intent(in)   :: maxDeltaHOverLambda
+        doubleprecision, intent(in)   :: minDeltaHOverLambda
         doubleprecision, dimension(3) :: inputSmoothing
         doubleprecision, dimension(:), allocatable :: hOverLambda
-        doubleprecision :: deltaHOverLambda
-        doubleprecision :: maxDeltaHOverLambda
-        doubleprecision :: minDeltaHOverLambda
         integer :: nDelta
         integer :: i, n, m, o
         !------------------------------------------------------------------------------
 
-        ! If these values will be passed as input parameters, 
-        ! there should be some sort of verification of their proper 
-        ! definition
-        ! IT IS NECESSARY A CHECK HERE
-        ! IF RANGE TIMES min(hOverLambda) is smaller than one
-        ! it is an invalid kernel
-        maxDeltaHOverLambda = 8.0
-        minDeltaHOverLambda = 0.2
-        deltaHOverLambda    = .2
+        
+        ! Sanity check for input parameters
+
 
         ! In the meantime a single nDelta, 
         ! it could be any discretization
@@ -199,21 +188,21 @@ contains
         hOverLambda = [ (minDeltaHOverLambda + i*deltaHOverLambda, i=0, nDelta ) ]
 
         ! Assign to the object
-        this%nDeltaHOverLambda    = nDelta
+        this%nDeltaHOverLambda   = nDelta
         this%deltaHOverLambda    = deltaHOverLambda
         this%minDeltaHOverLambda = minDeltaHOverLambda
-        
-        
-        print *, 'KERNEL DBS SIZES'
-        print *, nDelta
-        print *, nDelta*nDelta*nDelta
-        
+ 
 
+        ! REPLACE THESE PRINT STATEMENTS BY SOME SORT OF LOGGER      
+        print *, '## GPKDE: kernel db sizes:', nDelta, nDelta*nDelta*nDelta
+
+
+        ! Allocate kernel databases
         allocate( this%kernelDatabase( nDelta, nDelta, nDelta ) )
         allocate( this%kernelSDDatabase( nDelta ) )
 
 
-        ! Think about generating the thing from the transpose
+        ! Kernel database
         !$omp parallel do             &
         !$omp private( m, n )         &
         !$omp private( inputSmoothing )
@@ -230,10 +219,12 @@ contains
         !$omp end parallel do
 
 
+        ! Second derivatives
+        ! Isotropic in terms of gSmoothing for 
+        ! each direction
         !$omp parallel do             &
         !$omp private( inputSmoothing )
         do n = 1, nDelta
-            ! THESE ARE ISOTROPIC IN TERMS OF GSMOOTHING
             inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /) 
             call this%kernelSDDatabase( n )%Initialize( this%binSize )
             call this%kernelSDDatabase( n )%SetupSecondDerivativesMatrix( inputSmoothing*this%binSize )
@@ -245,7 +236,56 @@ contains
 
 
 
-    subroutine prComputeDensityDatabase( this, dataPoints )
+    subroutine prComputeDensity( this, dataPoints )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridProjectedKDEType ), target:: this
+        doubleprecision, dimension(:,:), intent(in) :: dataPoints
+
+        ! Time monitoring
+        integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+        doubleprecision :: elapsedTime
+        !------------------------------------------------------------------------------
+
+
+        ! Initialize the histogram quantities
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        call this%histogram%ComputeCounts( dataPoints )
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        print *, '## GPKDE: histogram compute counts took: ', elapsedTime, ' seconds'
+
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        call this%histogram%ComputeActiveBinIds()
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        print *, '## GPKDE: histogram active bins: ', this%histogram%nActiveBins
+        print *, '## GPKDE: histogram compute active bin ids took: ', elapsedTime, ' seconds'
+
+
+        !call exit(0)
+
+        ! Once histogram is computed, 
+        ! Initialize density optimization 
+        print *, '## GPKDE: compute densiy from kernel databases'
+        call this%ComputeDensityFromDatabase( dataPoints )
+
+
+
+    end subroutine 
+    
+
+
+    subroutine prComputeDensityFromDatabase( this, dataPoints )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -287,25 +327,14 @@ contains
         doubleprecision, dimension(:)    , allocatable :: roughnessZZArray
         doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
 
+        ! Grid cells
         type( GridCellType ), dimension(:), allocatable, target :: activeGridCells
         type( GridCellType ), pointer                           :: gc => null()
 
-        !type( KernelMultiGaussianType)                          :: kernel
-        !type( KernelSecondDerivativesType)                      :: kernelSD
-        ! NEW GRID CELL FORM STUFF
-
-
-        ! THINK OF A GRID HOLDER FOR COMPUTATION AND AFTER
-        ! THAT, THE VARIABLE IS "FLATTENED"
-        integer :: n, m
-        integer :: iX, iY, iZ
-        integer, dimension(2) :: iXGSpan, iYGSpan, iZGSpan
-        integer, dimension(2) :: iXKSpan, iYKSpan, iZKSpan
-        integer, dimension(3) :: kernelDBIndexes   = 0
-        integer, dimension(3) :: kernelSDDBIndexes = 0
-
-        integer :: convergenceCount = 0
-        
+        ! Utils
+        integer            :: n, m
+        integer            :: iX, iY, iZ
+        integer            :: convergenceCount = 0
         character(len=200) :: densityOutputFileName
         character(len=20)  :: loopId
 
@@ -315,18 +344,12 @@ contains
         doubleprecision :: elapsedTime
         doubleprecision :: elapsedTime2
         !------------------------------------------------------------------------------
-    
-        ! Compute histogram quantities
-        print *, '*** Computing histogram count' 
-        call this%histogram%ComputeCounts( dataPoints )
-        print *, '*** Computing histogram active ids' 
-        call this%histogram%ComputeActiveBinIds()
-        print *, this%histogram%nActiveBins
-        print *, '**********************************' 
+   
 
 
         ! Allocate activeGridCells 
         allocate( activeGridCells( this%histogram%nActiveBins ) )
+
 
         ! Allocate grids
         allocate( densityEstimateGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
@@ -348,7 +371,6 @@ contains
         allocate(         curvatureZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
 
 
-
         ! Allocate arrays
         allocate(      kernelSmoothing( this%histogram%nActiveBins, nDim ) )
         allocate(   curvatureBandwidth( this%histogram%nActiveBins, nDim ) )
@@ -362,13 +384,11 @@ contains
 
 
         ! Initialize active grid cells
-        !!$omp parallel do
+        !$omp parallel do
         do n = 1, this%histogram%nActiveBins
             call activeGridCells(n)%Initialize( this%histogram%activeBinIds( n, : ) )
         end do
-        !!$omp end parallel do 
-
-        print *, '********************************** INITIALIZED ACTIVE GRID CELLS ' 
+        !$omp end parallel do 
 
         ! Define the initial smoothing array
         kernelSmoothing         = spread( this%initialSmoothing, 1, this%histogram%nActiveBins )
@@ -376,7 +396,6 @@ contains
         kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
         kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
-        print *, '********************************** INITIALIZED SMOOTHING QUANTITIES ' 
 
 
         ! -- Initialize Density Estimate --!
@@ -390,7 +409,7 @@ contains
             !if (gc%convergence) cycle
 
             ! Compute indexes on kernel database
-            gc%kernelDBIndexes = this%ComputeKernelDatabaseIndexesFunction( kernelSmoothing( n, : ) )
+            gc%kernelDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSmoothing( n, : ) )
 
             ! Assign kernel pointer
             gc%kernel => this%kernelDatabase( gc%kernelDBIndexes(1), gc%kernelDBIndexes(2), gc%kernelDBIndexes(3) )
@@ -419,25 +438,29 @@ contains
         !$omp end parallel do 
         this%densityEstimate =  densityEstimateArray
 
-        !print *, '################################################################################' 
-        !print *, 'DEBUG: DENSITY MAX', maxval( densityEstimateArray )
-        !print *, 'DEBUG: DENSITY MIN', minval( densityEstimateArray )
-        !print *, '################################################################################' 
+        print *, '################################################################################' 
+        print *, 'debug_initial_density_max ', maxval( densityEstimateArray )
+        print *, 'debug_initial_density_min ', minval( densityEstimateArray )
 
         ! -- Optimization loop -- !
         do m = 1, nOptLoops
-            print *, '##################### OPTIMIZATION LOOP: ', m
+            print *, '################################################################################' 
+            print *, 'optimization_loop ', m
       
             ! TIC
             call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
-            !! WRITE THE DENSITY
-            !write( unit=loopId, fmt=* )m
-            !write( unit=densityOutputFileName, fmt='(a)' )'density_output_loop_'//trim(adjustl(loopId))//'.density'
-            !call this%ExportDensity( densityOutputFileName ) 
+            !! If even iteration loop
+            !if ( mod(m,2) .eq. 0 ) then 
+            !    !! WRITE THE DENSITY
+            !    write( unit=loopId, fmt=* )m
+            !    write( unit=densityOutputFileName, fmt='(a)' )'density_output_loop_'//trim(adjustl(loopId))//'.density'
+            !    call this%ExportDensity( densityOutputFileName ) 
+            !end if
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! --- STEP 2 --- !    
             !$omp parallel do &
             !$omp private( gc )            
@@ -449,7 +472,7 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelSigmaDBIndexes = this%ComputeKernelDatabaseIndexesFunction( kernelSigmaSupport( n, : ) )
+                gc%kernelSigmaDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSigmaSupport( n, : ) )
 
                 ! Assign pointer
                 gc%kernelSigma => this%kernelDatabase( gc%kernelSigmaDBIndexes(1), &
@@ -478,34 +501,33 @@ contains
 
             end do
             !$omp end parallel do
-            !print *, '################################################################################' 
-            !print *, 'DEBUG: NESTIMATE MAX', maxval( nEstimateArray )
-            !print *, 'DEBUG: NESTIMATE MIN', minval( nEstimateArray )
-            !print *, '################################################################################' 
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** nEstimate: ', elapsedTime2, ' seconds'
+            print *, 'debug_nestimate_max', maxval( nEstimateArray )
+            print *, 'debug_nestimate_min', minval( nEstimateArray )
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** nEstimate: ', elapsedTime2, ' seconds'
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Update kernelSigmaSupport 
             call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                                nEstimateArray, kernelSigmaSupportScale )
             ! Spread it, isotropic 
             kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** kernelSigmaSupport: ', elapsedTime2, ' seconds'
+            print *, 'debug_kernelsigmasupport_max', maxval( kernelSigmaSupport )
+            print *, 'debug_kernelsigmasupport_min', minval( kernelSigmaSupport )
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** kernelSigmaSupport: ', elapsedTime2, ' seconds'
            
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Update n estimate
-            !$omp parallel do              &
-            !$omp private( gc )            &
-            !$omp private( kernelDBIndexes ) 
+            !$omp parallel do &
+            !$omp private( gc )
             do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
@@ -514,7 +536,7 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelSigmaDBIndexes = this%ComputeKernelDatabaseIndexesFunction( kernelSigmaSupport( n, : ) )
+                gc%kernelSigmaDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSigmaSupport( n, : ) )
 
                 ! Assign pointer
                 gc%kernelSigma => this%kernelDatabase( gc%kernelSigmaDBIndexes(1), &
@@ -547,26 +569,30 @@ contains
             !print *, 'DEBUG: NESTIMATE MAX', maxval( nEstimateArray )
             !print *, 'DEBUG: NESTIMATE MIN', minval( nEstimateArray )
             !print *, '################################################################################' 
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** nEstimate: ', elapsedTime2, ' seconds'
+            print *, 'debug_nestimate_max', maxval( nEstimateArray )
+            print *, 'debug_nestimate_min', minval( nEstimateArray )
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** nEstimate: ', elapsedTime2, ' seconds'
 
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! --- STEP 3 --- !
             call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
                       nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
                                  kernelSigmaSupportScale, curvatureBandwidth )
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** curvatureBandwidth: ', elapsedTime2, ' seconds'
+            print *, 'debug_curvaturebandwidth_max', maxval( curvatureBandwidth )
+            print *, 'debug_curvaturebandwidth_min', minval( curvatureBandwidth )
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** curvatureBandwidth: ', elapsedTime2, ' seconds'
 
 
             ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             !$omp parallel do &        
             !$omp private( gc )                       
             do n = 1, this%histogram%nActiveBins
@@ -577,7 +603,7 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexesFunction( curvatureBandwidth( n, : ) )
+                gc%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( curvatureBandwidth( n, : ) )
 
                 ! X
                 ! Assign pointer
@@ -654,28 +680,28 @@ contains
             !print *, 'DEBUG: CURVATUREZ MAX', maxval( curvatureZGrid )
             !print *, 'DEBUG: CURVATUREz MIN', minval( curvatureZGrid )
             !print *, '################################################################################' 
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** curvatures: ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** curvatures: ', elapsedTime2, ' seconds'
 
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             curvatureXX = curvatureXGrid*curvatureXGrid
             curvatureYY = curvatureYGrid*curvatureYGrid
             curvatureZZ = curvatureZGrid*curvatureZGrid
             curvatureXY = curvatureXGrid*curvatureYGrid
             curvatureXZ = curvatureXGrid*curvatureZGrid
             curvatureYZ = curvatureYGrid*curvatureZGrid
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** productCurvatures: ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** productCurvatures: ', elapsedTime2, ' seconds'
 
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! --- STEP 4: ROUGHNESSES DIVIDED --- !
             ! Kernel pointers for these computations
             ! are already identified from previous
@@ -866,25 +892,31 @@ contains
             !print *, 'DEBUG: NETROUGHNESSMAX', maxval( netRoughnessArray )
             !print *, 'DEBUG: NETROUGHNESSMIN', minval( netRoughnessArray )
             !print *, '################################################################################' 
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** roughnesses: ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** roughnesses: ', elapsedTime2, ' seconds'
 
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
                             roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                            kernelSmoothing, kernelSmoothingScale  )
+            print *, 'debug_kernelsmoothing_x_max', maxval( kernelSmoothing(:,1) )
+            print *, 'debug_kernelsmoothing_x_min', minval( kernelSmoothing(:,1) )
+            print *, 'debug_kernelsmoothing_y_max', maxval( kernelSmoothing(:,2) )
+            print *, 'debug_kernelsmoothing_y_min', minval( kernelSmoothing(:,2) )
+            print *, 'debug_kernelsmoothing_z_max', maxval( kernelSmoothing(:,3) )
+            print *, 'debug_kernelsmoothing_z_min', minval( kernelSmoothing(:,3) )
 
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** smoothing: ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** smoothing: ', elapsedTime2, ' seconds'
 
             ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! --- UPDATE DENSITY WITH NEW SMOOTHING --- !
             !$omp parallel do &        
             !$omp private( gc ) 
@@ -896,7 +928,7 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelDBIndexes = this%ComputeKernelDatabaseIndexesFunction( kernelSmoothing( n, : ) )
+                gc%kernelDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSmoothing( n, : ) )
 
                 ! Assign kernel pointer
                 gc%kernel => this%kernelDatabase( gc%kernelDBIndexes(1), gc%kernelDBIndexes(2), gc%kernelDBIndexes(3) )
@@ -923,14 +955,16 @@ contains
 
             end do
             !$omp end parallel do 
+            print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
+            print *, 'debug_densityestimate_min', minval( densityEstimateArray )
             !print *, '################################################################################' 
             !print *, 'DEBUG: DENSITY MAX', maxval( densityEstimateArray )
             !print *, 'DEBUG: DENSITY MIN', minval( densityEstimateArray )
             !print *, '################################################################################' 
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, '**** density: ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, '**** density: ', elapsedTime2, ' seconds'
 
 
             relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
@@ -943,32 +977,37 @@ contains
                 end if 
             end do
             !$omp end parallel do 
-            print *, '################################################################################' 
-            print *, '# DENSITY CHANGES SMALLER THAN 0.01 ', convergenceCount
-            print *, '# MAX   DENSITY  ', maxval( densityEstimateArray )
-            print *, '# MIN   DENSITY  ', minval( densityEstimateArray )
-            print *, '# MEAN  DENSITY  ', sum( densityEstimateArray )/this%histogram%nActiveBins
-            print *, '################################################################################' 
-            print *, '#### MAX  DENSITY CHANGE  ', maxval( relativeDensityChange )
-            print *, '#### MIN  DENSITY CHANGE  ', minval( relativeDensityChange )
-            print *, '#### MEAN DENSITY CHANGE ',  sum(    relativeDensityChange )/this%histogram%nActiveBins
-            print *, '################################################################################' 
+            print *, 'debug_convergence_count', convergenceCount
+            print *, 'debug_relativedensitychange_max  ', maxval( relativeDensityChange )
+            print *, 'debug_relativedensitychange_min  ', minval( relativeDensityChange )
+            print *, 'debug_relativedensitychange_mean ',  sum(    relativeDensityChange )/this%histogram%nActiveBins
+            !print *, '################################################################################' 
+            !print *, '# DENSITY CHANGES SMALLER THAN 0.01 ', convergenceCount
+            !print *, '# MAX   DENSITY  ', maxval( densityEstimateArray )
+            !print *, '# MIN   DENSITY  ', minval( densityEstimateArray )
+            !print *, '# MEAN  DENSITY  ', sum( densityEstimateArray )/this%histogram%nActiveBins
+            !print *, '################################################################################' 
+            !print *, '#### MAX  DENSITY CHANGE  ', maxval( relativeDensityChange )
+            !print *, '#### MIN  DENSITY CHANGE  ', minval( relativeDensityChange )
+            !print *, '#### MEAN DENSITY CHANGE ',  sum(    relativeDensityChange )/this%histogram%nActiveBins
+            !print *, '################################################################################' 
             convergenceCount     = 0
             this%densityEstimate =  densityEstimateArray
+
             ! TOC
             call system_clock(clockCountStop, clockCountRate, clockCountMax)
             elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-            print *, '### OPTIMIZATION LOOP TIME: ', elapsedTime, ' seconds'
+            print *, 'optimization_loop_time ', elapsedTime, ' seconds'
 
         end do
         ! --- End Optimization Loop --- !
 
 
 
-    end subroutine prComputeDensityDatabase
+    end subroutine prComputeDensityFromDatabase
 
 
-    function prComputeKernelDatabaseIndexesFunction( this, smoothing ) result(indexes)
+    function prComputeKernelDatabaseIndexes( this, smoothing ) result(indexes)
         !------------------------------------------------------------------------------
         ! 
         !
@@ -982,13 +1021,8 @@ contains
         integer :: nd 
         !------------------------------------------------------------------------------
 
-        
-        ! IMPLEMENT SOME SORT OF WARNING IF 
-        ! INDEXES ARE TOO FAR AWAY
 
-        !print *, '*********** COMPUTE KERNEL DATABASE INDEXES BEFORE, WILL BE RESETED '
         indexes = 0
-        !print *, indexes
 
         do nd = 1, nDim
             indexes(nd) = min(&
@@ -1000,57 +1034,10 @@ contains
             this%nDeltaHOverLambda(nd)  )
         end do 
 
-
-        !print *, '*********** COMPUTE KERNEL DATABASE INDEXES AFTER'
-        !print *, indexes
-
-
-        return
-
-    end function prComputeKernelDatabaseIndexesFunction 
-
-
-    subroutine prComputeKernelDatabaseIndexes( this, smoothing, indexes )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
-        integer, dimension(3), intent(inout) :: indexes
-        integer :: nd 
-        !------------------------------------------------------------------------------
-
-        
-        ! IMPLEMENT SOME SORT OF WARNING IF 
-        ! INDEXES ARE TOO FAR AWAY
-
-        !print *, '*********** COMPUTE KERNEL DATABASE INDEXES BEFORE, WILL BE RESETED '
-        indexes = 0
-        !print *, indexes
-
-        do nd = 1, nDim
-            indexes(nd) = min(&
-                max(&
-                    floor(&
-                        (smoothing(nd)/this%binSize(nd) - this%minDeltaHOverLambda(nd))/this%deltaHOverLambda(nd)&
-                    ) + 1, 1 &
-                ), &
-            this%nDeltaHOverLambda(nd)  )
-        end do 
-
-
-        !print *, '*********** COMPUTE KERNEL DATABASE INDEXES AFTER'
-        !print *, indexes
-
-
         return
 
 
-    end subroutine prComputeKernelDatabaseIndexes 
+    end function prComputeKernelDatabaseIndexes
 
 
 
@@ -1214,102 +1201,155 @@ contains
 
         deallocate( kernelSmoothingShape )
       
-
         return
 
 
     end subroutine prComputeOptimalSmoothing
         
 
-    !! DEPRECATION WARNING
-    subroutine prComputeNetRoughness( this, nActiveGridIds, activeGridIds, & 
-                                    roughnessXX, roughnessXY, roughnessXZ, &
-                                    roughnessYY, roughnessYZ, roughnessZZ, &
-                                                              netRoughness )
+
+    subroutine prExportDensity( this, outputFileName )
         !------------------------------------------------------------------------------
         ! 
         !
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType) :: this
-        integer, intent(in) :: nActiveGridIds 
-        integer, dimension(:,:), intent(in) :: activeGridIds 
-        doubleprecision, dimension(:,:,:), intent(in) :: roughnessXX
-        doubleprecision, dimension(:,:,:), intent(in) :: roughnessXY
-        doubleprecision, dimension(:,:,:), intent(in) :: roughnessXZ
-        doubleprecision, dimension(:,:,:), intent(in) :: roughnessYY
-        doubleprecision, dimension(:,:,:), intent(in) :: roughnessYZ
-        doubleprecision, dimension(:,:,:), intent(in) :: roughnessZZ
-        doubleprecision, dimension(:), intent(inout) :: netRoughness
-        integer :: n
-        integer :: iX, iY, iZ
+        implicit none 
+        class(GridProjectedKDEType) :: this
+        character(len=200), intent(in) :: outputFileName
+        integer :: ix, iy, iz, n
+        integer :: outputUnit = 555
         !------------------------------------------------------------------------------
 
+        ! Write the output file name
 
-        ! Could be parallel with OpenMP
-        do n = 1, nActiveGridIds
-            ! Define local indexes
-            iX = activeGridIds( n, 1 )
-            iY = activeGridIds( n, 2 )
-            iZ = activeGridIds( n, 3 )
-         
-            ! Compute net roughness
-            netRoughness( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3)     + &
-                2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
-                2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
-                2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6)
-        
+        ! Add some default
+        !write( unit=outputFileName, fmt='(a)' )'histogram_output_.hist'
+        !write( unit=outputFileName, fmt='(a)' )'histogram_output_'//trim(adjustl(tempTimeId))//'.hist'
+        open( outputUnit, file=outputFileName, status='replace' )
+
+
+        do n = 1, this%histogram%nActiveBins
+            ix = this%histogram%activeBinIds( n, 1 )
+            iy = this%histogram%activeBinIds( n, 2 )
+            iz = this%histogram%activeBinIds( n, 3 )
+            ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
+            write(outputUnit,"(I6,I6,I6,F15.6)") ix, iy, iz, this%densityEstimate( n )
         end do
 
 
-        return
+        ! Finished
+        close(outputUnit)
 
 
-     end subroutine prComputeNetRoughness
-
-
-
-     subroutine prExportDensity( this, outputFileName )
-         !------------------------------------------------------------------------------
-         ! 
-         !
-         !------------------------------------------------------------------------------
-         ! Specifications 
-         !------------------------------------------------------------------------------
-         implicit none 
-         class(GridProjectedKDEType) :: this
-         character(len=200), intent(in) :: outputFileName
-         integer :: ix, iy, iz, n
-         integer :: outputUnit = 555
-         !------------------------------------------------------------------------------
-
-         ! Write the output file name
-
-         !write( unit=outputFileName, fmt='(a)' )'histogram_output_.hist'
-         !write( unit=outputFileName, fmt='(a)' )'histogram_output_'//trim(adjustl(tempTimeId))//'.hist'
-         open( outputUnit, file=outputFileName, status='replace' )
-
-
-         do n = 1, this%histogram%nActiveBins
-             ix = this%histogram%activeBinIds( n, 1 )
-             iy = this%histogram%activeBinIds( n, 2 )
-             iz = this%histogram%activeBinIds( n, 3 )
-             ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-             write(outputUnit,"(I6,I6,I6,F15.6)") ix, iy, iz, this%densityEstimate( n )
-         end do
-
-
-         ! Finished
-         close(outputUnit)
-
-
-     end subroutine prExportDensity
+    end subroutine prExportDensity
 
 
 
 end module GridProjectedKDEModule
+
+
+
+
+
+!! THRASH
+
+
+
+    !subroutine prComputeKernelDatabaseIndexes( this, smoothing, indexes )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class( GridProjectedKDEType ) :: this
+    !    doubleprecision, dimension(3), intent(in) :: smoothing
+    !    integer, dimension(3), intent(inout) :: indexes
+    !    integer :: nd 
+    !    !------------------------------------------------------------------------------
+
+    !    
+    !    ! IMPLEMENT SOME SORT OF WARNING IF 
+    !    ! INDEXES ARE TOO FAR AWAY
+
+    !    !print *, '*********** COMPUTE KERNEL DATABASE INDEXES BEFORE, WILL BE RESETED '
+    !    indexes = 0
+    !    !print *, indexes
+
+    !    do nd = 1, nDim
+    !        indexes(nd) = min(&
+    !            max(&
+    !                floor(&
+    !                    (smoothing(nd)/this%binSize(nd) - this%minDeltaHOverLambda(nd))/this%deltaHOverLambda(nd)&
+    !                ) + 1, 1 &
+    !            ), &
+    !        this%nDeltaHOverLambda(nd)  )
+    !    end do 
+
+
+    !    !print *, '*********** COMPUTE KERNEL DATABASE INDEXES AFTER'
+    !    !print *, indexes
+
+
+    !    return
+
+
+    !end subroutine prComputeKernelDatabaseIndexes 
+
+
+
+    !!! DEPRECATION WARNING
+    !subroutine prComputeNetRoughness( this, nActiveGridIds, activeGridIds, & 
+    !                                roughnessXX, roughnessXY, roughnessXZ, &
+    !                                roughnessYY, roughnessYZ, roughnessZZ, &
+    !                                                          netRoughness )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class( GridProjectedKDEType) :: this
+    !    integer, intent(in) :: nActiveGridIds 
+    !    integer, dimension(:,:), intent(in) :: activeGridIds 
+    !    doubleprecision, dimension(:,:,:), intent(in) :: roughnessXX
+    !    doubleprecision, dimension(:,:,:), intent(in) :: roughnessXY
+    !    doubleprecision, dimension(:,:,:), intent(in) :: roughnessXZ
+    !    doubleprecision, dimension(:,:,:), intent(in) :: roughnessYY
+    !    doubleprecision, dimension(:,:,:), intent(in) :: roughnessYZ
+    !    doubleprecision, dimension(:,:,:), intent(in) :: roughnessZZ
+    !    doubleprecision, dimension(:), intent(inout) :: netRoughness
+    !    integer :: n
+    !    integer :: iX, iY, iZ
+    !    !------------------------------------------------------------------------------
+
+
+    !    ! Could be parallel with OpenMP
+    !    do n = 1, nActiveGridIds
+    !        ! Define local indexes
+    !        iX = activeGridIds( n, 1 )
+    !        iY = activeGridIds( n, 2 )
+    !        iZ = activeGridIds( n, 3 )
+    !     
+    !        ! Compute net roughness
+    !        netRoughness( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3)     + &
+    !            2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
+    !            2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
+    !            2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6)
+    !    
+    !    end do
+
+
+    !    return
+
+
+    ! end subroutine prComputeNetRoughness
+
+
 
 
 
