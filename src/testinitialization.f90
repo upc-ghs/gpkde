@@ -43,13 +43,13 @@ program testkernel
     allocate( dataArray( nlines, 3 ) )
 
 
-    !maxDeltaHOverLambda = 30.0
-    !minDeltaHOverLambda = 0.5
-    !deltaHOverLambda    = 0.5
+    maxDeltaHOverLambda = 30.0
+    minDeltaHOverLambda = 0.1
+    deltaHOverLambda    = 0.25
 
-    maxDeltaHOverLambda = 7.05
-    minDeltaHOverLambda = 0.15
-    deltaHOverLambda    = 0.15
+    !maxDeltaHOverLambda = 7.05
+    !minDeltaHOverLambda = 0.15
+    !deltaHOverLambda    = 0.15
 
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
@@ -72,11 +72,14 @@ program testkernel
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
     print *, '## TEST: init kernel database' 
-    call gpkde%InitializeKernelDatabase( minDeltaHOverLambda, maxDeltaHOverLambda, deltaHOverLambda)
+    call gpkde%InitializeKernelDatabase( minDeltaHOverLambda, maxDeltaHOverLambda, deltaHOverLambda, logDatabase=.true.)
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)
     elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
     print *, '## TEST: init kernel database done!: ', elapsedTime, ' seconds'
+
+    
+    call exit(0)
 
 
     ! TIC

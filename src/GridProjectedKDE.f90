@@ -59,6 +59,7 @@ module GridProjectedKDEModule
         procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
         procedure :: ComputeOptimalSmoothing         => prComputeOptimalSmoothing
         procedure :: ExportDensity                   => prExportDensity
+        procedure :: GenerateLogSpaceData            => prGenerateLogSpaceData
 
     end type
     
@@ -160,7 +161,7 @@ contains
 
 
     subroutine prInitializeKernelDatabase( this, minDeltaHOverLambda, &
-                                maxDeltaHOverLambda, deltaHOverLambda )
+                    maxDeltaHOverLambda, deltaHOverLambda, logDatabase )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -169,9 +170,12 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
-        doubleprecision, intent(in)   :: deltaHOverLambda
-        doubleprecision, intent(in)   :: maxDeltaHOverLambda
-        doubleprecision, intent(in)   :: minDeltaHOverLambda
+        ! input
+        doubleprecision,   intent(in) :: deltaHOverLambda
+        doubleprecision,   intent(in) :: maxDeltaHOverLambda
+        doubleprecision,   intent(in) :: minDeltaHOverLambda
+        logical, optional             :: logDatabase
+        ! local
         doubleprecision, dimension(3) :: inputSmoothing
         doubleprecision, dimension(:), allocatable :: hOverLambda
         integer :: nDelta
@@ -181,11 +185,26 @@ contains
         
         ! Sanity check for input parameters
 
+        ! Initialize logDatabase as false
+        if ( .not. present( logDatabase ) ) logDatabase = .false.
+
 
         ! In the meantime a single nDelta, 
         ! it could be any discretization
-        nDelta      = floor( ( maxDeltaHOverLambda - minDeltaHOverLambda )/deltaHOverLambda )
-        hOverLambda = [ (minDeltaHOverLambda + i*deltaHOverLambda, i=0, nDelta ) ]
+        if ( logDatabase ) then
+            ! LOG FORM
+            ! IF LOG FORM THEN THE COMPUTATION OF DB INDEXES IS DIFFERENT THAN LINEAR
+            ! DEFINE AN INTERFACE ? 
+            ! Verify rhis 
+            nDelta      = ceiling(&
+                log10( maxDeltaHOverLambda/minDeltaHOverLambda )/log10( 1 + deltaHOverLambda ) ) + 1 
+            hOverLambda = this%GenerateLogSpaceData( minDeltaHOverLambda, maxDeltaHOverLambda, nDelta )
+        else 
+            ! LINEAR FORM
+            nDelta      = floor( ( maxDeltaHOverLambda - minDeltaHOverLambda )/deltaHOverLambda )
+            hOverLambda = [ (minDeltaHOverLambda + i*deltaHOverLambda, i=0, nDelta ) ]
+        end if 
+
 
         ! Assign to the object
         this%nDeltaHOverLambda   = nDelta
@@ -1245,6 +1264,46 @@ contains
 
     end subroutine prExportDensity
 
+    
+
+    function prGenerateLogSpaceData( this, initPoint, endPoint, nPoints ) result( output )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class(GridProjectedKDEType) :: this
+        doubleprecision, intent(in) :: initPoint, endPoint
+        integer, intent(in)         :: nPoints
+        doubleprecision :: deltaExponent, deltaAccumulated
+        doubleprecision :: logInit, logEnd, logBase
+        doubleprecision, dimension(:), allocatable :: output
+        integer :: n
+        !-----------------------------------------
+
+
+        allocate( output( nPoints ) )
+
+        logBase = 10
+
+        ! Some sanity to verify init smaller than end
+
+        logInit        = log10( initPoint )
+        logEnd         = log10( endPoint  )
+        deltaExponent  = ( logEnd - logInit )/nPoints
+
+        do n = 1, nPoints
+            output(n) = logBase**( logInit + deltaAccumulated )
+            deltaAccumulated = deltaAccumulated + deltaExponent
+        end do
+
+        
+        return
+            
+
+    end function prGenerateLogSpaceData
 
 
 end module GridProjectedKDEModule
