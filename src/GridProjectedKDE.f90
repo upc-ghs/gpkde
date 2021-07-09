@@ -44,6 +44,9 @@ module GridProjectedKDEModule
         ! Module constants
         doubleprecision :: supportDimensionConstant
 
+        ! Interface
+        procedure( ComputeIndexes ), pass, pointer :: ComputeKernelDatabaseIndexes => null()
+
 
     contains
 
@@ -54,7 +57,7 @@ module GridProjectedKDEModule
         procedure :: InitializeKernelDatabase        => prInitializeKernelDatabase
         procedure :: ComputeDensity                  => prComputeDensity
         procedure :: ComputeDensityFromDatabase      => prComputeDensityFromDatabase
-        procedure :: ComputeKernelDatabaseIndexes    => prComputeKernelDatabaseIndexes
+        !procedure :: ComputeKernelDatabaseIndexes    => prComputeKernelDatabaseIndexes
         procedure :: ComputeSupportScale             => prComputeSupportScale
         procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
         procedure :: ComputeOptimalSmoothing         => prComputeOptimalSmoothing
@@ -62,7 +65,25 @@ module GridProjectedKDEModule
         procedure :: GenerateLogSpaceData            => prGenerateLogSpaceData
 
     end type
+
+
+    ! Interfaces
+    abstract interface
     
+        ! ComputeIndexes
+        function ComputeIndexes( this, smoothing ) result(indexes)
+            import GridProjectedKDEType
+            implicit none
+            class( GridProjectedKDEType )             :: this
+            doubleprecision, dimension(3), intent(in) :: smoothing
+            integer, dimension(3) :: indexes 
+            integer :: nd 
+        end function ComputeIndexes
+  
+
+    end interface
+
+
 
 contains
 
@@ -193,24 +214,30 @@ contains
         ! it could be any discretization
         if ( logDatabase ) then
             ! LOG FORM
-            ! IF LOG FORM THEN THE COMPUTATION OF DB INDEXES IS DIFFERENT THAN LINEAR
-            ! DEFINE AN INTERFACE ? 
-            ! Verify rhis 
+            ! Verify this 
             nDelta      = ceiling(&
-                log10( maxDeltaHOverLambda/minDeltaHOverLambda )/log10( 1 + deltaHOverLambda ) ) + 1 
+                log10( maxDeltaHOverLambda/minDeltaHOverLambda )/log10( 1 + deltaHOverLambda ) ) + 1
             hOverLambda = this%GenerateLogSpaceData( minDeltaHOverLambda, maxDeltaHOverLambda, nDelta )
+
+            ! Assign indexes interface
+            this%ComputeKernelDatabaseIndexes => prComputeKernelDatabaseIndexesLog
+            this%deltaHOverLambda = log( hOverLambda(2)/hOverLambda(1) )
+
         else 
             ! LINEAR FORM
             nDelta      = floor( ( maxDeltaHOverLambda - minDeltaHOverLambda )/deltaHOverLambda )
             hOverLambda = [ (minDeltaHOverLambda + i*deltaHOverLambda, i=0, nDelta ) ]
-        end if 
 
+            ! Assign indexes interface
+            this%ComputeKernelDatabaseIndexes => prComputeKernelDatabaseIndexesLinear
+            this%deltaHOverLambda = deltaHOverLambda
+
+        end if 
 
         ! Assign to the object
         this%nDeltaHOverLambda   = nDelta
-        this%deltaHOverLambda    = deltaHOverLambda
         this%minDeltaHOverLambda = minDeltaHOverLambda
- 
+
 
         ! REPLACE THESE PRINT STATEMENTS BY SOME SORT OF LOGGER      
         print *, '## GPKDE: kernel db sizes:', nDelta, nDelta*nDelta*nDelta
@@ -1026,7 +1053,8 @@ contains
     end subroutine prComputeDensityFromDatabase
 
 
-    function prComputeKernelDatabaseIndexes( this, smoothing ) result(indexes)
+
+    function prComputeKernelDatabaseIndexesLinear( this, smoothing ) result(indexes)
         !------------------------------------------------------------------------------
         ! 
         !
@@ -1056,7 +1084,41 @@ contains
         return
 
 
-    end function prComputeKernelDatabaseIndexes
+    end function prComputeKernelDatabaseIndexesLinear
+
+
+
+    function prComputeKernelDatabaseIndexesLog( this, smoothing ) result(indexes)
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridProjectedKDEType ) :: this
+        doubleprecision, dimension(3), intent(in) :: smoothing
+        integer, dimension(3) :: indexes 
+        integer :: nd 
+        !------------------------------------------------------------------------------
+
+        
+        indexes = 0
+
+        do nd = 1, nDim
+            indexes(nd) = min(&
+                max(&
+                    floor(&
+                        log( smoothing(nd)/this%binSize(nd)/this%minDeltaHOverLambda(nd) )/this%deltaHOverLambda(nd)&
+                    ) + 1, 1 &
+                ), &
+            this%nDeltaHOverLambda(nd)  )
+        end do 
+
+        return
+
+
+    end function prComputeKernelDatabaseIndexesLog
 
 
 
@@ -1286,13 +1348,14 @@ contains
 
         allocate( output( nPoints ) )
 
-        logBase = 10
-
+        logBase = 10d0
+        deltaAccumulated = 0d0
         ! Some sanity to verify init smaller than end
 
         logInit        = log10( initPoint )
         logEnd         = log10( endPoint  )
-        deltaExponent  = ( logEnd - logInit )/nPoints
+        deltaExponent  = ( logEnd - logInit )/( nPoints - 1 )  
+
 
         do n = 1, nPoints
             output(n) = logBase**( logInit + deltaAccumulated )
@@ -1313,6 +1376,40 @@ end module GridProjectedKDEModule
 
 
 !! THRASH
+
+
+    !function prComputeKernelDatabaseIndexes( this, smoothing ) result(indexes)
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class( GridProjectedKDEType ) :: this
+    !    doubleprecision, dimension(3), intent(in) :: smoothing
+    !    integer, dimension(3) :: indexes 
+    !    integer :: nd 
+    !    !------------------------------------------------------------------------------
+
+
+    !    indexes = 0
+
+    !    do nd = 1, nDim
+    !        indexes(nd) = min(&
+    !            max(&
+    !                floor(&
+    !                    (smoothing(nd)/this%binSize(nd) - this%minDeltaHOverLambda(nd))/this%deltaHOverLambda(nd)&
+    !                ) + 1, 1 &
+    !            ), &
+    !        this%nDeltaHOverLambda(nd)  )
+    !    end do 
+
+    !    return
+
+
+    !end function prComputeKernelDatabaseIndexes
+
 
 
 
