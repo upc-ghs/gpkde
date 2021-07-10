@@ -42,14 +42,18 @@ program testkernel
 
     allocate( dataArray( nlines, 3 ) )
 
+    !! LOG
+    !maxDeltaHOverLambda = 10.0
+    !minDeltaHOverLambda = 1.0
+    !deltaHOverLambda    = 0.5
+    maxDeltaHOverLambda = 20.0
+    minDeltaHOverLambda = 0.25
+    deltaHOverLambda    = 0.2
 
-    maxDeltaHOverLambda = 30.0
-    minDeltaHOverLambda = 0.1
-    deltaHOverLambda    = 0.25
-
-    !maxDeltaHOverLambda = 7.05
-    !minDeltaHOverLambda = 0.15
-    !deltaHOverLambda    = 0.15
+    !! LINEAR
+    !maxDeltaHOverLambda = 7.0
+    !minDeltaHOverLambda = 5
+    !deltaHOverLambda    = 0.25
 
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
@@ -78,8 +82,7 @@ program testkernel
     elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
     print *, '## TEST: init kernel database done!: ', elapsedTime, ' seconds'
 
-    
-    call exit(0)
+    !call exit(0)
 
 
     ! TIC

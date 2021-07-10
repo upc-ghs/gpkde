@@ -8,10 +8,10 @@ module GridCellModule
         integer, dimension(3) :: id
         logical               :: convergence = .false.
 
+        ! Kernel pointers
         type( KernelMultiGaussianType ), pointer     :: kernel      => null()
         type( KernelMultiGaussianType ), pointer     :: kernelSigma => null()
         type( KernelSecondDerivativesType ), pointer :: kernelSD    => null()
-        !type( KernelMultiGaussianType ), pointer :: kernelPointer
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0

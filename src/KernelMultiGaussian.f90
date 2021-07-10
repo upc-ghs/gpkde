@@ -21,13 +21,13 @@ module KernelMultiGaussianModule
     type, public :: KernelMultiGaussianType
 
         ! Properties
-        integer :: nx, ny, nz
-        integer :: snx, sny, snz
-        integer :: curvatureGridSize = 0 
+        integer :: nx, ny, nz             ! should be removed 
+        integer :: snx, sny, snz          ! should be removed
+        integer :: curvatureGridSize = 0  ! should be removed
         integer, dimension(3) :: matrixPositiveShape = 0 
         doubleprecision, dimension(3) :: binSize     = 0d0
         doubleprecision, dimension(3) :: smoothing   = 0d0
-        doubleprecision, dimension(3) :: gBandwidths = 0d0
+        doubleprecision, dimension(3) :: gBandwidths = 0d0 ! should be removed
         doubleprecision, dimension(:,:,:), allocatable :: matrix
 
     contains
