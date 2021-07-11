@@ -15,11 +15,11 @@ module GridProjectedKDEModule
     integer, parameter         :: nDim         = 3
     doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
-    integer, parameter         :: nOptLoops    = 10
+    !integer, parameter         :: nOptLoops    = 10
 
     integer, parameter :: defaultKernelRange   = 3
     integer, parameter :: defaultKernelSDRange = 4
-
+    integer, parameter :: defaultNOptLoops     = 10
 
     ! Set default access to private
     private
@@ -45,9 +45,7 @@ module GridProjectedKDEModule
         doubleprecision, dimension(:,:), allocatable   :: kernelSmoothing
         doubleprecision, dimension(:,:), allocatable   :: kernelSigmaSupport
         
-
-
-        ! Kernel database 
+        ! Kernel database params 
         doubleprecision, dimension(3) :: deltaHOverLambda
         doubleprecision, dimension(3) :: minDeltaHOverLambda
         integer, dimension(3)         :: nDeltaHOverLambda
@@ -352,7 +350,7 @@ contains
 
 
 
-    subroutine prComputeDensity( this, dataPoints )
+    subroutine prComputeDensity( this, dataPoints, nOptimizationLoops )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -362,11 +360,20 @@ contains
         implicit none
         class( GridProjectedKDEType ), target:: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
+        integer, intent(in), optional :: nOptimizationLoops
+        integer :: localNOptimizationLoops
 
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
         doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
+
+        ! Define nOptimizationLoops
+        if ( present( nOptimizationLoops ) ) then 
+            localNOptimizationLoops = nOptimizationLoops
+        else 
+            localNOptimizationLoops = defaultNOptLoops
+        end if 
 
 
         ! Initialize the histogram quantities
@@ -387,14 +394,11 @@ contains
         print *, '## GPKDE: histogram active bins: ', this%histogram%nActiveBins
         print *, '## GPKDE: histogram compute active bin ids took: ', elapsedTime, ' seconds'
 
-
-        !call exit(0)
-
-
         ! Once histogram is computed, 
         ! Initialize density optimization 
         print *, '## GPKDE: compute density from kernel databases'
-        call this%ComputeDensityFromDatabase( dataPoints )
+        call this%ComputeDensityFromDatabase( dataPoints, &
+               nOptimizationLoops=localNOptimizationLoops )
 
         print *, '## GPKDE: drop kernel database'
         call this%DropKernelDatabase()
@@ -404,7 +408,7 @@ contains
     
 
 
-    subroutine prComputeDensityFromDatabase( this, dataPoints )
+    subroutine prComputeDensityFromDatabase( this, dataPoints, nOptimizationLoops )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -445,6 +449,10 @@ contains
         doubleprecision, dimension(:)    , allocatable :: roughnessYYArray
         doubleprecision, dimension(:)    , allocatable :: roughnessZZArray
         doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
+
+        ! Optimization loops
+        integer, intent(in), optional :: nOptimizationLoops
+        integer                       :: nOptLoops
 
         ! Grid cells
         type( GridCellType ), dimension(:), allocatable, target :: activeGridCells
@@ -498,6 +506,15 @@ contains
         allocate(     roughnessYYArray( this%histogram%nActiveBins ) )
         allocate(     roughnessZZArray( this%histogram%nActiveBins ) )
         allocate(    netRoughnessArray( this%histogram%nActiveBins ) )
+
+
+
+        ! Define nOptLoops
+        if ( present( nOptimizationLoops ) ) then 
+            nOptLoops = nOptimizationLoops
+        else 
+            nOptLoops = defaultNOptLoops
+        end if 
 
 
 
