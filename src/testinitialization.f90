@@ -46,8 +46,8 @@ program testkernel
     !maxDeltaHOverLambda = 10.0
     !minDeltaHOverLambda = 1.0
     !deltaHOverLambda    = 0.5
-    maxDeltaHOverLambda = 20.0
-    minDeltaHOverLambda = 0.25
+    maxDeltaHOverLambda = 25.0
+    minDeltaHOverLambda = 0.2
     deltaHOverLambda    = 0.2
 
     !! LINEAR

@@ -15,7 +15,7 @@ module GridProjectedKDEModule
     integer, parameter         :: nDim         = 3
     doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
-    integer, parameter         :: nOptLoops    = 5
+    integer, parameter         :: nOptLoops    = 10
 
 
     ! Set default access status to private
@@ -26,7 +26,7 @@ module GridProjectedKDEModule
 
         ! Properties
         type( HistogramType ) :: histogram
-        type( KernelMultiGaussianType ) :: kernel
+        !type( KernelMultiGaussianType ) :: kernel
         type( KernelMultiGaussianType ), dimension(:,:,:), allocatable :: kernelDatabase
         type( KernelSecondDerivativesType ), dimension(:), allocatable :: kernelSDDatabase
 
@@ -41,6 +41,7 @@ module GridProjectedKDEModule
         doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
         doubleprecision, dimension(:,:), allocatable   :: kernelSmoothing
         doubleprecision, dimension(:,:), allocatable   :: kernelSigmaSupport
+        doubleprecision, dimension(:,:), allocatable   :: curvatureBandwidth
         
 
 
@@ -71,6 +72,9 @@ module GridProjectedKDEModule
         procedure :: ComputeOptimalSmoothing         => prComputeOptimalSmoothing
         procedure :: ExportDensity                   => prExportDensity
         procedure :: GenerateLogSpaceData            => prGenerateLogSpaceData
+
+        ! DEV
+        procedure :: ComputeDensityParallel => prComputeDensityParallel
 
     end type
 
@@ -151,7 +155,7 @@ contains
         !------------------------------------------------------------------------------
 
         call this%histogram%Reset()
-        call this%kernel%Reset()
+        !call this%kernel%Reset()
 
 
         ! MAYBE HERE
@@ -372,6 +376,10 @@ contains
         print *, '## GPKDE: drop kernel database'
         call this%DropKernelDatabase()
 
+        
+        print *, '## GPKDE: last optimization stage'
+        call this%ComputeDensityParallel()
+
 
     end subroutine 
     
@@ -475,11 +483,11 @@ contains
 
 
         ! Initialize active grid cells
-        !$omp parallel do
+        !!$omp parallel do
         do n = 1, this%histogram%nActiveBins
             call activeGridCells(n)%Initialize( this%histogram%activeBinIds( n, : ) )
         end do
-        !$omp end parallel do 
+        !!$omp end parallel do 
 
         ! Define the initial smoothing array
         kernelSmoothing         = spread( this%initialSmoothing, 1, this%histogram%nActiveBins )
@@ -1099,7 +1107,10 @@ contains
         this%densityEstimateGrid = densityEstimateGrid
         this%kernelSmoothing     = kernelSmoothing
         this%kernelSigmaSupport  = kernelSigmaSupport
+        this%curvatureBandwidth  = curvatureBandwidth
 
+
+        !this%activeGridCells = activeGridCells
 
         ! Deallocate stuff
 
@@ -1108,95 +1119,96 @@ contains
 
 
     ! UPDATE
-    !subroutine prComputeDensityParallel( this, dataPoints )
-    !    !------------------------------------------------------------------------------
-    !    ! 
-    !    !
-    !    !------------------------------------------------------------------------------
-    !    ! Specifications 
-    !    !------------------------------------------------------------------------------
-    !    implicit none
-    !    class( GridProjectedKDEType ) :: this
-    !    doubleprecision, dimension(:,:)  , intent(in)  :: dataPoints
-    !    doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
-    !    doubleprecision, dimension(:,:)  , allocatable :: oldKernelSmoothing
-    !    doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
-    !    doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
-    !    doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
-    !    doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
-    !    doubleprecision, dimension(:,:)  , allocatable :: relativeSmoothingChange
-    !    doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
-    !    doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
-    !    doubleprecision, dimension(:)    , allocatable :: densityEstimateArray 
-    !    doubleprecision, dimension(:)    , allocatable :: nEstimateArray
-    !    doubleprecision, dimension(:,:,:), allocatable :: curvatureXGrid
-    !    doubleprecision, dimension(:,:,:), allocatable :: curvatureYGrid
-    !    doubleprecision, dimension(:,:,:), allocatable :: curvatureZGrid
-    !    doubleprecision, dimension(:,:,:), allocatable :: roughnessXX 
-    !    doubleprecision, dimension(:,:,:), allocatable :: roughnessXY
-    !    doubleprecision, dimension(:,:,:), allocatable :: roughnessXZ
-    !    doubleprecision, dimension(:,:,:), allocatable :: roughnessYY
-    !    doubleprecision, dimension(:,:,:), allocatable :: roughnessYZ
-    !    doubleprecision, dimension(:,:,:), allocatable :: roughnessZZ
-    !    doubleprecision, dimension(:)    , allocatable :: roughnessXXArray
-    !    doubleprecision, dimension(:)    , allocatable :: roughnessYYArray
-    !    doubleprecision, dimension(:)    , allocatable :: roughnessZZArray
-    !    doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
+    subroutine prComputeDensityParallel( this )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridProjectedKDEType ) :: this
+        doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
+        doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
+        doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
+        doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
+        doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
+        !doubleprecision, dimension(:,:)  , allocatable :: relativeSmoothingChange
+        doubleprecision, dimension(:)    , allocatable :: relativeDensityChange
+        doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
+        doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
+        doubleprecision, dimension(:)    , allocatable :: densityEstimateArray 
+        doubleprecision, dimension(:)    , allocatable :: nEstimateArray
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureXGrid
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureYGrid
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureZGrid
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureXX 
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureXY
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureXZ
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureYY
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureYZ
+        doubleprecision, dimension(:,:,:), allocatable :: curvatureZZ
+        doubleprecision, dimension(:,:,:), allocatable :: roughnessXX 
+        doubleprecision, dimension(:,:,:), allocatable :: roughnessXY
+        doubleprecision, dimension(:,:,:), allocatable :: roughnessXZ
+        doubleprecision, dimension(:,:,:), allocatable :: roughnessYY
+        doubleprecision, dimension(:,:,:), allocatable :: roughnessYZ
+        doubleprecision, dimension(:,:,:), allocatable :: roughnessZZ
+        doubleprecision, dimension(:)    , allocatable :: roughnessXXArray
+        doubleprecision, dimension(:)    , allocatable :: roughnessYYArray
+        doubleprecision, dimension(:)    , allocatable :: roughnessZZArray
+        doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
 
     !    type( GridCellType ), dimension(:), allocatable, target :: activeGridCells
     !    type( GridCellType ), pointer                           :: gc 
     !    ! NEW GRID CELL FORM STUFF
+        
+        type( KernelMultiGaussianType )     :: kernel
+        type( KernelMultiGaussianType )     :: kernelSigma
+        type( KernelSecondDerivativesType ) :: kernelSD
 
+        integer :: n, m
+        integer :: nFinalOptLoops = 10
+        integer :: iX, iY, iZ
+        integer            :: convergenceCount = 0
 
-    !    ! THINK OF A GRID HOLDER FOR COMPUTATION AND AFTER
-    !    ! THAT, THE VARIABLE IS "FLATTENED"
-    !    integer :: n, m
-    !    !integer :: nOptLoops = 10
-    !    integer :: iX, iY, iZ
-    !    integer, dimension(2) :: iXGSpan, iYGSpan, iZGSpan
-    !    integer, dimension(2) :: iXKSpan, iYKSpan, iZKSpan
+        integer, dimension(2) :: iXGSpan, iYGSpan, iZGSpan
+        integer, dimension(2) :: iXKSpan, iYKSpan, iZKSpan
 
-    !    ! Time monitoring
-    !    integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-    !    doubleprecision :: elapsedTime
-    !    doubleprecision :: elapsedTime2
-    !    !------------------------------------------------------------------------------
+        ! Time monitoring
+        integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+        integer :: clockCountStart2, clockCountStop2, clockCountRate2, clockCountMax2
+        doubleprecision :: elapsedTime
+        doubleprecision :: elapsedTime2
+        !------------------------------------------------------------------------------
    
-    !    ! THIS SHOULD BE MOVED TO SOME INITIALIZATION STAGE 
-    !    ! Compute histogram quantities
-    !    print *, '*** Computing histogram count' 
-    !    call this%histogram%ComputeCounts( dataPoints )
-    !    print *, '*** Computing histogram active ids' 
-    !    call this%histogram%ComputeActiveBinIds()
-    !    print *, this%histogram%nActiveBins
-    !    print *, '**********************************' 
 
 
     !    ! Allocate activeGridCells 
     !    allocate( activeGridCells( this%histogram%nActiveBins ) )
 
     !    ! Allocate grids
-    !    allocate( densityEstimateGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(       nEstimateGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(      curvatureXGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(      curvatureYGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(      curvatureZGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(         roughnessXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(         roughnessXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(         roughnessXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(         roughnessYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(         roughnessYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    !    allocate(         roughnessZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate( densityEstimateGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(       nEstimateGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(      curvatureXGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(      curvatureYGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(      curvatureZGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(         roughnessXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(         roughnessXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(         roughnessXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(         roughnessYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(         roughnessYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+        allocate(         roughnessZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
 
     !    ! Allocate arrays
-    !    allocate(      kernelSmoothing( this%histogram%nActiveBins, nDim ) )
-    !    allocate(   curvatureBandwidth( this%histogram%nActiveBins, nDim ) )
-    !    allocate( densityEstimateArray( this%histogram%nActiveBins ) )
-    !    allocate(       nEstimateArray( this%histogram%nActiveBins ) )
-    !    allocate(     roughnessXXArray( this%histogram%nActiveBins ) )  
-    !    allocate(     roughnessYYArray( this%histogram%nActiveBins ) )
-    !    allocate(     roughnessZZArray( this%histogram%nActiveBins ) )
-    !    allocate(    netRoughnessArray( this%histogram%nActiveBins ) )
+        allocate(      kernelSmoothing( this%histogram%nActiveBins, nDim ) )
+        allocate(   curvatureBandwidth( this%histogram%nActiveBins, nDim ) )
+        allocate( densityEstimateArray( this%histogram%nActiveBins ) )
+        allocate(       nEstimateArray( this%histogram%nActiveBins ) )
+        allocate(     roughnessXXArray( this%histogram%nActiveBins ) )  
+        allocate(     roughnessYYArray( this%histogram%nActiveBins ) )
+        allocate(     roughnessZZArray( this%histogram%nActiveBins ) )
+        allocate(    netRoughnessArray( this%histogram%nActiveBins ) )
 
 
 
@@ -1211,281 +1223,422 @@ contains
     !    !$omp end parallel do 
 
 
-    !    ! Define the initial smoothing array
-    !    kernelSmoothing         = spread( this%initialSmoothing, 1, this%histogram%nActiveBins )
-    !    oldKernelSmoothing      = kernelSmoothing
-    !    kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
-    !    kernelSigmaSupportScale = 3d0*kernelSmoothingScale
-    !    kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
+        ! Define the initial smoothing array
+        kernelSmoothing         = this%kernelSmoothing
+        kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
+        kernelSigmaSupport      = this%kernelSigmaSupport
+        kernelSigmaSupportScale = ( kernelSigmaSupport(:,1)*kernelSigmaSupport(:,2)*kernelSigmaSupport(:,3) )**( 1d0/nDim )
+        kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
+
+        call kernel%Initialize( this%binSize )
+        call kernelSigma%Initialize( this%binSize )
+        call kernelSD%Initialize( this%binSize )
 
 
-    !    ! -- Optimization loop -- !
-    !    do m = 1, nOptLoops
-    !        print *, '** Starting optimization loop: ', m
-    !  
-    !        ! TIC
-    !        call system_clock(clockCountStart, clockCountRate, clockCountMax)
-
-    !        ! --- STEP 1 --- !
-    !        !$omp parallel do &        
-    !        !$omp private( gc ) & 
-    !        !$omp private(iXGSpan, iYGSpan, iZGSpan) &
-    !        !$omp private(iXKSpan, iYKSpan, iZKSpan) 
-    !        do n = 1, this%histogram%nActiveBins
-
-    !            ! Assign pointer 
-    !            gc => activeGridCells(n)
-
-    !            if (gc%convergence) cycle
-    !            
-    !            ! Setup kernel matrix
-    !            call gc%kernel%SetupMatrix( kernelSmoothing( n, : ) )
-
-    !            ! Determine spans
-    !            call gc%kernel%ComputeGridEstimateSpans( gc%id, this%nBins, &
-    !                                             iXGSpan, iYGSpan, iZGSpan, & 
-    !                                             iXKSpan, iYKSpan, iZKSpan  ) 
-
-    !            ! Compute estimate
-    !            densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
-    !                this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !                gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
-
-    !            ! Assign into array     
-    !            densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )/this%histogram%binVolume
-
-    !        end do
-    !        !$omp end parallel do 
-    !   
-
-    !        !! --- STEP 2 --- !    
-    !        !!$omp parallel do &        
-    !        !!$omp private( gc ) & 
-    !        !!$omp private(iXGSpan, iYGSpan, iZGSpan) &
-    !        !!$omp private(iXKSpan, iYKSpan, iZKSpan) 
-    !        !do n = 1, this%histogram%nActiveBins
-
-    !        !    ! Assign pointer 
-    !        !    gc => activeGridCells(n)
-
-    !        !    if (gc%convergence) cycle
-
-    !        !    ! Setup kernel matrix
-    !        !    call gc%kernel%SetupMatrix( kernelSigmaSupport( n, : ) )
-
-    !        !    ! Determine spans
-    !        !    call gc%kernel%ComputeGridEstimateSpans( gc%id, this%nBins, &
-    !        !                                     iXGSpan, iYGSpan, iZGSpan, & 
-    !        !                                     iXKSpan, iYKSpan, iZKSpan  ) 
-
-    !        !    ! Compute estimate
-    !        !    nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
-    !        !        densityEstimateGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
-
-    !        !    ! Assign into array     
-    !        !    nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-
-    !        !end do
-    !        !!$omp end parallel do 
-
-    !        !! Update kernelSigmaSupport 
-    !        !call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
-    !        !                                   nEstimateArray, kernelSigmaSupportScale )
-    !        !! Spread it, isotropic 
-    !        !kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
-
-    !        !! Update n estimate
-    !        !! nEstimateGrid = 0d0
-    !        !!$omp parallel do &        
-    !        !!$omp private( gc ) & 
-    !        !!$omp private(iXGSpan, iYGSpan, iZGSpan) &
-    !        !!$omp private(iXKSpan, iYKSpan, iZKSpan) 
-    !        !do n = 1, this%histogram%nActiveBins
-
-    !        !    ! Assign pointer 
-    !        !    gc => activeGridCells(n)
-
-    !        !    
-    !        !    if (gc%convergence) cycle
+        densityEstimateGrid  = this%densityEstimateGrid
+        densityEstimateArray = this%densityEstimate
 
 
-    !        !    ! Setup kernel matrix
-    !        !    call gc%kernel%SetupMatrix( kernelSigmaSupport( n, : ) )
+        ! -- Optimization loop -- !
+        do m = 1, nFinalOptLoops
+            print *, '** Starting optimization loop: ', m
+      
+            ! TIC
+            call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
-    !        !    ! Determine spans
-    !        !    call gc%kernel%ComputeGridEstimateSpans( gc%id, this%nBins, &
-    !        !                                     iXGSpan, iYGSpan, iZGSpan, & 
-    !        !                                     iXKSpan, iYKSpan, iZKSpan  ) 
+            ! TIC
+            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            ! --- STEP 2 --- !    
+            !$omp parallel do                          &
+            !$omp firstprivate( kernelSigma )          & 
+            !$omp private( iX, iY, iZ )                &
+            !$omp private( iXGSpan, iYGSpan, iZGSpan ) &
+            !$omp private( iXKSpan, iYKSpan, iZKSpan ) 
+            do n = 1, this%histogram%nActiveBins
 
-    !        !    ! Compute estimate
-    !        !    nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
-    !        !        densityEstimateGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+                iX = this%histogram%activeBinIds( n, 1 )
+                iY = this%histogram%activeBinIds( n, 2 )
+                iZ = this%histogram%activeBinIds( n, 3 )
 
-    !        !    ! Assign into array     
-    !        !    nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+                ! Setup kernel matrix
+                call kernelSigma%SetupMatrix( kernelSigmaSupport( n, : ) )
 
-    !        !end do
-    !        !!$omp end parallel do 
-
-
-    !        !! --- STEP 3 --- !
-    !        !call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
-    !        !          nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
-    !        !                     kernelSigmaSupportScale, curvatureBandwidth )
-
-
-    !        !!$omp parallel do &        
-    !        !!$omp private( gc ) & 
-    !        !!$omp private(iXGSpan, iYGSpan, iZGSpan) &
-    !        !!$omp private(iXKSpan, iYKSpan, iZKSpan) 
-    !        !do n = 1, this%histogram%nActiveBins
-    !
-    !        !    ! Assign pointer 
-    !        !    gc => activeGridCells(n)
-   
-    !        !    if (gc%convergence) cycle
-
-    !        !    ! Setup second derivatives
-    !        !    call gc%kernel%SetupSecondDerivativesMatrix( curvatureBandwidth( n, : ) )
-    !
-    !        !    ! Determine spans
-    !        !    call gc%kernel%ComputeGridEstimateSpansSecond( gc%id, this%nBins, &
-    !        !                                           iXGSpan, iYGSpan, iZGSpan, & 
-    !        !                                           iXKSpan, iYKSpan, iZKSpan  )
-    !
-    !        !    ! Compute curvature grid estimates
-    !        !    curvatureXGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
-    !        !        this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%secondDerivativeX( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
-    !        !        /this%histogram%binVolume
-    !
-    !        !    curvatureYGrid( gc%id(1), gc%id(2), gc%id(3) )  = sum( &
-    !        !        this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%secondDerivativeY( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
-    !        !        /this%histogram%binVolume
-    !
-    !        !    curvatureZGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
-    !        !        this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%secondDerivativeZ( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
-    !        !        /this%histogram%binVolume
-    !
-    !        !end do
-    !        !!$omp end parallel do 
-    !
-    !
-
-    !        !! --- STEP 4 --- !
-    !        !!$omp parallel do                        &        
-    !        !!$omp private( gc )                      & 
-    !        !!$omp private(iX, iY, iZ)                & 
-    !        !!$omp private(iXGSpan, iYGSpan, iZGSpan) &
-    !        !!$omp private(iXKSpan, iYKSpan, iZKSpan) 
-    !        !do n = 1, this%histogram%nActiveBins
-
-    !        !    ! Assign pointer 
-    !        !    gc => activeGridCells(n)
-
-    !        !    if (gc%convergence) cycle
-
-    !        !    ! Define local indexes
-    !        !    iX = gc%id( 1 )
-    !        !    iY = gc%id( 2 )
-    !        !    iZ = gc%id( 3 )
+                ! Determine spans
+                call kernelSigma%ComputeGridEstimateSpans(&
+                   this%histogram%activeBinIds( n, : ), this%nBins, &
+                                         iXGSpan, iYGSpan, iZGSpan, & 
+                                         iXKSpan, iYKSpan, iZKSpan  ) 
 
 
-    !        !    call gc%kernel%SetupMatrix( kernelSigmaSupport( n, : ) )
+                ! Compute estimate
+                nEstimateGrid( iX, iY, iZ ) = sum(&
+                    densityEstimateGrid(&
+                        iXGSpan(1):iXGSpan(2), &
+                        iYGSpan(1):iYGSpan(2), &
+                        iZGSpan(1):iZGSpan(2)  &
+                    )*kernelSigma%matrix(&
+                        iXKSpan(1):iXKSpan(2), &
+                        iYKSpan(1):iYKSpan(2), & 
+                        iZKSpan(1):iZKSpan(2)) )
 
-    !        !    ! Determine spans
-    !        !    call gc%kernel%ComputeGridEstimateSpans( gc%id, this%nBins, &
-    !        !                                     iXGSpan, iYGSpan, iZGSpan, & 
-    !        !                                     iXKSpan, iYKSpan, iZKSpan  )
-
-    !        !    ! Compute roughness grid estimates
-    !        !    roughnessXX(iX,iY,iZ) = sum( &
-    !        !        curvatureXGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )**2*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
-
-    !        !    roughnessYY(iX,iY,iZ) = sum( &
-    !        !        curvatureYGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )**2*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
-
-    !        !    roughnessZZ(iX,iY,iZ) = sum( &
-    !        !        curvatureZGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )**2*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
-
-    !        !    roughnessXY(iX,iY,iZ) = sum( &
-    !        !        curvatureXGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        curvatureYGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
-
-    !        !    roughnessXZ(iX,iY,iZ) = sum( &
-    !        !        curvatureXGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        curvatureZGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
-
-    !        !    roughnessYZ(iX,iY,iZ) = sum( &
-    !        !        curvatureYGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        curvatureZGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
-    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
-    !        !    
-
-    !        !    ! Assign info for needed arrays 
-    !        !    roughnessXXArray( n ) = roughnessXX(iX,iY,iZ)
-    !        !    roughnessYYArray( n ) = roughnessYY(iX,iY,iZ)
-    !        !    roughnessZZArray( n ) = roughnessZZ(iX,iY,iZ)
-
-    !        !    ! Compute net roughness
-    !        !    netRoughnessArray( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3) + &
-    !        !        2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
-    !        !        2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
-    !        !        2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6)
-    !        !    
-
-    !        !end do
-    !        !!$omp end parallel do 
-
-    !        !call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
-    !        !                roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-    !        !                               kernelSmoothing, kernelSmoothingScale  )
-
-    !        !!print *, kernelSmoothing(1,:)
-
-    !        !relativeSmoothingChange = abs( ( kernelSmoothing - oldKernelSmoothing )/oldKernelSmoothing )
-
-    !        !!!$omp parallel do   &
-    !        !!!$omp private( gc )  
-    !        !!do n = 1, this%histogram%nActiveBins
-
-    !        !!    ! Assign pointer 
-    !        !!    gc => activeGridCells(n)
-
-    !        !!    if ( all( relativeSmoothingChange(n, :) < 0.01 ) .and. (.not. gc%convergence) ) then
-    !        !!        gc%convergence = .true.
-    !        !!    !else if (  gc%convergence  .and.  any( relativeSmoothingChange(n, :) > 0.01 )  ) then
-    !        !!    !    print *, '## LEFT CONVERGENCE ##', gc%id, relativeSmoothingChange(n,:)
-    !        !!    !    gc%convergence = .false.
-    !        !!    end if
-
-    !        !!end do
-    !        !!!$omp end parallel do 
-    !        !
-    !        !print *, 'MAX CHANGE  ', maxval( relativeSmoothingChange )
-    !        !print *, 'MIN CHANGE  ', minval( relativeSmoothingChange )
-    !        !print *, 'MEAN CHANGE ', sum( relativeSmoothingChange )/(3*this%histogram%nActiveBins)
-
-    !        !oldKernelSmoothing = kernelSmoothing
-
-    !        call system_clock(clockCountStop, clockCountRate, clockCountMax)
-    !        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-    !        print *, 'OPT LOOP TIME: ', elapsedTime, ' seconds'
-
-    !    end do
-    !    ! --- End Optimization Loop --- !
+                ! Assign into array     
+                nEstimateArray( n ) = nEstimateGrid( iX, iY, iZ )
 
 
-    !end subroutine prComputeDensityParallel
+            end do
+            !$omp end parallel do
+            print *, 'debug_nestimate_max', maxval( nEstimateArray )
+            print *, 'debug_nestimate_min', minval( nEstimateArray )
+            !! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** nEstimate: ', elapsedTime2, ' seconds'
+
+
+            !! TIC
+            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            ! Update kernelSigmaSupport 
+            call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
+                                               nEstimateArray, kernelSigmaSupportScale )
+            ! Spread it, isotropic 
+            kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
+            print *, 'debug_kernelsigmasupport_max', maxval( kernelSigmaSupport )
+            print *, 'debug_kernelsigmasupport_min', minval( kernelSigmaSupport )
+            !! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** kernelSigmaSupport: ', elapsedTime2, ' seconds'
+
+
+
+            ! TIC
+            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            ! Update n estimate
+            !$omp parallel do                          &
+            !$omp firstprivate( kernelSigma )          & 
+            !$omp private( iX, iY, iZ )                &
+            !$omp private( iXGSpan, iYGSpan, iZGSpan ) &
+            !$omp private( iXKSpan, iYKSpan, iZKSpan ) 
+            do n = 1, this%histogram%nActiveBins
+
+
+                iX = this%histogram%activeBinIds( n, 1 )
+                iY = this%histogram%activeBinIds( n, 2 )
+                iZ = this%histogram%activeBinIds( n, 3 )
+
+                ! Setup kernel matrix
+                call kernelSigma%SetupMatrix( kernelSigmaSupport( n, : ) )
+
+                ! Determine spans
+                call kernelSigma%ComputeGridEstimateSpans(&
+                   this%histogram%activeBinIds( n, : ), this%nBins, &
+                                         iXGSpan, iYGSpan, iZGSpan, & 
+                                         iXKSpan, iYKSpan, iZKSpan  ) 
+
+                ! Compute estimate
+                nEstimateGrid( iX, iY, iZ ) = sum(&
+                    densityEstimateGrid(&
+                        iXGSpan(1):iXGSpan(2), &
+                        iYGSpan(1):iYGSpan(2), &
+                        iZGSpan(1):iZGSpan(2)  &
+                    )*kernelSigma%matrix(&
+                        iXKSpan(1):iXKSpan(2), &
+                        iYKSpan(1):iYKSpan(2), & 
+                        iZKSpan(1):iZKSpan(2)) )
+
+                ! Assign into array     
+                nEstimateArray( n ) = nEstimateGrid( iX, iY, iZ )
+
+            end do
+            !$omp end parallel do 
+            print *, 'debug_nestimate_max', maxval( nEstimateArray )
+            print *, 'debug_nestimate_min', minval( nEstimateArray )
+            !! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** nEstimate: ', elapsedTime2, ' seconds'
+
+
+            ! --- STEP 3 --- !
+            call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
+                      nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
+                                 kernelSigmaSupportScale, curvatureBandwidth )
+            print *, 'debug_curvaturebandwidth_max', maxval( curvatureBandwidth )
+            print *, 'debug_curvaturebandwidth_min', minval( curvatureBandwidth )
+
+
+
+            ! TIC
+            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !$omp parallel do                          &        
+            !$omp firstprivate( kernelSD )             & 
+            !$omp private( iX, iY, iZ )                &
+            !$omp private( iXGSpan, iYGSpan, iZGSpan ) &
+            !$omp private( iXKSpan, iYKSpan, iZKSpan ) 
+            do n = 1, this%histogram%nActiveBins
+                
+                iX = this%histogram%activeBinIds( n, 1 )
+                iY = this%histogram%activeBinIds( n, 2 )
+                iZ = this%histogram%activeBinIds( n, 3 )
+    
+                ! Setup second derivatives
+                call kernelSD%SetupSecondDerivativesMatrix( curvatureBandwidth( n, : ) )
+    
+                ! Determine spans
+                call kernelSD%ComputeGridEstimateSpansSecond(&
+                   this%histogram%activeBinIds( n, : ), this%nBins, &
+                                         iXGSpan, iYGSpan, iZGSpan, & 
+                                         iXKSpan, iYKSpan, iZKSpan  )
+
+
+                ! Compute curvature grid estimates
+                ! X
+                curvatureXGrid( iX, iY, iZ ) = sum( &
+                    this%histogram%counts(&
+                        iXGSpan(1):iXGSpan(2), &
+                        iYGSpan(1):iYGSpan(2), &
+                        iZGSpan(1):iZGSpan(2)  &
+                    )*kernelSD%secondDerivativeX(&
+                        iXKSpan(1):iXKSpan(2), &
+                        iYKSpan(1):iYKSpan(2), & 
+                        iZKSpan(1):iZKSpan(2)) &
+                    )/this%histogram%binVolume
+
+                ! Y
+                curvatureYGrid( iX, iY, iZ ) = sum( &
+                    this%histogram%counts(&
+                        iXGSpan(1):iXGSpan(2), &
+                        iYGSpan(1):iYGSpan(2), &
+                        iZGSpan(1):iZGSpan(2)  &
+                    )*kernelSD%secondDerivativeY(&
+                        iXKSpan(1):iXKSpan(2), &
+                        iYKSpan(1):iYKSpan(2), & 
+                        iZKSpan(1):iZKSpan(2)) &
+                    )/this%histogram%binVolume
+    
+                ! Z
+                curvatureZGrid( iX, iY, iZ ) = sum( &
+                    this%histogram%counts(&
+                        iXGSpan(1):iXGSpan(2), &
+                        iYGSpan(1):iYGSpan(2), &
+                        iZGSpan(1):iZGSpan(2)  &
+                    )*kernelSD%secondDerivativeZ(&
+                        iXKSpan(1):iXKSpan(2), &
+                        iYKSpan(1):iYKSpan(2), & 
+                        iZKSpan(1):iZKSpan(2)) &
+                    )/this%histogram%binVolume
+
+            end do
+            !$omp end parallel do 
+            !print *, '################################################################################' 
+            !print *, 'DEBUG: CURVATUREX MAX', maxval( curvatureXGrid )
+            !print *, 'DEBUG: CURVATUREX MIN', minval( curvatureXGrid )
+            !print *, 'DEBUG: CURVATUREY MAX', maxval( curvatureYGrid )
+            !print *, 'DEBUG: CURVATUREY MIN', minval( curvatureYGrid )
+            !print *, 'DEBUG: CURVATUREZ MAX', maxval( curvatureZGrid )
+            !print *, 'DEBUG: CURVATUREz MIN', minval( curvatureZGrid )
+            !print *, '################################################################################' 
+            !! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** curvatures: ', elapsedTime2, ' seconds'
+
+
+            !! TIC
+            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            curvatureXX = curvatureXGrid*curvatureXGrid
+            curvatureYY = curvatureYGrid*curvatureYGrid
+            curvatureZZ = curvatureZGrid*curvatureZGrid
+            curvatureXY = curvatureXGrid*curvatureYGrid
+            curvatureXZ = curvatureXGrid*curvatureZGrid
+            curvatureYZ = curvatureYGrid*curvatureZGrid
+            !! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** productCurvatures: ', elapsedTime2, ' seconds'
+
+
+
+            ! --- STEP 4 --- !
+            !$omp parallel do                        &        
+            !$omp firstprivate( kernelSigma )        & 
+            !$omp private(iX, iY, iZ)                & 
+            !$omp private(iXGSpan, iYGSpan, iZGSpan) &
+            !$omp private(iXKSpan, iYKSpan, iZKSpan) 
+            do n = 1, this%histogram%nActiveBins
+
+                iX = this%histogram%activeBinIds( n, 1 )
+                iY = this%histogram%activeBinIds( n, 2 )
+                iZ = this%histogram%activeBinIds( n, 3 )
+
+                ! Setup kernel matrix
+                call kernelSigma%SetupMatrix( kernelSigmaSupport( n, : ) )
+
+                ! Determine spans
+                call kernelSigma%ComputeGridEstimateSpans(&
+                   this%histogram%activeBinIds( n, : ), this%nBins, &
+                                         iXGSpan, iYGSpan, iZGSpan, & 
+                                         iXKSpan, iYKSpan, iZKSpan  ) 
+
+
+                ! Compute roughness grid estimates
+                roughnessXX(iX,iY,iZ) = sum( &
+                    curvatureXX( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                    kernelSigma%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
+
+                roughnessYY(iX,iY,iZ) = sum( &
+                    curvatureYY( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                    kernelSigma%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
+
+                roughnessZZ(iX,iY,iZ) = sum( &
+                    curvatureZZ( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                    kernelSigma%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
+
+                roughnessXY(iX,iY,iZ) = sum( &
+                    curvatureXY( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                    kernelSigma%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
+
+                roughnessXZ(iX,iY,iZ) = sum( &
+                    curvatureXZ( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                    kernelSigma%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
+
+                roughnessYZ(iX,iY,iZ) = sum( &
+                    curvatureYZ( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+                    kernelSigma%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) ) 
+                
+
+                ! Assign info for needed arrays 
+                roughnessXXArray( n ) = roughnessXX(iX,iY,iZ)
+                roughnessYYArray( n ) = roughnessYY(iX,iY,iZ)
+                roughnessZZArray( n ) = roughnessZZ(iX,iY,iZ)
+
+                ! Compute net roughness
+                netRoughnessArray( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3) + &
+                    2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
+                    2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
+                    2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6)
+                
+
+            end do
+            !$omp end parallel do 
+
+            ! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** roughnesses: ', elapsedTime2, ' seconds'
+
+
+            ! TIC
+            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
+                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                                           kernelSmoothing, kernelSmoothingScale  )
+            print *, 'debug_kernelsmoothing_x_max', maxval( kernelSmoothing(:,1) )
+            print *, 'debug_kernelsmoothing_x_min', minval( kernelSmoothing(:,1) )
+            print *, 'debug_kernelsmoothing_y_max', maxval( kernelSmoothing(:,2) )
+            print *, 'debug_kernelsmoothing_y_min', minval( kernelSmoothing(:,2) )
+            print *, 'debug_kernelsmoothing_z_max', maxval( kernelSmoothing(:,3) )
+            print *, 'debug_kernelsmoothing_z_min', minval( kernelSmoothing(:,3) )
+
+            ! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** smoothing: ', elapsedTime2, ' seconds'
+
+
+            ! TIC
+            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            ! --- UPDATE DENSITY WITH NEW SMOOTHING --- !
+            !$omp parallel do &        
+            !$omp firstprivate( kernel )        & 
+            !$omp private(iX, iY, iZ)                & 
+            !$omp private(iXGSpan, iYGSpan, iZGSpan) &
+            !$omp private(iXKSpan, iYKSpan, iZKSpan) 
+            do n = 1, this%histogram%nActiveBins
+
+                iX = this%histogram%activeBinIds( n, 1 )
+                iY = this%histogram%activeBinIds( n, 2 )
+                iZ = this%histogram%activeBinIds( n, 3 )
+
+                ! Setup kernel matrix
+                call kernel%SetupMatrix( kernelSmoothing( n, : ) )
+
+                ! Determine spans
+                call kernel%ComputeGridEstimateSpans(&
+                   this%histogram%activeBinIds( n, : ), this%nBins, &
+                                         iXGSpan, iYGSpan, iZGSpan, & 
+                                         iXKSpan, iYKSpan, iZKSpan  ) 
+
+                ! Compute estimate
+                densityEstimateGrid( iX, iY, iZ ) = sum(&
+                    this%histogram%counts(&
+                        iXGSpan(1):iXGSpan(2), &
+                        iYGSpan(1):iYGSpan(2), &
+                        iZGSpan(1):iZGSpan(2)  &
+                    )*kernel%matrix(&
+                        iXKSpan(1):iXKSpan(2), &
+                        iYKSpan(1):iYKSpan(2), & 
+                        iZKSpan(1):iZKSpan(2)) &
+                    )/this%histogram%binVolume
+
+                ! Assign into array     
+                densityEstimateArray( n ) = densityEstimateGrid( iX, iY, iZ )
+
+            end do
+            !$omp end parallel do 
+            print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
+            print *, 'debug_densityestimate_min', minval( densityEstimateArray )
+            !print *, '################################################################################' 
+            !print *, 'DEBUG: DENSITY MAX', maxval( densityEstimateArray )
+            !print *, 'DEBUG: DENSITY MIN', minval( densityEstimateArray )
+            !print *, '################################################################################' 
+            !! TOC
+            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            print *, '**** density: ', elapsedTime2, ' seconds'
+
+            relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
+
+            !$omp parallel do   &
+            !$omp reduction( +:convergenceCount ) 
+            do n = 1, this%histogram%nActiveBins
+                if ( relativeDensityChange(n) < 0.01 ) then 
+                    convergenceCount = convergenceCount + 1
+                end if 
+            end do
+            !$omp end parallel do 
+            print *, 'debug_convergence_count', convergenceCount
+            print *, 'debug_relativedensitychange_max  ', maxval( relativeDensityChange )
+            print *, 'debug_relativedensitychange_min  ', minval( relativeDensityChange )
+            print *, 'debug_relativedensitychange_mean ',  sum(    relativeDensityChange )/this%histogram%nActiveBins
+            !print *, '################################################################################' 
+            !print *, '# DENSITY CHANGES SMALLER THAN 0.01 ', convergenceCount
+            !print *, '# MAX   DENSITY  ', maxval( densityEstimateArray )
+            !print *, '# MIN   DENSITY  ', minval( densityEstimateArray )
+            !print *, '# MEAN  DENSITY  ', sum( densityEstimateArray )/this%histogram%nActiveBins
+            !print *, '################################################################################' 
+            !print *, '#### MAX  DENSITY CHANGE  ', maxval( relativeDensityChange )
+            !print *, '#### MIN  DENSITY CHANGE  ', minval( relativeDensityChange )
+            !print *, '#### MEAN DENSITY CHANGE ',  sum(    relativeDensityChange )/this%histogram%nActiveBins
+            !print *, '################################################################################' 
+            convergenceCount     = 0
+            this%densityEstimate =  densityEstimateArray
+
+
+            call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
+                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                                           kernelSmoothing, kernelSmoothingScale  )
+
+            call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            print *, 'OPT LOOP TIME: ', elapsedTime, ' seconds'
+
+
+        end do
+        ! --- End Optimization Loop --- !
+
+
+    end subroutine prComputeDensityParallel
 
 
 
@@ -1816,6 +1969,7 @@ end module GridProjectedKDEModule
 !! THRASH
 
 
+
     !function prComputeKernelDatabaseIndexes( this, smoothing ) result(indexes)
     !    !------------------------------------------------------------------------------
     !    ! 
@@ -1948,6 +2102,67 @@ end module GridProjectedKDEModule
 
 
 
+
+
+
+
+
+
+
+    !        !!$omp parallel do &        
+    !        !!$omp private( gc ) & 
+    !        !!$omp private(iXGSpan, iYGSpan, iZGSpan) &
+    !        !!$omp private(iXKSpan, iYKSpan, iZKSpan) 
+    !        !do n = 1, this%histogram%nActiveBins
+    !
+    !        !    ! Assign pointer 
+    !        !    gc => activeGridCells(n)
+   
+    !        !    if (gc%convergence) cycle
+
+    !        !    ! Setup second derivatives
+    !        !    call gc%kernel%SetupSecondDerivativesMatrix( curvatureBandwidth( n, : ) )
+    !
+    !        !    ! Determine spans
+    !        !    call gc%kernel%ComputeGridEstimateSpansSecond( gc%id, this%nBins, &
+    !        !                                           iXGSpan, iYGSpan, iZGSpan, & 
+    !        !                                           iXKSpan, iYKSpan, iZKSpan  )
+    !
+    !        !    ! Compute curvature grid estimates
+    !        !    curvatureXGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
+    !        !        this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+    !        !        gc%kernel%secondDerivativeX( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
+    !        !        /this%histogram%binVolume
+    !
+    !        !    curvatureYGrid( gc%id(1), gc%id(2), gc%id(3) )  = sum( &
+    !        !        this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+    !        !        gc%kernel%secondDerivativeY( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
+    !        !        /this%histogram%binVolume
+    !
+    !        !    curvatureZGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
+    !        !        this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+    !        !        gc%kernel%secondDerivativeZ( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )&
+    !        !        /this%histogram%binVolume
+    !
+    !        !end do
+    !        !!$omp end parallel do 
+    !
+            !call exit(0)
+    !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         !    !relativeSmoothingChange = abs( ( kernelSmoothing - oldKernelSmoothing )/oldKernelSmoothing )
         !    !!!!$omp parallel do   &
         !    !!!!$omp private( gc )  
@@ -1986,6 +2201,76 @@ end module GridProjectedKDEModule
 
 
 
+
+
+    !        ! --- STEP 1 --- !
+    !        !$omp parallel do &        
+    !        !$omp private( gc ) & 
+    !        !$omp private(iXGSpan, iYGSpan, iZGSpan) &
+    !        !$omp private(iXKSpan, iYKSpan, iZKSpan) 
+    !        do n = 1, this%histogram%nActiveBins
+
+    !            ! Assign pointer 
+    !            gc => activeGridCells(n)
+
+    !            if (gc%convergence) cycle
+    !            
+    !            ! Setup kernel matrix
+    !            call gc%kernel%SetupMatrix( kernelSmoothing( n, : ) )
+
+    !            ! Determine spans
+    !            call gc%kernel%ComputeGridEstimateSpans( gc%id, this%nBins, &
+    !                                             iXGSpan, iYGSpan, iZGSpan, & 
+    !                                             iXKSpan, iYKSpan, iZKSpan  ) 
+
+    !            ! Compute estimate
+    !            densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
+    !                this%histogram%counts( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+    !                gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+
+    !            ! Assign into array     
+    !            densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )/this%histogram%binVolume
+
+    !        end do
+    !        !$omp end parallel do 
+    !   
+
+    !        !! --- STEP 2 --- !    
+    !        !!$omp parallel do &        
+    !        !!$omp private( gc ) & 
+    !        !!$omp private(iXGSpan, iYGSpan, iZGSpan) &
+    !        !!$omp private(iXKSpan, iYKSpan, iZKSpan) 
+    !        !do n = 1, this%histogram%nActiveBins
+
+    !        !    ! Assign pointer 
+    !        !    gc => activeGridCells(n)
+
+    !        !    if (gc%convergence) cycle
+
+    !        !    ! Setup kernel matrix
+    !        !    call gc%kernel%SetupMatrix( kernelSigmaSupport( n, : ) )
+
+    !        !    ! Determine spans
+    !        !    call gc%kernel%ComputeGridEstimateSpans( gc%id, this%nBins, &
+    !        !                                     iXGSpan, iYGSpan, iZGSpan, & 
+    !        !                                     iXKSpan, iYKSpan, iZKSpan  ) 
+
+    !        !    ! Compute estimate
+    !        !    nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum( &
+    !        !        densityEstimateGrid( iXGSpan(1):iXGSpan(2), iYGSpan(1):iYGSpan(2), iZGSpan(1):iZGSpan(2) )*&
+    !        !        gc%kernel%matrix( iXKSpan(1):iXKSpan(2), iYKSpan(1):iYKSpan(2), iZKSpan(1):iZKSpan(2) ) )
+
+    !        !    ! Assign into array     
+    !        !    nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+
+    !        !end do
+    !        !!$omp end parallel do 
+
+    !        !! Update kernelSigmaSupport 
+    !        !call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
+    !        !                                   nEstimateArray, kernelSigmaSupportScale )
+    !        !! Spread it, isotropic 
+    !        !kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
 
 
 
