@@ -12,6 +12,9 @@ module KernelMultiGaussianModule
     doubleprecision, parameter :: sqrtTwo = sqrt(2d0)
     integer                    :: nDim    = 3
 
+    integer, parameter :: defaultKernelRange   = 3
+    integer, parameter :: defaultKernelSDRange = 4
+
 
     ! Set default access status to private
     private
@@ -25,6 +28,7 @@ module KernelMultiGaussianModule
         integer :: snx, sny, snz          ! should be removed
         integer :: curvatureGridSize = 0  ! should be removed
         integer, dimension(3) :: matrixPositiveShape = 0 
+        integer :: kernelRange
         doubleprecision, dimension(3) :: binSize     = 0d0
         doubleprecision, dimension(3) :: smoothing   = 0d0
         doubleprecision, dimension(3) :: gBandwidths = 0d0 ! should be removed
@@ -52,6 +56,7 @@ module KernelMultiGaussianModule
         integer :: snx, sny, snz
         integer :: curvatureGridSize = 0 
         integer, dimension(3) :: secondDerivativePositiveShape = 0 
+        integer :: kernelRange
         doubleprecision, dimension(3) :: binSize     = 0d0
         doubleprecision, dimension(3) :: smoothing   = 0d0
         doubleprecision, dimension(3) :: gBandwidths = 0d0
@@ -78,7 +83,7 @@ contains
 
 
     ! CONSIDER RESTORING SMOOTHING
-    subroutine prInitialize( this, binSize )
+    subroutine prInitialize( this, binSize, kernelRange )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -87,20 +92,24 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class(KernelMultiGaussianType) :: this 
-        !integer, intent(in) :: nx, ny, nz  
-        !doubleprecision, dimension(:) :: smoothing
-        doubleprecision, dimension(:) :: binSize
+        doubleprecision, dimension(:)  :: binSize
+        integer, intent(in), optional  :: kernelRange
         !------------------------------------------------------------------------------
 
         ! Assign binSize 
         this%binSize = binSize 
 
+        if ( present( kernelRange ) ) then 
+            this%kernelRange = kernelRange
+        else
+            this%kernelRange = defaultKernelRange 
+        end if
 
     end subroutine prInitialize
 
 
 
-    subroutine prInitializeSD( this, binSize )
+    subroutine prInitializeSD( this, binSize, kernelRange )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -109,13 +118,18 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class(KernelSecondDerivativesType) :: this 
-        !integer, intent(in) :: nx, ny, nz  
-        !doubleprecision, dimension(:) :: smoothing
         doubleprecision, dimension(:) :: binSize
+        integer, optional :: kernelRange
         !------------------------------------------------------------------------------
 
         ! Assign binSize 
         this%binSize = binSize 
+
+        if ( present( kernelRange ) ) then 
+            this%kernelRange = kernelRange
+        else
+            this%kernelRange = defaultKernelSDRange 
+        end if
 
 
     end subroutine prInitializeSD
@@ -186,15 +200,14 @@ contains
         implicit none
         class(KernelMultiGaussianType)            :: this 
         doubleprecision, dimension(3), intent(in) :: smoothing
-        !integer, dimension(3) :: positiveGridSize
-        !integer, dimension(3) :: matrixPositiveShape
-        integer, dimension(:,:,:), allocatable :: zPXGrid, zPYGrid, zPZGrid
+        integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
         logical               :: newSmoothing, newGrid = .false. 
         !------------------------------------------------------------------------------
 
+        ! RANGE
         ! Assign kernel properties
-        this%smoothing = smoothing
-        this%matrixPositiveShape = floor( 3*this%smoothing/this%binSize )
+        this%smoothing           = smoothing
+        this%matrixPositiveShape = floor( this%kernelRange*this%smoothing/this%binSize )
 
         allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
         allocate( zPYGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
@@ -344,16 +357,15 @@ contains
         !------------------------------------------------------------------------------
 
 
-        ! Value 4 in this place comes from a RANGE argument in BAKS
-        ! Curvature matrices should have the same size
         ! Compute the size
+        ! same for each matrix. 
+        ! This is because the same grid is being used
+        ! for all derivatives
         curvatureGridSize = max( &
-            maxval( floor( 4*gBandwidths(1)/this%binSize ) ), &
-            maxval( floor( 4*gBandwidths(2)/this%binSize ) ), & 
-            maxval( floor( 4*gBandwidths(3)/this%binSize ) )  )
+            maxval( floor( this%kernelRange*gBandwidths(1)/this%binSize ) ), &
+            maxval( floor( this%kernelRange*gBandwidths(2)/this%binSize ) ), & 
+            maxval( floor( this%kernelRange*gBandwidths(3)/this%binSize ) )  )
 
-        !print *, ' AT SETUP '
-        !print *, curvatureGridSize
 
         allocate( zPXGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )
         allocate( zPYGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )

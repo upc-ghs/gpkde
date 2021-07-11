@@ -15,10 +15,13 @@ module GridProjectedKDEModule
     integer, parameter         :: nDim         = 3
     doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
-    integer, parameter         :: nOptLoops    = 10
+    !integer, parameter         :: nOptLoops    = 10
 
+    integer, parameter :: defaultKernelRange   = 3
+    integer, parameter :: defaultKernelSDRange = 4
+    integer, parameter :: defaultNOptLoops     = 10
 
-    ! Set default access status to private
+    ! Set default access to private
     private
 
 
@@ -43,9 +46,7 @@ module GridProjectedKDEModule
         doubleprecision, dimension(:,:), allocatable   :: kernelSigmaSupport
         doubleprecision, dimension(:,:), allocatable   :: curvatureBandwidth
         
-
-
-        ! Kernel database 
+        ! Kernel database params 
         doubleprecision, dimension(3) :: deltaHOverLambda
         doubleprecision, dimension(3) :: minDeltaHOverLambda
         integer, dimension(3)         :: nDeltaHOverLambda
@@ -194,7 +195,8 @@ contains
 
 
     subroutine prInitializeKernelDatabase( this, minDeltaHOverLambda, &
-                    maxDeltaHOverLambda, deltaHOverLambda, logDatabase )
+                  maxDeltaHOverLambda, deltaHOverLambda, logDatabase, &
+                                           kernelRange, kernelSDRange )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -207,12 +209,17 @@ contains
         doubleprecision,   intent(in) :: deltaHOverLambda
         doubleprecision,   intent(in) :: maxDeltaHOverLambda
         doubleprecision,   intent(in) :: minDeltaHOverLambda
-        logical, optional             :: logDatabase
+        logical, intent(in), optional :: logDatabase
+        integer, intent(in), optional :: kernelRange
+        integer, intent(in), optional :: kernelSDRange
         ! local
         doubleprecision, dimension(3) :: inputSmoothing
         doubleprecision, dimension(:), allocatable :: hOverLambda
         integer :: nDelta
         integer :: i, n, m, o
+        logical :: localLogDatabase
+        integer :: localKernelRange
+        integer :: localKernelSDRange
 
         ! Mem debug
         doubleprecision :: kernelMatrixMemory = 0d0
@@ -220,16 +227,34 @@ contains
         doubleprecision :: kernelSDDBMemory = 0d0
         !------------------------------------------------------------------------------
 
-        
         ! Sanity check for input parameters
 
-        ! Initialize logDatabase as false
-        if ( .not. present( logDatabase ) ) logDatabase = .false.
+        ! Default parameters
+
+        ! logDatabase as false
+        if ( present( logDatabase ) ) then 
+            localLogDatabase = logDatabase
+        else
+            localLogDatabase = .false.
+        end if 
+
+        ! Kernel ranges 
+        if ( present( kernelRange ) )  then 
+            localKernelRange = kernelRange
+        else 
+            localKernelRange = defaultKernelRange
+        end if
+
+        if ( present( kernelSDRange ) ) then 
+            localKernelSDRange = kernelSDRange
+        else 
+            localKernelSDRange = defaultKernelSDRange
+        end if 
 
 
         ! In the meantime a single nDelta, 
         ! it could be any discretization
-        if ( logDatabase ) then
+        if ( localLogDatabase ) then
             ! LOG FORM
             ! Verify this 
             nDelta      = ceiling(&
@@ -276,7 +301,7 @@ contains
             do m = 1, nDelta
                 do n = 1, nDelta
                    inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
-                   call this%kernelDatabase( n, m, o )%Initialize( this%binSize )
+                   call this%kernelDatabase( n, m, o )%Initialize( this%binSize, kernelRange=localKernelRange )
                    call this%kernelDatabase( n, m, o )%SetupMatrix( inputSmoothing*this%binSize )
                    !kernelMatrixMemory = sizeof( this%kernelDatabase( n, m, o )%matrix )/1e6
                    !kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
@@ -296,7 +321,7 @@ contains
         !$omp private( inputSmoothing )
         do n = 1, nDelta
             inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /) 
-            call this%kernelSDDatabase( n )%Initialize( this%binSize )
+            call this%kernelSDDatabase( n )%Initialize( this%binSize, kernelRange=localKernelSDRange )
             call this%kernelSDDatabase( n )%SetupSecondDerivativesMatrix( inputSmoothing*this%binSize )
         end do
         !$omp end parallel do
@@ -329,7 +354,7 @@ contains
 
 
 
-    subroutine prComputeDensity( this, dataPoints )
+    subroutine prComputeDensity( this, dataPoints, nOptimizationLoops )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -339,11 +364,20 @@ contains
         implicit none
         class( GridProjectedKDEType ), target:: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
+        integer, intent(in), optional :: nOptimizationLoops
+        integer :: localNOptimizationLoops
 
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
         doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
+
+        ! Define nOptimizationLoops
+        if ( present( nOptimizationLoops ) ) then 
+            localNOptimizationLoops = nOptimizationLoops
+        else 
+            localNOptimizationLoops = defaultNOptLoops
+        end if 
 
 
         ! Initialize the histogram quantities
@@ -364,14 +398,11 @@ contains
         print *, '## GPKDE: histogram active bins: ', this%histogram%nActiveBins
         print *, '## GPKDE: histogram compute active bin ids took: ', elapsedTime, ' seconds'
 
-
-        !call exit(0)
-
-
         ! Once histogram is computed, 
         ! Initialize density optimization 
         print *, '## GPKDE: compute density from kernel databases'
-        call this%ComputeDensityFromDatabase( dataPoints )
+        call this%ComputeDensityFromDatabase( dataPoints, &
+               nOptimizationLoops=localNOptimizationLoops )
 
         print *, '## GPKDE: drop kernel database'
         call this%DropKernelDatabase()
@@ -385,7 +416,7 @@ contains
     
 
 
-    subroutine prComputeDensityFromDatabase( this, dataPoints )
+    subroutine prComputeDensityFromDatabase( this, dataPoints, nOptimizationLoops )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -426,6 +457,10 @@ contains
         doubleprecision, dimension(:)    , allocatable :: roughnessYYArray
         doubleprecision, dimension(:)    , allocatable :: roughnessZZArray
         doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
+
+        ! Optimization loops
+        integer, intent(in), optional :: nOptimizationLoops
+        integer                       :: nOptLoops
 
         ! Grid cells
         type( GridCellType ), dimension(:), allocatable, target :: activeGridCells
@@ -479,6 +514,15 @@ contains
         allocate(     roughnessYYArray( this%histogram%nActiveBins ) )
         allocate(     roughnessZZArray( this%histogram%nActiveBins ) )
         allocate(    netRoughnessArray( this%histogram%nActiveBins ) )
+
+
+
+        ! Define nOptLoops
+        if ( present( nOptimizationLoops ) ) then 
+            nOptLoops = nOptimizationLoops
+        else 
+            nOptLoops = defaultNOptLoops
+        end if 
 
 
 
