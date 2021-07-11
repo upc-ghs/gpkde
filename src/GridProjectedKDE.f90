@@ -15,10 +15,13 @@ module GridProjectedKDEModule
     integer, parameter         :: nDim         = 3
     doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
-    integer, parameter         :: nOptLoops    = 5
+    integer, parameter         :: nOptLoops    = 10
+
+    integer, parameter :: defaultKernelRange   = 3
+    integer, parameter :: defaultKernelSDRange = 4
 
 
-    ! Set default access status to private
+    ! Set default access to private
     private
 
 
@@ -151,7 +154,7 @@ contains
         !------------------------------------------------------------------------------
 
         call this%histogram%Reset()
-        call this%kernel%Reset()
+        !call this%kernel%Reset()
 
 
         ! MAYBE HERE
@@ -190,7 +193,8 @@ contains
 
 
     subroutine prInitializeKernelDatabase( this, minDeltaHOverLambda, &
-                    maxDeltaHOverLambda, deltaHOverLambda, logDatabase )
+                  maxDeltaHOverLambda, deltaHOverLambda, logDatabase, &
+                                           kernelRange, kernelSDRange )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -203,12 +207,17 @@ contains
         doubleprecision,   intent(in) :: deltaHOverLambda
         doubleprecision,   intent(in) :: maxDeltaHOverLambda
         doubleprecision,   intent(in) :: minDeltaHOverLambda
-        logical, optional             :: logDatabase
+        logical, intent(in), optional :: logDatabase
+        integer, intent(in), optional :: kernelRange
+        integer, intent(in), optional :: kernelSDRange
         ! local
         doubleprecision, dimension(3) :: inputSmoothing
         doubleprecision, dimension(:), allocatable :: hOverLambda
         integer :: nDelta
         integer :: i, n, m, o
+        logical :: localLogDatabase
+        integer :: localKernelRange
+        integer :: localKernelSDRange
 
         ! Mem debug
         doubleprecision :: kernelMatrixMemory = 0d0
@@ -216,16 +225,34 @@ contains
         doubleprecision :: kernelSDDBMemory = 0d0
         !------------------------------------------------------------------------------
 
-        
         ! Sanity check for input parameters
 
-        ! Initialize logDatabase as false
-        if ( .not. present( logDatabase ) ) logDatabase = .false.
+        ! Default parameters
+
+        ! logDatabase as false
+        if ( present( logDatabase ) ) then 
+            localLogDatabase = logDatabase
+        else
+            localLogDatabase = .false.
+        end if 
+
+        ! Kernel ranges 
+        if ( present( kernelRange ) )  then 
+            localKernelRange = kernelRange
+        else 
+            localKernelRange = defaultKernelRange
+        end if
+
+        if ( present( kernelSDRange ) ) then 
+            localKernelSDRange = kernelSDRange
+        else 
+            localKernelSDRange = defaultKernelSDRange
+        end if 
 
 
         ! In the meantime a single nDelta, 
         ! it could be any discretization
-        if ( logDatabase ) then
+        if ( localLogDatabase ) then
             ! LOG FORM
             ! Verify this 
             nDelta      = ceiling(&
@@ -272,7 +299,7 @@ contains
             do m = 1, nDelta
                 do n = 1, nDelta
                    inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
-                   call this%kernelDatabase( n, m, o )%Initialize( this%binSize )
+                   call this%kernelDatabase( n, m, o )%Initialize( this%binSize, kernelRange=localKernelRange )
                    call this%kernelDatabase( n, m, o )%SetupMatrix( inputSmoothing*this%binSize )
                    !kernelMatrixMemory = sizeof( this%kernelDatabase( n, m, o )%matrix )/1e6
                    !kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
@@ -292,7 +319,7 @@ contains
         !$omp private( inputSmoothing )
         do n = 1, nDelta
             inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /) 
-            call this%kernelSDDatabase( n )%Initialize( this%binSize )
+            call this%kernelSDDatabase( n )%Initialize( this%binSize, kernelRange=localKernelSDRange )
             call this%kernelSDDatabase( n )%SetupSecondDerivativesMatrix( inputSmoothing*this%binSize )
         end do
         !$omp end parallel do
