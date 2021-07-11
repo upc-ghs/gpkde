@@ -89,7 +89,7 @@ program testkernel
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
     print *, '## TEST: compute density ' 
     !call gpkde%ComputeDensityDatabase( dataPoints )
-    call gpkde%ComputeDensity( dataArray )
+    call gpkde%ComputeDensity( dataArray, nOptimizationLoops=10 )
     !call gpkde%ComputeDensityDatabase( dataArray )
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)

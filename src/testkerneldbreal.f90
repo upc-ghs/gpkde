@@ -13,7 +13,7 @@ program testkernel
     !doubleprecision, dimension(3) :: domainSize = [ 100.0, 50.0, 10.0 ]
     !doubleprecision, dimension(3) :: binSize    = [ 1.0, 1.0, 1.0 ]
 
-    doubleprecision, dimension(3)             :: domainSize         = [ 300.0 , 150.0 , 100.0 ] 
+    doubleprecision, dimension(3)             :: domainSize         = [ 500.0 , 150.0 , 100.0 ] 
     !doubleprecision, dimension(3)             :: domainSize         = [ 750.0 , 150.0 , 10.0 ] 
     doubleprecision, dimension(3)             :: pointsDomainSize   = [ 100.0  , 50.0 , 5.0  ]
     doubleprecision, dimension(3)             :: pointsDomainOffset = [ 45.0   , 7.5  , 15.0 ]
@@ -31,8 +31,8 @@ program testkernel
     doubleprecision :: elapsedTime
     integer :: res
     integer :: line_no, ix
-    character(len=200) :: particlesFileName = 'particles_4.csv'
-    integer            :: nlines = 999999
+    character(len=200) :: particlesFileName = 'particles_1.csv'
+    integer            :: nlines = 1000000
     doubleprecision, dimension(:,:), allocatable :: dataArray
     !-------------------------------------------------------------
 
