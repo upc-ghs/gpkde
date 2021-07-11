@@ -71,6 +71,7 @@ module GridProjectedKDEModule
         procedure :: ComputeSupportScale             => prComputeSupportScale
         procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
         procedure :: ComputeOptimalSmoothing         => prComputeOptimalSmoothing
+        procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
         procedure :: ExportDensity                   => prExportDensity
         procedure :: GenerateLogSpaceData            => prGenerateLogSpaceData
 
@@ -1181,6 +1182,7 @@ contains
         class( GridProjectedKDEType ) :: this
         doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
         doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
+        doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
         doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
         doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
         doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
@@ -1233,6 +1235,10 @@ contains
         integer :: clockCountStart2, clockCountStop2, clockCountRate2, clockCountMax2
         doubleprecision :: elapsedTime
         doubleprecision :: elapsedTime2
+
+        doubleprecision :: kernelDBMemory = 0d0
+        doubleprecision :: kernelMatrixMemory = 0d0
+
         !------------------------------------------------------------------------------
    
 
@@ -1256,6 +1262,7 @@ contains
 
     !    ! Allocate arrays
         allocate(      kernelSmoothing( this%histogram%nActiveBins, nDim ) )
+        allocate( kernelSmoothingShape( this%histogram%nActiveBins, nDim ) )
         allocate(   curvatureBandwidth( this%histogram%nActiveBins, nDim ) )
         allocate( densityEstimateArray( this%histogram%nActiveBins ) )
         allocate(       nEstimateArray( this%histogram%nActiveBins ) )
@@ -1267,11 +1274,17 @@ contains
 
 
         ! Define the initial smoothing array
-        kernelSmoothing         = this%kernelSmoothing
-        kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
-        kernelSigmaSupport      = this%kernelSigmaSupport
-        kernelSigmaSupportScale = ( kernelSigmaSupport(:,1)*kernelSigmaSupport(:,2)*kernelSigmaSupport(:,3) )**( 1d0/nDim )
-        kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
+        kernelSmoothing           = this%kernelSmoothing
+        kernelSmoothingScale      = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
+        kernelSmoothingShape(:,1) = kernelSmoothing(:,1)/kernelSmoothingScale
+        kernelSmoothingShape(:,2) = kernelSmoothing(:,2)/kernelSmoothingScale
+        kernelSmoothingShape(:,3) = kernelSmoothing(:,3)/kernelSmoothingScale
+        kernelSigmaSupport        = this%kernelSigmaSupport
+        kernelSigmaSupportScale   = ( kernelSigmaSupport(:,1)*kernelSigmaSupport(:,2)*kernelSigmaSupport(:,3) )**( 1d0/nDim )
+        !kernelSigmaSupport        = spread( kernelSigmaSupportScale, 2, nDim )
+        kernelSigmaSupport(:,1)   = kernelSigmaSupportScale*kernelSmoothingShape(:,1)
+        kernelSigmaSupport(:,2)   = kernelSigmaSupportScale*kernelSmoothingShape(:,2)
+        kernelSigmaSupport(:,3)   = kernelSigmaSupportScale*kernelSmoothingShape(:,3)
 
 
         print *, '## GPKDE Initializing kernelsigmaarray '
@@ -1280,6 +1293,8 @@ contains
         ! Initialize active grid cells
         ! and kernel sigma array
         !$omp parallel do &
+        !$omp private( kernelMatrixMemory )  &
+        !$omp reduction(+:kernelDBMemory) &
         !$omp private(gc) 
         do n = 1, this%histogram%nActiveBins
 
@@ -1301,12 +1316,20 @@ contains
              gc%kernelSigmaXGSpan, gc%kernelSigmaYGSpan, gc%kernelSigmaZGSpan, & 
              gc%kernelSigmaXMSpan, gc%kernelSigmaYMSpan, gc%kernelSigmaZMSpan )
 
+             kernelMatrixMemory = sizeof( kernelSigmaArray(n)%matrix )/1e6
+             kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
+
         end do 
         !$omp end parallel do 
         !! TOC
         call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
         elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
         print *, '#### TOOK: ', elapsedTime2, ' seconds'
+
+        print *, 'KERNEL DB MEMORY ', kernelDBMemory 
+
+        !call exit(0)
+
 
 
         call kernel%Initialize( this%binSize )
@@ -1415,7 +1438,12 @@ contains
             call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                                nEstimateArray, kernelSigmaSupportScale )
             ! Spread it, isotropic 
-            kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
+            !kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
+            ! Anisotropic
+            kernelSigmaSupport(:,1) = kernelSigmaSupportScale*kernelSmoothingShape(:,1)
+            kernelSigmaSupport(:,2) = kernelSigmaSupportScale*kernelSmoothingShape(:,2)
+            kernelSigmaSupport(:,3) = kernelSigmaSupportScale*kernelSmoothingShape(:,3)
+
             print *, 'debug_kernelsigmasupport_max', maxval( kernelSigmaSupport )
             print *, 'debug_kernelsigmasupport_min', minval( kernelSigmaSupport )
             !! TOC
@@ -1988,9 +2016,14 @@ contains
 
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
-            call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
+            ! ONLY SMOOTHING 
+            !call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
+            !                roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+            !                               kernelSmoothing, kernelSmoothingScale  )
+            ! SMOOTHING AND SHAPE
+            call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                             roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                           kernelSmoothing, kernelSmoothingScale  )
+                      kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
             print *, 'debug_kernelsmoothing_x_max', maxval( kernelSmoothing(:,1) )
             print *, 'debug_kernelsmoothing_x_min', minval( kernelSmoothing(:,1) )
             print *, 'debug_kernelsmoothing_y_max', maxval( kernelSmoothing(:,2) )
@@ -2336,6 +2369,58 @@ contains
 
     end subroutine prComputeOptimalSmoothing
         
+
+
+    subroutine prComputeOptimalSmoothingAndShape( this, nEstimate, netRoughness, &
+                        roughnessXXActive, roughnessYYActive, roughnessZZActive, &
+                    kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape  )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridProjectedKDEType) :: this
+        doubleprecision, dimension(:), intent(in)      :: nEstimate 
+        doubleprecision, dimension(:), intent(in)      :: netRoughness 
+        doubleprecision, dimension(:), intent(in)      :: roughnessXXActive 
+        doubleprecision, dimension(:), intent(in)      :: roughnessYYActive 
+        doubleprecision, dimension(:), intent(in)      :: roughnessZZActive 
+        doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothing
+        doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScale
+        doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingShape
+        doubleprecision, dimension(:), allocatable     :: roughnessScale
+        integer :: n, m, nActiveBins 
+        !------------------------------------------------------------------------------
+
+        nActiveBins = size( nEstimate ) ! Maybe removed
+        !allocate( kernelSmoothingShape( nActiveBins, nDim ) )
+      
+        ! Compute the smoothing scale
+        kernelSmoothingScale = 0d0
+        kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( 1d0/( nDim + 4 ) )
+
+        ! Compute the shape factors
+        roughnessScale               = ( roughnessXXActive*roughnessYYActive*roughnessZZActive )**( 1d0/nDim )
+        kernelSmoothingShape( :, 1 ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
+        kernelSmoothingShape( :, 2 ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
+        kernelSmoothingShape( :, 3 ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
+
+
+        kernelSmoothing( :, 1 ) = kernelSmoothingShape( :, 1 )*kernelSmoothingScale
+        kernelSmoothing( :, 2 ) = kernelSmoothingShape( :, 2 )*kernelSmoothingScale
+        kernelSmoothing( :, 3 ) = kernelSmoothingShape( :, 3 )*kernelSmoothingScale
+
+
+        !deallocate( kernelSmoothingShape )
+      
+        return
+
+
+    end subroutine prComputeOptimalSmoothingAndShape
+
+
 
 
     subroutine prExportDensity( this, outputFileName )
