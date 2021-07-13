@@ -23,6 +23,12 @@ module GridCellModule
         integer, dimension(3) :: kernelSigmaDBIndexes = 0
         integer, dimension(3) :: kernelSDDBIndexes    = 0
 
+        ! Flat db stuff
+        integer, dimension(2) :: kernelDBFlatIndexes      = 0
+        integer, dimension(2) :: kernelSigmaDBFlatIndexes = 0
+        logical               :: transposeKernel = .false.
+
+
         ! Spans
         integer, dimension(2) :: kernelXGSpan = 0
         integer, dimension(2) :: kernelYGSpan = 0
@@ -53,6 +59,7 @@ module GridCellModule
 
 
 contains
+
 
     subroutine prInitialize( this, id )
         !------------------------------------------------------------------------------
