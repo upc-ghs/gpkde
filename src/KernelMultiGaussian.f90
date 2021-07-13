@@ -32,12 +32,13 @@ module KernelMultiGaussianModule
     contains 
         
         ! Procedures
-        procedure, non_overridable :: Initialize               => prInitialize ! Consider deferring
-        procedure, non_overridable :: Reset                    => prReset      ! Consider deferring
-        procedure, non_overridable :: ComputeGridSpans         => prComputeGridSpans
-        procedure, non_overridable :: GenerateZeroPositiveGrid => prGenerateZeroPositiveGrid
-        procedure, non_overridable :: UnfoldZeroPositiveMatrix => prUnfoldZeroPositiveMatrix
-        procedure, non_overridable :: SetupMatrix              => prSetupMatrix
+        procedure, non_overridable :: Initialize                => prInitialize ! Consider deferring
+        procedure, non_overridable :: Reset                     => prReset      ! Consider deferring
+        procedure, non_overridable :: ComputeGridSpans          => prComputeGridSpans
+        procedure, non_overridable :: ComputeGridSpansTranspose => prComputeGridSpansTranspose
+        procedure, non_overridable :: GenerateZeroPositiveGrid  => prGenerateZeroPositiveGrid
+        procedure, non_overridable :: UnfoldZeroPositiveMatrix  => prUnfoldZeroPositiveMatrix
+        procedure, non_overridable :: SetupMatrix               => prSetupMatrix
         procedure( ComputeKernelMatrix ), deferred  :: ComputeMatrix 
 
     end type
@@ -198,6 +199,40 @@ contains
 
 
     end subroutine prComputeGridSpans
+
+
+
+    subroutine prComputeGridSpansTranspose( this, gridIndexes, gridShape, &
+                                         xGridSpan, yGridSpan, zGridSpan, &
+                                    xKernelSpan, yKernelSpan, zKernelSpan )
+        !------------------------------------------------------------------------------
+        !  
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( KernelType ) :: this
+        integer, dimension(3), intent(in) :: gridShape
+        integer, dimension(3), intent(in) :: gridIndexes
+        integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
+        integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
+        !------------------------------------------------------------------------------
+
+        ! Spans in grid 
+        xGridSpan(1) = max( gridIndexes(1) - this%matrixPositiveShape(2), 1)
+        xGridSpan(2) = min( gridIndexes(1) + this%matrixPositiveShape(2), gridShape(1) )
+        yGridSpan(1) = max( gridIndexes(2) - this%matrixPositiveShape(1), 1)
+        yGridSpan(2) = min( gridIndexes(2) + this%matrixPositiveShape(1), gridShape(2) )
+        zGridSpan(1) = max( gridIndexes(3) - this%matrixPositiveShape(3), 1)
+        zGridSpan(2) = min( gridIndexes(3) + this%matrixPositiveShape(3), gridShape(3) )
+
+        ! Spans in kernel matrix
+        xKernelSpan = xGridSpan + this%matrixPositiveShape(2) - gridIndexes(1) + 1
+        yKernelSpan = yGridSpan + this%matrixPositiveShape(1) - gridIndexes(2) + 1
+        zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
+
+
+    end subroutine prComputeGridSpansTranspose
 
 
 

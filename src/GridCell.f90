@@ -27,6 +27,7 @@ module GridCellModule
         integer, dimension(2) :: kernelDBFlatIndexes      = 0
         integer, dimension(2) :: kernelSigmaDBFlatIndexes = 0
         logical               :: transposeKernel = .false.
+        logical               :: transposeKernelSigma = .false.
 
 
         ! Spans

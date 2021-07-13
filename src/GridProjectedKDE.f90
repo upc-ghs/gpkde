@@ -559,10 +559,14 @@ contains
 
         ! Once histogram is computed, 
         ! Initialize density optimization 
+        !print *, '## GPKDE: compute density from flat kernel databases'
+        !call this%ComputeDensityFromDatabaseFlat( nOptimizationLoops=localNOptimizationLoops )
+
         print *, '## GPKDE: compute density from kernel databases'
-        call this%ComputeDensityFromDatabaseFlat( nOptimizationLoops=localNOptimizationLoops )
-        !call this%ComputeDensityFromDatabase( dataPoints, &
-        !       nOptimizationLoops=localNOptimizationLoops )
+        call this%ComputeDensityFromDatabase( dataPoints, &
+               nOptimizationLoops=localNOptimizationLoops )
+
+        call exit(0)
 
         print *, '## GPKDE: drop kernel database'
         call this%DropKernelDatabase()
@@ -624,6 +628,10 @@ contains
         ! Grid cells
         type( GridCellType ), dimension(:), allocatable, target :: activeGridCells
         type( GridCellType ), pointer                           :: gc => null()
+
+        ! kernelMatrix pointer
+        doubleprecision, dimension(:,:,:), pointer :: kernelMatrix
+        doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
 
         ! Utils
         integer            :: n, m
@@ -702,8 +710,10 @@ contains
 
 
         ! Initialize density estimate
-        !$omp parallel do &
-        !$omp private( gc )            
+        !$omp parallel do   &
+        !$omp private( gc ) &
+        !$omp private( kernelMatrix ) & 
+        !$omp private( transposedKernelMatrix )        
         do n = 1, this%histogram%nActiveBins
 
             ! Assign gc pointer 
@@ -712,7 +722,6 @@ contains
             !if (gc%convergence) cycle
 
             ! Compute indexes on kernel database
-            !gc%kernelDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSmoothing( n, : ) )
             call prComputeKernelDatabaseFlatIndexesLog( this, kernelSmoothing( n, : ), &
                                             gc%kernelDBFlatIndexes, gc%transposeKernel )
 
@@ -720,13 +729,21 @@ contains
             gc%kernel => this%kernelDatabaseFlat( gc%kernelDBFlatIndexes(1), gc%kernelDBFlatIndexes(2) )
 
             if ( gc%transposeKernel ) then 
-                print *, 'TRANSPOSE: SPANS SHOULD BE INVERTED ?'
+                print *, 'initiala density TRANSPOSE!!'
+                ! Determine spans
+                call gc%kernel%ComputeGridSpansTranspose( gc%id, this%nBins, &
+                          gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
+                          gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  )
+                transposedKernelMatrix = prComputeXYTranspose( this, gc%kernel%matrix )
+                kernelMatrix => transposedKernelMatrix
+            else
+                ! Determine spans
+                call gc%kernel%ComputeGridSpans( gc%id, this%nBins, &
+                    gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
+                    gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  )
+                kernelMatrix => gc%kernel%matrix
             end if 
 
-            ! Determine spans
-            call gc%kernel%ComputeGridSpans( gc%id, this%nBins, &
-                gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
-                gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  ) 
 
             ! Compute estimate
             densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
@@ -734,7 +751,7 @@ contains
                     gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
                     gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
                     gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-                )*gc%kernel%matrix(&
+                )*kernelMatrix(&
                     gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
                     gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
                     gc%kernelZMSpan(1):gc%kernelZMSpan(2)) &
@@ -751,9 +768,6 @@ contains
         print *, '################################################################################' 
         print *, 'debug_initial_density_max ', maxval( densityEstimateArray )
         print *, 'debug_initial_density_min ', minval( densityEstimateArray )
-
-
-        call exit(0)
 
 
         ! Optimization loop
@@ -776,12 +790,13 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelSigmaDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSigmaSupport( n, : ) )
+                ! transposeKernelSigma will always be false as this kernel is isotropic
+                call prComputeKernelDatabaseFlatIndexesLog( this, kernelSigmaSupport( n, : ), &
+                                         gc%kernelSigmaDBFlatIndexes, gc%transposeKernelSigma ) 
 
                 ! Assign pointer
-                gc%kernelSigma => this%kernelDatabase( gc%kernelSigmaDBIndexes(1), &
-                                                       gc%kernelSigmaDBIndexes(2), &
-                                                       gc%kernelSigmaDBIndexes(3)  )
+                gc%kernelSigma => this%kernelDatabaseFlat(&
+                    gc%kernelSigmaDBFlatIndexes(1), gc%kernelSigmaDBFlatIndexes(2) )
 
                 ! Determine spans
                 call gc%kernelSigma%ComputeGridSpans( gc%id, this%nBins, &
@@ -835,12 +850,14 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelSigmaDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSigmaSupport( n, : ) )
+                ! transposeKernelSigma will always be false as this kernel is isotropic
+                call prComputeKernelDatabaseFlatIndexesLog( this, kernelSigmaSupport( n, : ), &
+                                         gc%kernelSigmaDBFlatIndexes, gc%transposeKernelSigma ) 
 
                 ! Assign pointer
-                gc%kernelSigma => this%kernelDatabase( gc%kernelSigmaDBIndexes(1), &
-                                                       gc%kernelSigmaDBIndexes(2), &
-                                                       gc%kernelSigmaDBIndexes(3)  )
+                gc%kernelSigma => this%kernelDatabaseFlat(&
+                    gc%kernelSigmaDBFlatIndexes(1), gc%kernelSigmaDBFlatIndexes(2) )
+
 
                 ! Determine spans
                 call gc%kernelSigma%ComputeGridSpans( gc%id, this%nBins, &
@@ -1158,7 +1175,9 @@ contains
 
             ! Update density
             !$omp parallel do &        
-            !$omp private( gc ) 
+            !$omp private( gc ) & 
+            !$omp private( kernelMatrix ) & 
+            !$omp private( transposedKernelMatrix )        
             do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
@@ -1167,15 +1186,27 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelDBIndexes = this%ComputeKernelDatabaseIndexes( kernelSmoothing( n, : ) )
+                call prComputeKernelDatabaseFlatIndexesLog( this, kernelSmoothing( n, : ), &
+                                                gc%kernelDBFlatIndexes, gc%transposeKernel )
 
                 ! Assign kernel pointer
-                gc%kernel => this%kernelDatabase( gc%kernelDBIndexes(1), gc%kernelDBIndexes(2), gc%kernelDBIndexes(3) )
+                gc%kernel => this%kernelDatabaseFlat( gc%kernelDBFlatIndexes(1), gc%kernelDBFlatIndexes(2) )
 
-                ! Determine spans
-                call gc%kernel%ComputeGridSpans( gc%id, this%nBins, &
-                         gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
-                         gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  ) 
+                if ( gc%transposeKernel ) then 
+                    !print *, 'update density TRANSPOSE!!'
+                    ! Determine spans
+                    call gc%kernel%ComputeGridSpansTranspose( gc%id, this%nBins, &
+                              gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
+                              gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  )
+                    transposedKernelMatrix = prComputeXYTranspose( this, gc%kernel%matrix )
+                    kernelMatrix => transposedKernelMatrix
+                else
+                    ! Determine spans
+                    call gc%kernel%ComputeGridSpans( gc%id, this%nBins, &
+                        gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
+                        gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  )
+                    kernelMatrix => gc%kernel%matrix
+                end if 
 
                 ! Compute estimate
                 densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
@@ -1183,7 +1214,7 @@ contains
                         gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
                         gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
                         gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-                    )*gc%kernel%matrix(&
+                    )*kernelMatrix(&
                         gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
                         gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
                         gc%kernelZMSpan(1):gc%kernelZMSpan(2)) &
@@ -2682,7 +2713,7 @@ contains
         ! has the same value for each axis. 
         ! This is linked to database initialization function.
         if ( indexes(1) < indexes(2) ) then
-            print *, 'AT INDEXES FUNCTION TRANSPOSE KERNEL'  
+            !print *, 'AT INDEXES FUNCTION TRANSPOSE KERNEL'  
             transposeKernel  = .true.
             flatDBIndexes(1) = indexes(2)*( indexes(2) - 1 )/2 + indexes(1)
             flatDBIndexes(2) = indexes(3)
@@ -2959,7 +2990,6 @@ contains
 
     function prGenerateLogSpaceData( this, initPoint, endPoint, nPoints ) result( output )
         !------------------------------------------------------------------------------
-        ! 
         !
         !------------------------------------------------------------------------------
         ! Specifications 
@@ -2996,6 +3026,36 @@ contains
             
 
     end function prGenerateLogSpaceData
+
+
+    function prComputeXYTranspose( this, sourceMatrix ) result( transposedMatrix )
+        !------------------------------------------------------------------------------
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class(GridProjectedKDEType) :: this
+        doubleprecision, dimension(:,:,:), intent(in)  :: sourceMatrix
+        doubleprecision, dimension(:,:,:), allocatable :: transposedMatrix
+        ! local
+        integer, dimension(3) :: sourceShape
+        integer :: n
+        !------------------------------------------------------------------------------
+        
+        sourceShape = shape( sourceMatrix )
+
+        allocate( transposedMatrix( sourceShape(2), sourceShape(1), sourceShape(3) ) )
+
+        do n = 1, sourceShape(3)
+            transposedMatrix(:,:,n) = transpose( sourceMatrix(:,:,n) )
+        end do
+   
+        return 
+
+
+    end function prComputeXYTranspose
+    
 
 
 
@@ -3186,7 +3246,6 @@ end module GridProjectedKDEModule
     !        !end do
     !        !!$omp end parallel do 
     !
-            !call exit(0)
     !
 
 

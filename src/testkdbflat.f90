@@ -73,10 +73,20 @@ program testkernel
     allocate( gpkde )
     call gpkde%Initialize( domainSize, binSize )
 
+    !! TIC
+    !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+    !print *, '## TEST: init flat kernel database' 
+    !call gpkde%InitializeKernelDatabaseFlat( minDeltaHOverLambda, maxDeltaHOverLambda, deltaHOverLambda, logDatabase=.true.)
+    !! TOC
+    !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+    !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+    !print *, '## TEST: init flat kernel database done!: ', elapsedTime, ' seconds'
+
+
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
     print *, '## TEST: init kernel database' 
-    call gpkde%InitializeKernelDatabaseFlat( minDeltaHOverLambda, maxDeltaHOverLambda, deltaHOverLambda, logDatabase=.true.)
+    call gpkde%InitializeKernelDatabase( minDeltaHOverLambda, maxDeltaHOverLambda, deltaHOverLambda, logDatabase=.true.)
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)
     elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
