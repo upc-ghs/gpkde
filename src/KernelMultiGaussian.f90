@@ -19,71 +19,107 @@ module KernelMultiGaussianModule
     ! Set default access status to private
     private
 
-   
-    ! Averaged MultiGaussian kernel \bar{W}
-    type, public :: KernelMultiGaussianType
 
+    type, abstract :: KernelType
+        
         ! Properties
-        integer :: nx, ny, nz             ! should be removed 
-        integer :: snx, sny, snz          ! should be removed
-        integer :: curvatureGridSize = 0  ! should be removed
-        integer, dimension(3) :: matrixPositiveShape = 0 
-        integer :: kernelRange
         doubleprecision, dimension(3) :: binSize     = 0d0
-        doubleprecision, dimension(3) :: smoothing   = 0d0
-        doubleprecision, dimension(3) :: gBandwidths = 0d0 ! should be removed
+        doubleprecision, dimension(3) :: bandwidth   = 0d0
+        integer                       :: matrixRange 
+        integer, dimension(3)         :: matrixPositiveShape = 0 
         doubleprecision, dimension(:,:,:), allocatable :: matrix
 
-    contains
-
+    contains 
+        
         ! Procedures
-        procedure :: Initialize       => prInitialize 
-        procedure :: Reset            => prReset 
-        procedure :: SetupMatrix               => prSetupMatrix
-        procedure :: GenerateZeroPositiveGrid  => prGenerateZeroPositiveGrid
-        procedure :: ComputeZeroPositiveMatrix => prComputeZeroPositiveMatrix
-        procedure :: ComputeGridEstimateSpans  => prComputeGridEstimateSpans
-        procedure :: UnfoldZeroPositiveMatrix  => prUnfoldZeroPositiveMatrix
+        procedure, non_overridable :: Initialize               => prInitialize ! Consider deferring
+        procedure, non_overridable :: Reset                    => prReset      ! Consider deferring
+        procedure, non_overridable :: ComputeGridSpans         => prComputeGridSpans
+        procedure, non_overridable :: GenerateZeroPositiveGrid => prGenerateZeroPositiveGrid
+        procedure, non_overridable :: UnfoldZeroPositiveMatrix => prUnfoldZeroPositiveMatrix
+        procedure, non_overridable :: SetupMatrix              => prSetupMatrix
+        procedure( ComputeKernelMatrix ), deferred  :: ComputeMatrix 
 
     end type
-   
-
-    ! Second derivatives of Averaged MultiGaussian kernel \bar{V}
-    type, public :: KernelSecondDerivativesType
+        
+    
+    ! MultiGaussian W
+    type, public, extends( KernelType ) :: KernelMultiGaussianType
 
         ! Properties
-        integer :: nx, ny, nz
-        integer :: snx, sny, snz
-        integer :: curvatureGridSize = 0 
-        integer, dimension(3) :: secondDerivativePositiveShape = 0 
-        integer :: kernelRange
-        doubleprecision, dimension(3) :: binSize     = 0d0
-        doubleprecision, dimension(3) :: smoothing   = 0d0
-        doubleprecision, dimension(3) :: gBandwidths = 0d0
-
-        doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeX
-        doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeY
-        doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeZ
 
     contains
-
+        
         ! Procedures
-        procedure :: Initialize       => prInitializeSD 
-        procedure :: Reset            => prResetSD
-        procedure :: SetupSecondDerivativesMatrix   => prSetupSecondDerivativesMatrix
-        procedure :: GenerateZeroPositiveSDGrid     => prGenerateZeroPositiveSDGrid
-        procedure :: ComputeSecondDerivativesUnfold => prComputeSecondDerivativesUnfold
-        procedure :: ComputeGridEstimateSpansSecond => prComputeGridEstimateSpansSecond
-        procedure :: UnfoldZeroPositiveMatrix       => prUnfoldZeroPositiveMatrixSD
+        procedure :: ComputeMatrix => prComputeKernelWMatrix
 
     end type
+  
+
+    ! Second Derivative X
+    type, public, extends( KernelType ) :: KernelSecondDerivativeXType
+
+        ! Properties
+
+    contains
+        
+        ! Procedures
+        procedure :: ComputeMatrix => prComputeKernelVXMatrix
+
+    end type
+
+
+    ! Second Derivative Y
+    type, public, extends( KernelType ) :: KernelSecondDerivativeYType
+
+        ! Properties
+
+    contains
+        
+        ! Procedures
+        procedure :: ComputeMatrix => prComputeKernelVYMatrix
+
+    end type
+
+
+    ! Second Derivative Z
+    type, public, extends( KernelType ) :: KernelSecondDerivativeZType
+
+        ! Properties
+
+    contains
+        
+        ! Procedures
+        procedure :: ComputeMatrix => prComputeKernelVZMatrix
+
+    end type
+
+
+    ! Interfaces
+    abstract interface
+        subroutine ComputeKernelMatrix( this, zPXGrid, zPYgrid, zPZGrid )
+            !------------------------------------------------------------------------------
+            !
+            !------------------------------------------------------------------------------
+            ! Specifications 
+            !------------------------------------------------------------------------------
+            import :: KernelType
+            class( KernelType ) :: this 
+            integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
+            doubleprecision, dimension(:)    , allocatable :: hLambda
+            doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+            integer :: nx, ny, nz
+            !------------------------------------------------------------------------------
+        end subroutine ComputeKernelMatrix
+    end interface
+
 
 
 contains
 
 
-    ! CONSIDER RESTORING SMOOTHING
-    subroutine prInitialize( this, binSize, kernelRange )
+    ! Common methods
+    subroutine prInitialize( this, binSize, matrixRange )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -91,48 +127,21 @@ contains
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class(KernelMultiGaussianType) :: this 
+        class( KernelType ) :: this 
         doubleprecision, dimension(:)  :: binSize
-        integer, intent(in), optional  :: kernelRange
+        integer, intent(in), optional  :: matrixRange
         !------------------------------------------------------------------------------
 
         ! Assign binSize 
         this%binSize = binSize 
 
-        if ( present( kernelRange ) ) then 
-            this%kernelRange = kernelRange
+        if ( present( matrixRange ) ) then 
+            this%matrixRange = matrixRange
         else
-            this%kernelRange = defaultKernelRange 
+            this%matrixRange = defaultKernelRange 
         end if
 
     end subroutine prInitialize
-
-
-
-    subroutine prInitializeSD( this, binSize, kernelRange )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class(KernelSecondDerivativesType) :: this 
-        doubleprecision, dimension(:) :: binSize
-        integer, optional :: kernelRange
-        !------------------------------------------------------------------------------
-
-        ! Assign binSize 
-        this%binSize = binSize 
-
-        if ( present( kernelRange ) ) then 
-            this%kernelRange = kernelRange
-        else
-            this%kernelRange = defaultKernelSDRange 
-        end if
-
-
-    end subroutine prInitializeSD
 
 
 
@@ -144,470 +153,104 @@ contains
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class(KernelMultiGaussianType) :: this 
-        !integer, intent(in) :: nx, ny, nz  
-        ! integer :: nDimensions
-        !integer, intent(in) :: nDim
-        !doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
-        !doubleprecision, dimension(:), allocatable     :: normSmoothing
+        class( KernelType ) :: this 
         !------------------------------------------------------------------------------
 
-        this%nx = 0 
-        this%ny = 0 
-        this%nz = 0 
+        this%bandwidth = 0d0
+        this%binSize   = 0d0
+        this%matrixPositiveShape = 0
+        this%matrixRange = defaultKernelRange ! Set to zero ?
 
-        this%smoothing = 0
-        this%binSize   = 0
+        if ( allocated( this%matrix ) ) deallocate( this%matrix )
 
     end subroutine prReset
 
 
 
-    subroutine prResetSD( this )
+    subroutine prComputeGridSpans( this, gridIndexes, gridShape, &
+                                xGridSpan, yGridSpan, zGridSpan, &
+                           xKernelSpan, yKernelSpan, zKernelSpan )
         !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class(KernelSecondDerivativesType) :: this 
-        !integer, intent(in) :: nx, ny, nz  
-        ! integer :: nDimensions
-        !integer, intent(in) :: nDim
-        !doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
-        !doubleprecision, dimension(:), allocatable     :: normSmoothing
-        !------------------------------------------------------------------------------
-
-        this%nx = 0 
-        this%ny = 0 
-        this%nz = 0 
-
-        this%smoothing = 0
-        this%binSize   = 0
-
-    end subroutine prResetSD
-
-
-
-    subroutine prSetupMatrix( this, smoothing )
-        !------------------------------------------------------------------------------
-        ! 
-        !
+        !  
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class(KernelMultiGaussianType)            :: this 
-        doubleprecision, dimension(3), intent(in) :: smoothing
-        integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
-        logical               :: newSmoothing, newGrid = .false. 
+        class( KernelType ) :: this
+        integer, dimension(3), intent(in) :: gridShape
+        integer, dimension(3), intent(in) :: gridIndexes
+        integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
+        integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
         !------------------------------------------------------------------------------
 
-        ! RANGE
-        ! Assign kernel properties
-        this%smoothing           = smoothing
-        this%matrixPositiveShape = floor( this%kernelRange*this%smoothing/this%binSize )
+        ! Spans in grid 
+        xGridSpan(1) = max( gridIndexes(1) - this%matrixPositiveShape(1), 1)
+        xGridSpan(2) = min( gridIndexes(1) + this%matrixPositiveShape(1), gridShape(1) )
+        yGridSpan(1) = max( gridIndexes(2) - this%matrixPositiveShape(2), 1)
+        yGridSpan(2) = min( gridIndexes(2) + this%matrixPositiveShape(2), gridShape(2) )
+        zGridSpan(1) = max( gridIndexes(3) - this%matrixPositiveShape(3), 1)
+        zGridSpan(2) = min( gridIndexes(3) + this%matrixPositiveShape(3), gridShape(3) )
 
-        allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
-        allocate( zPYGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
-        allocate( zPZGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
-
-        call this%GenerateZeroPositiveGrid( this%matrixPositiveShape, zPXGrid, zPYGrid, zPZGrid )
-        call this%ComputeZeroPositiveMatrix( zPXGrid, zPYGrid, zPZGrid )
-
-        ! Necessary ?
-        deallocate( zPXGrid )
-        deallocate( zPYGrid )
-        deallocate( zPZGrid )
+        ! Spans in kernel matrix
+        xKernelSpan = xGridSpan + this%matrixPositiveShape(1) - gridIndexes(1) + 1
+        yKernelSpan = yGridSpan + this%matrixPositiveShape(2) - gridIndexes(2) + 1
+        zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
 
 
-        return
-
-
-    end subroutine prSetupMatrix
+    end subroutine prComputeGridSpans
 
 
 
-    subroutine prGenerateZeroPositiveGrid( this, zeroPositiveShape, zPXGrid, zPYGrid, zPZGrid  )
+    subroutine prGenerateZeroPositiveGrid( this, zPXGrid, zPYGrid, zPZGrid  )
         !------------------------------------------------------------------------------
         !
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class(KernelMultiGaussianType) :: this 
-        integer, dimension(3), intent(in) :: zeroPositiveShape
+        class( KernelType ) :: this 
         integer, dimension(:,:,:), intent(inout) :: zPXGrid, zPYGrid, zPZGrid
+        ! local
         integer :: nx, ny, nz
         integer :: i
         !------------------------------------------------------------------------------
 
+        nx = this%matrixPositiveShape(1) 
+        ny = this%matrixPositiveShape(2) 
+        nz = this%matrixPositiveShape(3) 
 
-        nx = zeroPositiveShape(1)
-        ny = zeroPositiveShape(2)
-        nz = zeroPositiveShape(3)
+        ! Positive octant
+        zPXGrid = spread(  spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
+        zPYGrid = spread(  spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
+        zPZGrid = reshape( spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 ) ), &
+                                                  [ nx + 1, ny + 1, nz + 1 ] )
 
 
-        ! WILL BE REMOVED
-        this%nx = nx
-        this%ny = ny
-        this%nz = nz
-
-
-        ! The quarter grid
-        zPXGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
-        zPYGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
-        zPZGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 ) ), &
-                                                      [ nx + 1, ny + 1, nz + 1 ] )
-
-        if ( allocated( this%matrix ) ) deallocate( this%matrix )
-        allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+        return
 
 
     end subroutine prGenerateZeroPositiveGrid
 
 
 
-    subroutine prComputeZeroPositiveMatrix( this, zPXGrid, zPYGrid, zPZGrid )
-        ! CONSIDER ADDING SMOOTHING AS INPUT PARAMETER
-        !------------------------------------------------------------------------------
-        ! Evaluate averaged MultiGaussian kernel in a 2D or 3D matrix depending
-        ! on the number of spatial dimensions
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class(KernelMultiGaussianType) :: this 
-        integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
-        doubleprecision, dimension(:), allocatable :: hLambda
-        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
-        !------------------------------------------------------------------------------
-
-
-        ! Compute normalized smoothing h/lambda
-        hLambda = this%smoothing/this%binSize
-
-        ! Compute kernel
-        zeroPositiveMatrix = (0.5**nDim)*( &
-            ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
-            ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
-
-        ! Unfold
-        call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrixPositiveShape, this%matrix )
-
-        ! Normalization correction
-        this%matrix = this%matrix/sum( this%matrix )
-
-
-    end subroutine prComputeZeroPositiveMatrix
-
-
-
-    subroutine prComputeGridEstimateSpans( this, gridIndexes, gridShape, &
-                                              iXGSpan, iYGSpan, iZGSpan, &
-                                              iXKSpan, iYKSpan, iZKSpan  )
+    subroutine prUnfoldZeroPositiveMatrix( this, sourceZeroPositive, targetMatrix )
         !------------------------------------------------------------------------------
         ! 
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class(KernelMultiGaussianType) :: this
-        integer, dimension(3), intent(in) :: gridShape
-        integer, dimension(3), intent(in) :: gridIndexes
-        integer, dimension(2), intent(inout) :: iXGSpan, iYGSpan, iZGSpan
-        integer, dimension(2), intent(inout) :: iXKSpan, iYKSpan, iZKSpan
-        !------------------------------------------------------------------------------
-
-        ! Spans in grid 
-        iXGSpan(1) = max( gridIndexes(1) - this%nx, 1)
-        iXGSpan(2) = min( gridIndexes(1) + this%nx, gridShape(1) )
-        iYGSpan(1) = max( gridIndexes(2) - this%ny, 1)
-        iYGSpan(2) = min( gridIndexes(2) + this%ny, gridShape(2) )
-        iZGSpan(1) = max( gridIndexes(3) - this%nz, 1)
-        iZGSpan(2) = min( gridIndexes(3) + this%nz, gridShape(3) )
-
-        ! Spans in kernel matrix
-        iXKSpan = iXGSpan + this%nx - gridIndexes(1) + 1
-        iYKSpan = iYGSpan + this%ny - gridIndexes(2) + 1
-        iZKSpan = iZGSpan + this%nz - gridIndexes(3) + 1
-
-
-    end subroutine prComputeGridEstimateSpans
-
-
-
-    subroutine prSetupSecondDerivativesMatrix( this, gBandwidths )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class(KernelSecondDerivativesType)            :: this 
-        !class(KernelMultiGaussianType)            :: this 
-        doubleprecision, dimension(3), intent(in) :: gBandwidths
-        integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
-        integer :: curvatureGridSize
-        logical :: newBandwidth, newGrid = .false. 
-        !------------------------------------------------------------------------------
-
-
-        ! Compute the size
-        ! same for each matrix. 
-        ! This is because the same grid is being used
-        ! for all derivatives
-        curvatureGridSize = max( &
-            maxval( floor( this%kernelRange*gBandwidths(1)/this%binSize ) ), &
-            maxval( floor( this%kernelRange*gBandwidths(2)/this%binSize ) ), & 
-            maxval( floor( this%kernelRange*gBandwidths(3)/this%binSize ) )  )
-
-
-        allocate( zPXGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )
-        allocate( zPYGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )
-        allocate( zPZGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )
-
-        ! Initialize grid
-        this%gBandwidths                   = gBandwidths
-        this%curvatureGridSize             = curvatureGridSize
-        this%secondDerivativePositiveShape = curvatureGridSize
-
-        call this%GenerateZeroPositiveSDGrid( curvatureGridSize, zPXGrid, zPYGrid, zPZGrid )
-        call this%ComputeSecondDerivativesUnfold( gBandwidths, zPXGrid, zPYGrid, zPZGrid  )
-
-        ! Necessary ?
-        deallocate( zPXGrid )
-        deallocate( zPYGrid )
-        deallocate( zPZGrid )
-
-
-        return
-
-
-    end subroutine prSetupSecondDerivativesMatrix
-
-
-
-    subroutine prGenerateZeroPositiveSDGrid( this, gridSize, zPXGrid, zPYGrid, zPZGrid )
-        !------------------------------------------------------------------------------
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class(KernelSecondDerivativesType) :: this 
-        !class(KernelMultiGaussianType) :: this 
-        integer, dimension(:,:,:), intent(inout) :: zPXGrid, zPYgrid, zPZGrid
-        integer :: nx, ny, nz  
-        integer :: gridSize
-        integer :: i 
-        !------------------------------------------------------------------------------
-
-
-        nx = gridSize
-        ny = gridSize
-        nz = gridSize
-
-
-        ! WILL BE RENAMED/REMOVED
-        this%snx = gridSize
-        this%sny = gridSize
-        this%snz = gridSize
-
-
-        ! The octant grid
-        zPXGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
-        zPYGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
-        zPZGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 ) ), &
-                                                 [ nx + 1, ny + 1, nz + 1 ] )
-
-
-        if ( allocated( this%secondDerivativeX ) ) then 
-            deallocate( this%secondDerivativeX )
-            deallocate( this%secondDerivativeY )
-            deallocate( this%secondDerivativeZ )
-        end if
-        allocate( this%secondDerivativeX( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
-        allocate( this%secondDerivativeY( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
-        allocate( this%secondDerivativeZ( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
-
-
-        return
-
-
-    end subroutine prGenerateZeroPositiveSDGrid
-
-
-
-    subroutine prComputeSecondDerivativesUnfold( this, gBandwidths, zPXGrid, zPYGrid, zPZGrid )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(KernelSecondDerivativesType) :: this 
-        !class(KernelMultiGaussianType) :: this 
-        doubleprecision, dimension(3), intent(in)      :: gBandwidths
-        integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
-        doubleprecision, dimension(3)                  :: gLambda
-        doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeX
-        doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeY
-        doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeZ
-        doubleprecision :: aXDenom, aXNum, aXCoeff
-        doubleprecision :: aYDenom, aYNum, aYCoeff
-        doubleprecision :: aZDenom, aZNum, aZCoeff
-        !------------------------------------------------------------------------------
-   
-        ! Grid size for these derivatives is not necessarily 
-        ! the same as kernel matrix
-
-        ! X
-        gLambda = gBandwidths(1)/this%binSize
-        secondDerivativeX = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(1)**3 ) ) )*(&
-            ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) - &
-            ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) )*&
-            ( erf( ( zPYGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
-              erf( ( zPYGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )*&
-            ( erf( ( zPZGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
-              erf( ( zPZGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
-
-        call this%UnfoldZeroPositiveMatrix( secondDerivativeX, this%secondDerivativePositiveShape, this%secondDerivativeX )
-        deallocate( secondDerivativeX )
-
-        ! X kernel corrections 
-        aXNum   = sum( this%secondDerivativeX, mask=( this%secondDerivativeX < 0 ) )
-        aXDenom = sum( this%secondDerivativeX, mask=( this%secondDerivativeX > 0 ) )
-        aXCoeff = -1*aXNum/aXDenom
-
-        where ( this%secondDerivativeX > 0 )
-            this%secondDerivativeX = aXCoeff*this%secondDerivativeX
-        end where
-
-        this%secondDerivativeX = this%secondDerivativeX*sqrt( &
-                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( gLambda(1)**5 )*sum( this%secondDerivativeX**2 ) ) &
-            )/sqrt( gLambda(2) )/sqrt( gLambda(3) )
-
-
-        ! Y
-        gLambda = gBandwidths(2)/this%binSize
-        secondDerivativeY = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(2)**3 ) ) )*(&
-            ( zPYGrid + 0.5 )*exp( -1*( ( zPYGrid + 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) - &
-            ( zPYGrid - 0.5 )*exp( -1*( ( zPYGrid - 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) )*&
-            ( erf( ( zPXGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
-              erf( ( zPXGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( zPZGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
-              erf( ( zPZGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
-
-        call this%UnfoldZeroPositiveMatrix( secondDerivativeY, this%secondDerivativePositiveShape, this%secondDerivativeY )
-        deallocate( secondDerivativeY )
-
-        ! Y kernel corrections
-        aYNum   = sum( this%secondDerivativeY, mask=( this%secondDerivativeY < 0 ) )
-        aYDenom = sum( this%secondDerivativeY, mask=( this%secondDerivativeY > 0 ) )
-        aYCoeff = -1*aYNum/aYDenom
-    
-        where ( this%secondDerivativeY > 0 )
-            this%secondDerivativeY = aYCoeff*this%secondDerivativeY
-        end where
-
-        this%secondDerivativeY = this%secondDerivativeY*sqrt( &
-                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( gLambda(2)**5 )*sum( this%secondDerivativeY**2 ) ) &
-            )/sqrt( gLambda(1) )/sqrt( gLambda(3) )
-
-
-        ! Z
-        gLambda = gBandwidths(3)/this%binSize
-        secondDerivativeZ = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(3)**3 ) ) )*(&
-            ( zPZGrid + 0.5 )*exp( -1*( ( zPZGrid + 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) - &
-            ( zPZGrid - 0.5 )*exp( -1*( ( zPZGrid - 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) )*&
-            ( erf( ( zPXGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
-              erf( ( zPXGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( zPYGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
-              erf( ( zPYGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )
-
-        call this%UnfoldZeroPositiveMatrix( secondDerivativeZ, this%secondDerivativePositiveShape, this%secondDerivativeZ )
-        deallocate( secondDerivativeZ )
-
-        ! Z kernel corrections
-        aZNum   = sum( this%secondDerivativeZ, mask=( this%secondDerivativeZ < 0 ) )
-        aZDenom = sum( this%secondDerivativeZ, mask=( this%secondDerivativeZ > 0 ) )
-        aZCoeff = -1*aZNum/aZDenom
-    
-        where ( this%secondDerivativeZ > 0 )
-            this%secondDerivativeZ = aZCoeff*this%secondDerivativeZ
-        end where
-
-        this%secondDerivativeZ = this%secondDerivativeZ*sqrt( &
-                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( gLambda(3)**5 )*sum( this%secondDerivativeZ**2 ) ) &
-            )/sqrt( gLambda(1) )/sqrt( gLambda(2) )
-
-
-        return
-
-    end subroutine prComputeSecondDerivativesUnfold
-
-
-
-    subroutine prComputeGridEstimateSpansSecond( this, gridIndexes, gridShape, &
-                                                    iXGSpan, iYGSpan, iZGSpan, &
-                                                    iXKSpan, iYKSpan, iZKSpan  )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class(KernelSecondDerivativesType) :: this 
-        !class(KernelMultiGaussianType) :: this
-        integer, dimension(3), intent(in) :: gridShape
-        !integer, dimension(3), intent(in) :: kernelPositiveGridSize
-        integer, dimension(3), intent(in) :: gridIndexes
-        integer, dimension(2), intent(inout) :: iXGSpan, iYGSpan, iZGSpan
-        integer, dimension(2), intent(inout) :: iXKSpan, iYKSpan, iZKSpan
-        !------------------------------------------------------------------------------
-
-        ! Spans in grid 
-        iXGSpan(1) = max( gridIndexes(1) - this%snx, 1)
-        iXGSpan(2) = min( gridIndexes(1) + this%snx, gridShape(1) )
-        iYGSpan(1) = max( gridIndexes(2) - this%sny, 1)
-        iYGSpan(2) = min( gridIndexes(2) + this%sny, gridShape(2) )
-        iZGSpan(1) = max( gridIndexes(3) - this%snz, 1)
-        iZGSpan(2) = min( gridIndexes(3) + this%snz, gridShape(3) )
-
-        ! Spans in kernel matrix
-        iXKSpan = iXGSpan + this%snx - gridIndexes(1) + 1
-        iYKSpan = iYGSpan + this%sny - gridIndexes(2) + 1
-        iZKSpan = iZGSpan + this%snz - gridIndexes(3) + 1
-
-
-    end subroutine prComputeGridEstimateSpansSecond
-
-
-
-    subroutine prUnfoldZeroPositiveMatrix( this, sourceZeroPositive, sourcePositiveShape, targetMatrix )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class(KernelMultiGaussianType) :: this
+        class( KernelType ) :: this
         doubleprecision, dimension(:,:,:), intent(in)    :: sourceZeroPositive
-        integer, dimension(3), intent(in)                :: sourcePositiveShape 
         doubleprecision, dimension(:,:,:), intent(inout) :: targetMatrix
-        integer, dimension(3) :: sourceShape 
+        ! local
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------
         ! VERIFY WHAT HAPPENS WITH OCTANTS IN 2D
 
-        nx = sourcePositiveShape(1)
-        ny = sourcePositiveShape(2)
-        nz = sourcePositiveShape(3)
+        nx = this%matrixPositiveShape(1)
+        ny = this%matrixPositiveShape(2)
+        nz = this%matrixPositiveShape(3)
 
         targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive                                   ! Octant III 
         targetMatrix( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, :         , :        ) ! Octant OII
@@ -623,44 +266,299 @@ contains
 
 
     end subroutine prUnfoldZeroPositiveMatrix
-    
 
 
-    subroutine prUnfoldZeroPositiveMatrixSD( this, sourceZeroPositive, sourcePositiveShape, targetMatrix )
+
+    subroutine prSetupMatrix( this, bandwidth )
+        !------------------------------------------------------------------------------
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( KernelType ) :: this 
+        doubleprecision, dimension(3), intent(in) :: bandwidth
+        ! local
+        integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
+        !------------------------------------------------------------------------------
+
+        ! Assign kernel properties
+        this%bandwidth = bandwidth
+        this%matrixPositiveShape = floor( this%matrixRange*this%bandwidth/this%binSize )
+
+        allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
+        allocate( zPYGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
+        allocate( zPZGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
+
+        call this%GenerateZeroPositiveGrid( zPXGrid, zPYGrid, zPZGrid )
+        call this%ComputeMatrix( zPXGrid, zPYGrid, zPZGrid )
+
+        ! Necessary ?
+        deallocate( zPXGrid )
+        deallocate( zPYGrid )
+        deallocate( zPZGrid )
+
+
+        return
+
+
+    end subroutine prSetupMatrix
+
+
+    ! KernelMultiGaussianW
+    subroutine prComputeKernelWMatrix( this, zPXGrid, zPYGrid, zPZGrid )
         !------------------------------------------------------------------------------
         ! 
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class(KernelSecondDerivativesType) :: this
-        !class(KernelMultiGaussianType) :: this
-        doubleprecision, dimension(:,:,:), intent(in)    :: sourceZeroPositive
-        integer, dimension(3), intent(in)                :: sourcePositiveShape 
-        doubleprecision, dimension(:,:,:), intent(inout) :: targetMatrix
-        integer, dimension(3) :: sourceShape 
+        class( KernelMultiGaussianType ) :: this 
+        integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
+        ! local 
+        doubleprecision, dimension(:)    , allocatable :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------
-        ! VERIFY WHAT HAPPENS WITH OCTANTS IN 2D
 
-        nx = sourcePositiveShape(1)
-        ny = sourcePositiveShape(2)
-        nz = sourcePositiveShape(3)
 
-        targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive                                   ! Octant III 
-        targetMatrix( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, :         , :        ) ! Octant OII
-        targetMatrix( nx+1:2*nx+1 , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(:        , ny+1:2:-1 , :        ) ! Octant IOI
-        targetMatrix( 1:nx        , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , :        ) ! Octant OOI
-        targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(:        , :         , nz+1:2:-1) ! Octant IIO 
-        targetMatrix( 1:nx        , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, :         , nz+1:2:-1) ! Octant OIO
-        targetMatrix( nx+1:2*nx+1 , 1:ny        , 1:nz        ) = sourceZeroPositive(:        , ny+1:2:-1 , nz+1:2:-1) ! Octant IOO
-        targetMatrix( 1:nx        , 1:ny        , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , nz+1:2:-1) ! Octant OOO
+        nx = this%matrixPositiveShape(1)
+        ny = this%matrixPositiveShape(2)
+        nz = this%matrixPositiveShape(3)
+
+
+        ! Matrix allocation ( consider doing this only if grid size changed )
+        if ( allocated( this%matrix ) ) deallocate( this%matrix )
+        allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
+
+        ! Compute normalized smoothing bandwidth/lambda
+        hLambda = this%bandwidth/this%binSize
+
+
+        ! Compute kernel
+        zeroPositiveMatrix = (0.5**nDim)*( &
+            ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
+            ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
+            ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
+
+
+        ! Unfold
+        call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
+
+
+        ! Normalization correction
+        this%matrix = this%matrix/sum( this%matrix )
 
 
         return
 
 
-    end subroutine prUnfoldZeroPositiveMatrixSD
+    end subroutine prComputeKernelWMatrix
+
+
+    ! KernelSecondDerivativeX
+    subroutine prComputeKernelVXMatrix( this, zPXGrid, zPYGrid, zPZGrid )
+        !------------------------------------------------------------------------------
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class( KernelSecondDerivativeXType ) :: this 
+        integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
+        ! local
+        doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        integer :: nx, ny, nz
+        doubleprecision :: aDenom, aNum, aCoeff
+        !------------------------------------------------------------------------------
+
+
+        nx = this%matrixPositiveShape(1)
+        ny = this%matrixPositiveShape(2)
+        nz = this%matrixPositiveShape(3)
+
+
+        ! Matrix allocation ( consider doing this only if grid size changed )
+        if ( allocated( this%matrix ) ) deallocate( this%matrix )
+        allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
+
+        ! Compute normalized smoothing bandwidth/lambda
+        hLambda = this%bandwidth/this%binSize
+
+
+        ! Compute kernel
+        zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
+            ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) - &
+            ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) )*&
+            ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
+              erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
+            ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
+              erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+
+
+        ! Unfold
+        call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
+
+
+        ! Kernel corrections
+        aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
+        aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
+        aCoeff = -1*aNum/aDenom
+   
+
+        where ( this%matrix > 0 )
+            this%matrix = aCoeff*this%matrix
+        end where
+
+
+        this%matrix = this%matrix*sqrt( &
+                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(1)**5 )*sum( this%matrix**2 ) ) &
+            )/sqrt( hLambda(2) )/sqrt( hLambda(3) )
+
+
+        return
+
+
+    end subroutine prComputeKernelVXMatrix
+
+
+    ! KernelSecondDerivativeY
+    subroutine prComputeKernelVYMatrix( this, zPXGrid, zPYGrid, zPZGrid )
+        !------------------------------------------------------------------------------
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class( KernelSecondDerivativeYType ) :: this 
+        integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
+        ! local
+        doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        integer :: nx, ny, nz
+        doubleprecision :: aDenom, aNum, aCoeff
+        !------------------------------------------------------------------------------
+
+
+        nx = this%matrixPositiveShape(1)
+        ny = this%matrixPositiveShape(2)
+        nz = this%matrixPositiveShape(3)
+
+
+        ! Matrix allocation ( consider doing this only if grid size changed )
+        if ( allocated( this%matrix ) ) deallocate( this%matrix )
+        allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
+
+        ! Compute normalized smoothing bandwidth/lambda
+        hLambda = this%bandwidth/this%binSize
+
+
+        ! Compute kernel
+        zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(2)**3 ) ) )*(&
+            ( zPYGrid + 0.5 )*exp( -1*( ( zPYGrid + 0.5 )**2 )/( 2*( hLambda(2)**2 ) ) ) - &
+            ( zPYGrid - 0.5 )*exp( -1*( ( zPYGrid - 0.5 )**2 )/( 2*( hLambda(2)**2 ) ) ) )*&
+            ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - &
+              erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
+            ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
+              erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+
+
+        ! Unfold
+        call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
+
+
+        ! Kernel corrections
+        aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
+        aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
+        aCoeff = -1*aNum/aDenom
+   
+
+        where ( this%matrix > 0 )
+            this%matrix = aCoeff*this%matrix
+        end where
+
+
+        this%matrix = this%matrix*sqrt( &
+                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(2)**5 )*sum( this%matrix**2 ) ) &
+            )/sqrt( hLambda(1) )/sqrt( hLambda(3) )
+
+
+        return
+
+
+    end subroutine prComputeKernelVYMatrix
+
+
+    ! KernelSecondDerivativeZ
+    subroutine prComputeKernelVZMatrix( this, zPXGrid, zPYGrid, zPZGrid )
+        !------------------------------------------------------------------------------
+        ! 
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class( KernelSecondDerivativeZType ) :: this 
+        integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
+        ! local
+        doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        integer :: nx, ny, nz
+        doubleprecision :: aDenom, aNum, aCoeff
+        !------------------------------------------------------------------------------
+
+
+        nx = this%matrixPositiveShape(1)
+        ny = this%matrixPositiveShape(2)
+        nz = this%matrixPositiveShape(3)
+
+
+        ! Matrix allocation ( consider doing this only if grid size changed )
+        if ( allocated( this%matrix ) ) deallocate( this%matrix )
+        allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
+
+        ! Compute normalized smoothing bandwidth/lambda
+        hLambda = this%bandwidth/this%binSize
+
+
+        ! Compute kernel
+        zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(3)**3 ) ) )*(&
+            ( zPZGrid + 0.5 )*exp( -1*( ( zPZGrid + 0.5 )**2 )/( 2*( hLambda(3)**2 ) ) ) - &
+            ( zPZGrid - 0.5 )*exp( -1*( ( zPZGrid - 0.5 )**2 )/( 2*( hLambda(3)**2 ) ) ) )*&
+            ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - &
+              erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
+            ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
+              erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+
+
+        ! Unfold
+        call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
+
+
+        ! Kernel corrections
+        aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
+        aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
+        aCoeff = -1*aNum/aDenom
+   
+
+        where ( this%matrix > 0 )
+            this%matrix = aCoeff*this%matrix
+        end where
+
+
+        this%matrix = this%matrix*sqrt( &
+                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(3)**5 )*sum( this%matrix**2 ) ) &
+            )/sqrt( hLambda(1) )/sqrt( hLambda(2) )
+
+
+        return
+
+
+    end subroutine prComputeKernelVZMatrix
 
 
 
@@ -670,7 +568,660 @@ end module KernelMultiGaussianModule
 
 
 
+
+
+
+
+
+! THRASH
+
+
+
+
+
+
+
+
+
+    !!!!!!!!!!!!!!!!!!!!!!!!! OLD KERNEL FUNCTIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+    !! CONSIDER RESTORING SMOOTHING
+    !subroutine prInitialize( this, binSize, kernelRange )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType) :: this 
+    !    doubleprecision, dimension(:)  :: binSize
+    !    integer, intent(in), optional  :: kernelRange
+    !    !------------------------------------------------------------------------------
+
+    !    ! Assign binSize 
+    !    this%binSize = binSize 
+
+    !    if ( present( kernelRange ) ) then 
+    !        this%kernelRange = kernelRange
+    !    else
+    !        this%kernelRange = defaultKernelRange 
+    !    end if
+
+    !end subroutine prInitialize
+
+
+
+
+    !subroutine prReset( this )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType) :: this 
+    !    !integer, intent(in) :: nx, ny, nz  
+    !    ! integer :: nDimensions
+    !    !integer, intent(in) :: nDim
+    !    !doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+    !    !doubleprecision, dimension(:), allocatable     :: normSmoothing
+    !    !------------------------------------------------------------------------------
+
+    !    this%nx = 0 
+    !    this%ny = 0 
+    !    this%nz = 0 
+
+    !    this%smoothing = 0
+    !    this%binSize   = 0
+
+    !end subroutine prReset
+
+
+
+
+    !subroutine prSetupMatrix( this, smoothing )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType)            :: this 
+    !    doubleprecision, dimension(3), intent(in) :: smoothing
+    !    integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
+    !    logical               :: newSmoothing, newGrid = .false. 
+    !    !------------------------------------------------------------------------------
+
+    !    ! RANGE
+    !    ! Assign kernel properties
+    !    this%smoothing           = smoothing
+    !    this%matrixPositiveShape = floor( this%kernelRange*this%smoothing/this%binSize )
+
+    !    allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
+    !    allocate( zPYGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
+    !    allocate( zPZGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
+
+    !    call this%GenerateZeroPositiveGrid( this%matrixPositiveShape, zPXGrid, zPYGrid, zPZGrid )
+    !    call this%ComputeZeroPositiveMatrix( zPXGrid, zPYGrid, zPZGrid )
+
+    !    ! Necessary ?
+    !    deallocate( zPXGrid )
+    !    deallocate( zPYGrid )
+    !    deallocate( zPZGrid )
+
+
+    !    return
+
+
+    !end subroutine prSetupMatrix
+
+
+    !subroutine prGenerateZeroPositiveGrid( this, zeroPositiveShape, zPXGrid, zPYGrid, zPZGrid  )
+    !    !------------------------------------------------------------------------------
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType) :: this 
+    !    integer, dimension(3), intent(in) :: zeroPositiveShape
+    !    integer, dimension(:,:,:), intent(inout) :: zPXGrid, zPYGrid, zPZGrid
+    !    integer :: nx, ny, nz
+    !    integer :: i
+    !    !------------------------------------------------------------------------------
+
+
+    !    nx = zeroPositiveShape(1)
+    !    ny = zeroPositiveShape(2)
+    !    nz = zeroPositiveShape(3)
+
+
+    !    ! WILL BE REMOVED
+    !    this%nx = nx
+    !    this%ny = ny
+    !    this%nz = nz
+
+
+    !    ! The quarter grid
+    !    zPXGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
+    !    zPYGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
+    !    zPZGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 ) ), &
+    !                                                  [ nx + 1, ny + 1, nz + 1 ] )
+
+    !    if ( allocated( this%matrix ) ) deallocate( this%matrix )
+    !    allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
+
+    !end subroutine prGenerateZeroPositiveGrid
+
+
+
+
+
+
+
+
+
+
+    !subroutine prComputeZeroPositiveMatrix( this, zPXGrid, zPYGrid, zPZGrid )
+    !    ! CONSIDER ADDING SMOOTHING AS INPUT PARAMETER
+    !    !------------------------------------------------------------------------------
+    !    ! Evaluate averaged MultiGaussian kernel in a 2D or 3D matrix depending
+    !    ! on the number of spatial dimensions
+    !    ! 
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType) :: this 
+    !    integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
+    !    doubleprecision, dimension(:), allocatable :: hLambda
+    !    doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+    !    !------------------------------------------------------------------------------
+
+
+    !    ! Compute normalized smoothing h/lambda
+    !    hLambda = this%smoothing/this%binSize
+
+    !    ! Compute kernel
+    !    zeroPositiveMatrix = (0.5**nDim)*( &
+    !        ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
+    !        ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
+    !        ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
+
+    !    ! Unfold
+    !    call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrixPositiveShape, this%matrix )
+
+    !    ! Normalization correction
+    !    this%matrix = this%matrix/sum( this%matrix )
+
+
+    !end subroutine prComputeZeroPositiveMatrix
+
+
+
+    !subroutine prComputeGridEstimateSpans( this, gridIndexes, gridShape, &
+    !                                          iXGSpan, iYGSpan, iZGSpan, &
+    !                                          iXKSpan, iYKSpan, iZKSpan  )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType) :: this
+    !    integer, dimension(3), intent(in) :: gridShape
+    !    integer, dimension(3), intent(in) :: gridIndexes
+    !    integer, dimension(2), intent(inout) :: iXGSpan, iYGSpan, iZGSpan
+    !    integer, dimension(2), intent(inout) :: iXKSpan, iYKSpan, iZKSpan
+    !    !------------------------------------------------------------------------------
+
+    !    ! Spans in grid 
+    !    iXGSpan(1) = max( gridIndexes(1) - this%nx, 1)
+    !    iXGSpan(2) = min( gridIndexes(1) + this%nx, gridShape(1) )
+    !    iYGSpan(1) = max( gridIndexes(2) - this%ny, 1)
+    !    iYGSpan(2) = min( gridIndexes(2) + this%ny, gridShape(2) )
+    !    iZGSpan(1) = max( gridIndexes(3) - this%nz, 1)
+    !    iZGSpan(2) = min( gridIndexes(3) + this%nz, gridShape(3) )
+
+    !    ! Spans in kernel matrix
+    !    iXKSpan = iXGSpan + this%nx - gridIndexes(1) + 1
+    !    iYKSpan = iYGSpan + this%ny - gridIndexes(2) + 1
+    !    iZKSpan = iZGSpan + this%nz - gridIndexes(3) + 1
+
+
+    !end subroutine prComputeGridEstimateSpans
+
+
+    !subroutine prUnfoldZeroPositiveMatrix( this, sourceZeroPositive, sourcePositiveShape, targetMatrix )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelMultiGaussianType) :: this
+    !    doubleprecision, dimension(:,:,:), intent(in)    :: sourceZeroPositive
+    !    integer, dimension(3), intent(in)                :: sourcePositiveShape 
+    !    doubleprecision, dimension(:,:,:), intent(inout) :: targetMatrix
+    !    integer, dimension(3) :: sourceShape 
+    !    integer :: nx, ny, nz
+    !    !------------------------------------------------------------------------------
+    !    ! VERIFY WHAT HAPPENS WITH OCTANTS IN 2D
+
+    !    nx = sourcePositiveShape(1)
+    !    ny = sourcePositiveShape(2)
+    !    nz = sourcePositiveShape(3)
+
+    !    targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive                                   ! Octant III 
+    !    targetMatrix( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, :         , :        ) ! Octant OII
+    !    targetMatrix( nx+1:2*nx+1 , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(:        , ny+1:2:-1 , :        ) ! Octant IOI
+    !    targetMatrix( 1:nx        , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , :        ) ! Octant OOI
+    !    targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(:        , :         , nz+1:2:-1) ! Octant IIO 
+    !    targetMatrix( 1:nx        , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, :         , nz+1:2:-1) ! Octant OIO
+    !    targetMatrix( nx+1:2*nx+1 , 1:ny        , 1:nz        ) = sourceZeroPositive(:        , ny+1:2:-1 , nz+1:2:-1) ! Octant IOO
+    !    targetMatrix( 1:nx        , 1:ny        , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , nz+1:2:-1) ! Octant OOO
+
+
+    !    return
+
+
+    !end subroutine prUnfoldZeroPositiveMatrix
+
+
+
+    !!!!!!!!!!!!!!!!!!!!!!!!! END OLD KERNEL FUNCTIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+
+
+
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!! OLD SECOND DERIVATIVES KERNEL FUNCTIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+    !subroutine prInitializeSD( this, binSize, kernelRange )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelSecondDerivativesType) :: this 
+    !    doubleprecision, dimension(:) :: binSize
+    !    integer, optional :: kernelRange
+    !    !------------------------------------------------------------------------------
+
+    !    ! Assign binSize 
+    !    this%binSize = binSize 
+
+    !    if ( present( kernelRange ) ) then 
+    !        this%kernelRange = kernelRange
+    !    else
+    !        this%kernelRange = defaultKernelSDRange 
+    !    end if
+
+
+    !end subroutine prInitializeSD
+
+
+    !subroutine prResetSD( this )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelSecondDerivativesType) :: this 
+    !    !integer, intent(in) :: nx, ny, nz  
+    !    ! integer :: nDimensions
+    !    !integer, intent(in) :: nDim
+    !    !doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+    !    !doubleprecision, dimension(:), allocatable     :: normSmoothing
+    !    !------------------------------------------------------------------------------
+
+    !    this%nx = 0 
+    !    this%ny = 0 
+    !    this%nz = 0 
+
+    !    this%smoothing = 0
+    !    this%binSize   = 0
+
+    !end subroutine prResetSD
+
+
+    !subroutine prSetupSecondDerivativesMatrix( this, gBandwidths )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelSecondDerivativesType)            :: this 
+    !    !class(KernelMultiGaussianType)            :: this 
+    !    doubleprecision, dimension(3), intent(in) :: gBandwidths
+    !    integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
+    !    integer :: curvatureGridSize
+    !    logical :: newBandwidth, newGrid = .false. 
+    !    !------------------------------------------------------------------------------
+
+
+    !    ! Compute the size
+    !    ! same for each matrix. 
+    !    ! This is because the same grid is being used
+    !    ! for all derivatives
+    !    curvatureGridSize = max( &
+    !        maxval( floor( this%kernelRange*gBandwidths(1)/this%binSize ) ), &
+    !        maxval( floor( this%kernelRange*gBandwidths(2)/this%binSize ) ), & 
+    !        maxval( floor( this%kernelRange*gBandwidths(3)/this%binSize ) )  )
+
+
+    !    allocate( zPXGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )
+    !    allocate( zPYGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )
+    !    allocate( zPZGrid( curvatureGridSize + 1, curvatureGridSize + 1, curvatureGridSize + 1 ) )
+
+    !    ! Initialize grid
+    !    this%gBandwidths                   = gBandwidths
+    !    this%curvatureGridSize             = curvatureGridSize
+    !    this%secondDerivativePositiveShape = curvatureGridSize
+
+    !    call this%GenerateZeroPositiveSDGrid( curvatureGridSize, zPXGrid, zPYGrid, zPZGrid )
+    !    call this%ComputeSecondDerivativesUnfold( gBandwidths, zPXGrid, zPYGrid, zPZGrid  )
+
+    !    ! Necessary ?
+    !    deallocate( zPXGrid )
+    !    deallocate( zPYGrid )
+    !    deallocate( zPZGrid )
+
+
+    !    return
+
+
+    !end subroutine prSetupSecondDerivativesMatrix
+
+
+
+    !subroutine prGenerateZeroPositiveSDGrid( this, gridSize, zPXGrid, zPYGrid, zPZGrid )
+    !    !------------------------------------------------------------------------------
+    !    !
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelSecondDerivativesType) :: this 
+    !    !class(KernelMultiGaussianType) :: this 
+    !    integer, dimension(:,:,:), intent(inout) :: zPXGrid, zPYgrid, zPZGrid
+    !    integer :: nx, ny, nz  
+    !    integer :: gridSize
+    !    integer :: i 
+    !    !------------------------------------------------------------------------------
+
+
+    !    nx = gridSize
+    !    ny = gridSize
+    !    nz = gridSize
+
+
+    !    ! WILL BE RENAMED/REMOVED
+    !    this%snx = gridSize
+    !    this%sny = gridSize
+    !    this%snz = gridSize
+
+
+    !    ! The octant grid
+    !    zPXGrid = spread( spread( [(i, i=0, nx)], 2, ny + 1 ), 3, nz + 1 )
+    !    zPYGrid = spread( spread( [(i, i=0, ny)], 1, nx + 1 ), 3, nz + 1 )
+    !    zPZGrid = reshape(spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 ) ), &
+    !                                             [ nx + 1, ny + 1, nz + 1 ] )
+
+
+    !    if ( allocated( this%secondDerivativeX ) ) then 
+    !        deallocate( this%secondDerivativeX )
+    !        deallocate( this%secondDerivativeY )
+    !        deallocate( this%secondDerivativeZ )
+    !    end if
+    !    allocate( this%secondDerivativeX( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+    !    allocate( this%secondDerivativeY( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+    !    allocate( this%secondDerivativeZ( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
+
+    !    return
+
+
+    !end subroutine prGenerateZeroPositiveSDGrid
+
+
+
+    !subroutine prComputeSecondDerivativesUnfold( this, gBandwidths, zPXGrid, zPYGrid, zPZGrid )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none 
+    !    class(KernelSecondDerivativesType) :: this 
+    !    !class(KernelMultiGaussianType) :: this 
+    !    doubleprecision, dimension(3), intent(in)      :: gBandwidths
+    !    integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
+    !    doubleprecision, dimension(3)                  :: gLambda
+    !    doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeX
+    !    doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeY
+    !    doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeZ
+    !    doubleprecision :: aXDenom, aXNum, aXCoeff
+    !    doubleprecision :: aYDenom, aYNum, aYCoeff
+    !    doubleprecision :: aZDenom, aZNum, aZCoeff
+    !    !------------------------------------------------------------------------------
+   
+    !    ! Grid size for these derivatives is not necessarily 
+    !    ! the same as kernel matrix
+
+    !    ! X
+    !    gLambda = gBandwidths(1)/this%binSize
+    !    secondDerivativeX = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(1)**3 ) ) )*(&
+    !        ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) - &
+    !        ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( gLambda(1)**2 ) ) ) )*&
+    !        ( erf( ( zPYGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
+    !          erf( ( zPYGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )*&
+    !        ( erf( ( zPZGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
+    !          erf( ( zPZGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
+
+    !    call this%UnfoldZeroPositiveMatrix( secondDerivativeX, this%secondDerivativePositiveShape, this%secondDerivativeX )
+    !    deallocate( secondDerivativeX )
+
+    !    ! X kernel corrections 
+    !    aXNum   = sum( this%secondDerivativeX, mask=( this%secondDerivativeX < 0 ) )
+    !    aXDenom = sum( this%secondDerivativeX, mask=( this%secondDerivativeX > 0 ) )
+    !    aXCoeff = -1*aXNum/aXDenom
+
+    !    where ( this%secondDerivativeX > 0 )
+    !        this%secondDerivativeX = aXCoeff*this%secondDerivativeX
+    !    end where
+
+    !    this%secondDerivativeX = this%secondDerivativeX*sqrt( &
+    !            3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( gLambda(1)**5 )*sum( this%secondDerivativeX**2 ) ) &
+    !        )/sqrt( gLambda(2) )/sqrt( gLambda(3) )
+
+
+    !    ! Y
+    !    gLambda = gBandwidths(2)/this%binSize
+    !    secondDerivativeY = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(2)**3 ) ) )*(&
+    !        ( zPYGrid + 0.5 )*exp( -1*( ( zPYGrid + 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) - &
+    !        ( zPYGrid - 0.5 )*exp( -1*( ( zPYGrid - 0.5 )**2 )/( 2*( gLambda(2)**2 ) ) ) )*&
+    !        ( erf( ( zPXGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
+    !          erf( ( zPXGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
+    !        ( erf( ( zPZGrid + 0.5 )/( gLambda(3)*sqrtTwo ) ) - &
+    !          erf( ( zPZGrid - 0.5 )/( gLambda(3)*sqrtTwo ) ) )
+
+    !    call this%UnfoldZeroPositiveMatrix( secondDerivativeY, this%secondDerivativePositiveShape, this%secondDerivativeY )
+    !    deallocate( secondDerivativeY )
+
+    !    ! Y kernel corrections
+    !    aYNum   = sum( this%secondDerivativeY, mask=( this%secondDerivativeY < 0 ) )
+    !    aYDenom = sum( this%secondDerivativeY, mask=( this%secondDerivativeY > 0 ) )
+    !    aYCoeff = -1*aYNum/aYDenom
+    !
+    !    where ( this%secondDerivativeY > 0 )
+    !        this%secondDerivativeY = aYCoeff*this%secondDerivativeY
+    !    end where
+
+    !    this%secondDerivativeY = this%secondDerivativeY*sqrt( &
+    !            3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( gLambda(2)**5 )*sum( this%secondDerivativeY**2 ) ) &
+    !        )/sqrt( gLambda(1) )/sqrt( gLambda(3) )
+
+
+    !    ! Z
+    !    gLambda = gBandwidths(3)/this%binSize
+    !    secondDerivativeZ = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( gLambda(3)**3 ) ) )*(&
+    !        ( zPZGrid + 0.5 )*exp( -1*( ( zPZGrid + 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) - &
+    !        ( zPZGrid - 0.5 )*exp( -1*( ( zPZGrid - 0.5 )**2 )/( 2*( gLambda(3)**2 ) ) ) )*&
+    !        ( erf( ( zPXGrid + 0.5 )/( gLambda(1)*sqrtTwo ) ) - &
+    !          erf( ( zPXGrid - 0.5 )/( gLambda(1)*sqrtTwo ) ) )*&
+    !        ( erf( ( zPYGrid + 0.5 )/( gLambda(2)*sqrtTwo ) ) - &
+    !          erf( ( zPYGrid - 0.5 )/( gLambda(2)*sqrtTwo ) ) )
+
+    !    call this%UnfoldZeroPositiveMatrix( secondDerivativeZ, this%secondDerivativePositiveShape, this%secondDerivativeZ )
+    !    deallocate( secondDerivativeZ )
+
+    !    ! Z kernel corrections
+    !    aZNum   = sum( this%secondDerivativeZ, mask=( this%secondDerivativeZ < 0 ) )
+    !    aZDenom = sum( this%secondDerivativeZ, mask=( this%secondDerivativeZ > 0 ) )
+    !    aZCoeff = -1*aZNum/aZDenom
+    !
+    !    where ( this%secondDerivativeZ > 0 )
+    !        this%secondDerivativeZ = aZCoeff*this%secondDerivativeZ
+    !    end where
+
+    !    this%secondDerivativeZ = this%secondDerivativeZ*sqrt( &
+    !            3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( gLambda(3)**5 )*sum( this%secondDerivativeZ**2 ) ) &
+    !        )/sqrt( gLambda(1) )/sqrt( gLambda(2) )
+
+
+    !    return
+
+    !end subroutine prComputeSecondDerivativesUnfold
+
+
+
+    !subroutine prComputeGridEstimateSpansSecond( this, gridIndexes, gridShape, &
+    !                                                iXGSpan, iYGSpan, iZGSpan, &
+    !                                                iXKSpan, iYKSpan, iZKSpan  )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelSecondDerivativesType) :: this 
+    !    !class(KernelMultiGaussianType) :: this
+    !    integer, dimension(3), intent(in) :: gridShape
+    !    !integer, dimension(3), intent(in) :: kernelPositiveGridSize
+    !    integer, dimension(3), intent(in) :: gridIndexes
+    !    integer, dimension(2), intent(inout) :: iXGSpan, iYGSpan, iZGSpan
+    !    integer, dimension(2), intent(inout) :: iXKSpan, iYKSpan, iZKSpan
+    !    !------------------------------------------------------------------------------
+
+    !    ! Spans in grid 
+    !    iXGSpan(1) = max( gridIndexes(1) - this%snx, 1)
+    !    iXGSpan(2) = min( gridIndexes(1) + this%snx, gridShape(1) )
+    !    iYGSpan(1) = max( gridIndexes(2) - this%sny, 1)
+    !    iYGSpan(2) = min( gridIndexes(2) + this%sny, gridShape(2) )
+    !    iZGSpan(1) = max( gridIndexes(3) - this%snz, 1)
+    !    iZGSpan(2) = min( gridIndexes(3) + this%snz, gridShape(3) )
+
+    !    ! Spans in kernel matrix
+    !    iXKSpan = iXGSpan + this%snx - gridIndexes(1) + 1
+    !    iYKSpan = iYGSpan + this%sny - gridIndexes(2) + 1
+    !    iZKSpan = iZGSpan + this%snz - gridIndexes(3) + 1
+
+
+    !end subroutine prComputeGridEstimateSpansSecond
+
+
+    !subroutine prUnfoldZeroPositiveMatrixSD( this, sourceZeroPositive, sourcePositiveShape, targetMatrix )
+    !    !------------------------------------------------------------------------------
+    !    ! 
+    !    !------------------------------------------------------------------------------
+    !    ! Specifications 
+    !    !------------------------------------------------------------------------------
+    !    implicit none
+    !    class(KernelSecondDerivativesType) :: this
+    !    !class(KernelMultiGaussianType) :: this
+    !    doubleprecision, dimension(:,:,:), intent(in)    :: sourceZeroPositive
+    !    integer, dimension(3), intent(in)                :: sourcePositiveShape 
+    !    doubleprecision, dimension(:,:,:), intent(inout) :: targetMatrix
+    !    integer, dimension(3) :: sourceShape 
+    !    integer :: nx, ny, nz
+    !    !------------------------------------------------------------------------------
+    !    ! VERIFY WHAT HAPPENS WITH OCTANTS IN 2D
+
+    !    nx = sourcePositiveShape(1)
+    !    ny = sourcePositiveShape(2)
+    !    nz = sourcePositiveShape(3)
+
+    !    targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive                                   ! Octant III 
+    !    targetMatrix( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, :         , :        ) ! Octant OII
+    !    targetMatrix( nx+1:2*nx+1 , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(:        , ny+1:2:-1 , :        ) ! Octant IOI
+    !    targetMatrix( 1:nx        , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , :        ) ! Octant OOI
+    !    targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(:        , :         , nz+1:2:-1) ! Octant IIO 
+    !    targetMatrix( 1:nx        , ny+1:2*ny+1 , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, :         , nz+1:2:-1) ! Octant OIO
+    !    targetMatrix( nx+1:2*nx+1 , 1:ny        , 1:nz        ) = sourceZeroPositive(:        , ny+1:2:-1 , nz+1:2:-1) ! Octant IOO
+    !    targetMatrix( 1:nx        , 1:ny        , 1:nz        ) = sourceZeroPositive(nx+1:2:-1, ny+1:2:-1 , nz+1:2:-1) ! Octant OOO
+
+
+    !    return
+
+
+    !end subroutine prUnfoldZeroPositiveMatrixSD
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!! END OLD SECOND DERIVATIVES KERNEL FUNCTIONS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+
+
+
+
+
+
+
+
+
+
 !! THRASH
+
+    !! Second derivatives of Averaged MultiGaussian kernel \bar{V}
+    !type, public :: KernelSecondDerivativesType
+
+    !    ! Properties
+    !    integer :: nx, ny, nz
+    !    integer :: snx, sny, snz
+    !    integer :: curvatureGridSize = 0 
+    !    integer, dimension(3) :: secondDerivativePositiveShape = 0 
+    !    integer :: kernelRange
+    !    doubleprecision, dimension(3) :: binSize     = 0d0
+    !    doubleprecision, dimension(3) :: smoothing   = 0d0
+    !    doubleprecision, dimension(3) :: gBandwidths = 0d0
+
+    !    doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeX
+    !    doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeY
+    !    doubleprecision, dimension(:,:,:), allocatable :: secondDerivativeZ
+
+    !contains
+
+    !    ! Procedures
+    !    procedure :: Initialize       => prInitializeSD 
+    !    procedure :: Reset            => prResetSD
+    !    procedure :: SetupSecondDerivativesMatrix   => prSetupSecondDerivativesMatrix
+    !    procedure :: GenerateZeroPositiveSDGrid     => prGenerateZeroPositiveSDGrid
+    !    procedure :: ComputeSecondDerivativesUnfold => prComputeSecondDerivativesUnfold
+    !    procedure :: ComputeGridEstimateSpansSecond => prComputeGridEstimateSpansSecond
+    !    procedure :: UnfoldZeroPositiveMatrix       => prUnfoldZeroPositiveMatrixSD
+
+    !end type
+
+
+
+
+
+
 
         !print *, ' AT ZEROPOSITIVE NORMAL GRID BEFORE ', nx, ny, nz
         !print *, shape(zPXGrid)
