@@ -1676,8 +1676,9 @@ contains
 
             relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
 
-            !$omp parallel do   &
-            !$omp reduction( +:convergenceCount ) 
+            !$omp parallel do &
+            !$omp reduction( +:convergenceCount )   &
+            !$omp reduction( +:softConvergenceCount ) 
             do n = 1, this%histogram%nActiveBins
                 if ( relativeDensityChange(n) < 0.01 ) then 
                     convergenceCount = convergenceCount + 1
