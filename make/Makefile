@@ -36,7 +36,7 @@ $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridCell.o \
 $(OBJDIR)/GridProjectedKDE.o \
-$(OBJDIR)/testinitialization.o
+$(OBJDIR)/testwithparameters.o
 #$(OBJDIR)/testkerneldbreal.o
 #$(OBJDIR)/testgpkdeomp.o
 #$(OBJDIR)/testgpkde.o

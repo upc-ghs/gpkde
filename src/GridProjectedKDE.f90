@@ -184,51 +184,42 @@ contains
 
         
         ! Process optional arguments
-
         ! Kernel database 
         if ( present( databaseOptimization ) ) then 
             this%databaseOptimization = databaseOptimization
-
-            ! flatKernelDatabase
-            if ( present( flatKernelDatabase ) ) then 
-                this%flatKernelDatabase = flatKernelDatabase
-            else 
-                this%flatKernelDatabase = defaultFlatKernelDatabase
-            end if
-
-            ! Process kernel database discretization parameters 
-            if ( present( maxHOverLambda ) ) then 
-                this%maxHOverLambda = maxHOverLambda
-            else 
-                this%maxHOverLambda = defaultMaxHOverLambda
-            end if 
-
-            if ( present( minHOverLambda ) ) then 
-                this%minHOverLambda = minHOverLambda
-            else 
-                this%minHOverLambda = defaultMinHOverLambda
-            end if
-
-            if ( present( deltaHOverLambda ) ) then 
-                this%deltaHOverLambda = deltaHOverLambda
-            else 
-                this%deltaHOverLambda = defaultDeltaHOverLambda
-            end if
-
-            if ( present( logKernelDatabase ) ) then 
-                this%logKernelDatabase = logKernelDatabase
-            else 
-                this%logKernelDatabase = defaultLogKernelDatabase
-            end if
-
         else 
             this%databaseOptimization = defaultDatabaseOptimization
-            this%flatKernelDatabase   = defaultFlatKernelDatabase  
-            this%logKernelDatabase    = defaultLogKernelDatabase   
-            this%maxHOverLambda       = defaultMaxHOverLambda      
-            this%minHOverLambda       = defaultMinHOverLambda      
-            this%deltaHOverLambda     = defaultDeltaHOverLambda    
         end if 
+
+        ! flatKernelDatabase
+        if ( present( flatKernelDatabase ) ) then 
+            this%flatKernelDatabase = flatKernelDatabase
+        else 
+            this%flatKernelDatabase = defaultFlatKernelDatabase
+        end if
+
+        ! Process kernel database discretization parameters 
+        if ( present( maxHOverLambda ) ) then 
+            this%maxHOverLambda = maxHOverLambda
+        else 
+            this%maxHOverLambda = defaultMaxHOverLambda
+        end if 
+        if ( present( minHOverLambda ) ) then 
+            this%minHOverLambda = minHOverLambda
+        else 
+            this%minHOverLambda = defaultMinHOverLambda
+        end if
+        if ( present( deltaHOverLambda ) ) then 
+            this%deltaHOverLambda = deltaHOverLambda
+        else 
+            this%deltaHOverLambda = defaultDeltaHOverLambda
+        end if
+        if ( present( logKernelDatabase ) ) then 
+            this%logKernelDatabase = logKernelDatabase
+        else 
+            this%logKernelDatabase = defaultLogKernelDatabase
+        end if
+
 
         ! bruteOptimization and anisotropicSigmaSupport
         if ( present( bruteOptimization ) ) then 
@@ -682,6 +673,9 @@ contains
         ! Histogram quantities
         call this%histogram%ComputeCounts( dataPoints )
         call this%histogram%ComputeActiveBinIds()
+        print *, '## GPKDE: histogram with nActiveBins', &
+                      this%histogram%nActiveBins
+
 
         ! Density optimization 
         if ( this%databaseOptimization ) then
@@ -2247,8 +2241,8 @@ contains
         print *, '## GPKDE Initializing kernelsigmaarray'
         ! Initialize kernelSigmaArray
         !$omp parallel do &
-        !$omp private( kernelMatrixMemory )  &
-        !$omp reduction(+:kernelDBMemory) &
+        !!$omp private( kernelMatrixMemory )  &
+        !!$omp reduction(+:kernelDBMemory) &
         !$omp private(gc) 
         do n = 1, this%histogram%nActiveBins
 
@@ -2267,8 +2261,8 @@ contains
                 gc%kernelSigmaXGSpan, gc%kernelSigmaYGSpan, gc%kernelSigmaZGSpan, & 
                 gc%kernelSigmaXMSpan, gc%kernelSigmaYMSpan, gc%kernelSigmaZMSpan  )
 
-             kernelMatrixMemory = sizeof( kernelSigmaArray(n)%matrix )/1e6
-             kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
+            !kernelMatrixMemory = sizeof( kernelSigmaArray(n)%matrix )/1e6
+            !kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
 
         end do 
         !$omp end parallel do 
@@ -2408,6 +2402,7 @@ contains
             ! CURVATURE BANDWIDTHS COULD BE ANISOTROPIC FOR EACH 
             ! SPATIAL DERIVATIVE, AS A REMINDER THAT THIS SHOULD 
             ! BE THE FINAL IMPLEMENTATION
+
             !$omp parallel do                                      &        
             !$omp firstprivate( kernelSDX )                        & 
             !$omp firstprivate( kernelSDY )                        & 
@@ -2734,8 +2729,8 @@ contains
             !$omp end parallel do 
 
             ! LOGGER
-            !print *, 'debug_convergence_count', convergenceCount
-            !print *, 'debug_soft_convergence_count', softConvergenceCount
+            print *, 'debug_convergence_count', convergenceCount
+            print *, 'debug_soft_convergence_count', softConvergenceCount
             !print *, 'debug_relativedensitychange_max  ', maxval( relativeDensityChange )
             !print *, 'debug_relativedensitychange_min  ', minval( relativeDensityChange )
             !print *, 'debug_relativedensitychange_mean ',  sum(    relativeDensityChange )/this%histogram%nActiveBins

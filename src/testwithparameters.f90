@@ -36,7 +36,7 @@ program testkernel
     !! LOG
     maxHOverLambda   = 20.0
     minHOverLambda   = 0.25
-    deltaHOverLambda = 0.25
+    deltaHOverLambda = 0.08
 
 
     ! TIC
@@ -58,7 +58,8 @@ program testkernel
     call gpkde%Initialize( domainSize, binSize, &
                minHOverLambda = minHOverLambda, & 
                maxHOverLambda = maxHOverLambda, & 
-           deltaHOverLambda = deltaHOverLambda  & 
+           deltaHOverLambda   = deltaHOverLambda, &
+           bruteOptimization  = .true.           & 
         )
 
     ! TIC
