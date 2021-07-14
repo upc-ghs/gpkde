@@ -425,6 +425,7 @@ contains
         ! LOGGER
         print *, '## GPKDE: kernel db sizes:', nDelta, nDelta*nDelta*nDelta
 
+
         ! Allocate kernel databases
         allocate( this%kernelDatabase( nDelta, nDelta, nDelta ) )
         allocate( this%kernelSDXDatabase( nDelta ) )
@@ -1378,8 +1379,8 @@ contains
             !$omp end parallel do
 
             !! LOGGER
-            print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
-            print *, 'debug_densityestimate_min', minval( densityEstimateArray )
+            !print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
+            !print *, 'debug_densityestimate_min', minval( densityEstimateArray )
 
             relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
 
@@ -2040,8 +2041,8 @@ contains
             !$omp end parallel do
 
             !! LOGGER
-            print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
-            print *, 'debug_densityestimate_min', minval( densityEstimateArray )
+            !print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
+            !print *, 'debug_densityestimate_min', minval( densityEstimateArray )
 
             relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
 
@@ -2733,8 +2734,8 @@ contains
             !$omp end parallel do 
 
             ! LOGGER
-            print *, 'debug_convergence_count', convergenceCount
-            print *, 'debug_soft_convergence_count', softConvergenceCount
+            !print *, 'debug_convergence_count', convergenceCount
+            !print *, 'debug_soft_convergence_count', softConvergenceCount
             !print *, 'debug_relativedensitychange_max  ', maxval( relativeDensityChange )
             !print *, 'debug_relativedensitychange_min  ', minval( relativeDensityChange )
             !print *, 'debug_relativedensitychange_mean ',  sum(    relativeDensityChange )/this%histogram%nActiveBins
@@ -2750,6 +2751,12 @@ contains
 
         end do
         ! End optimization loop
+
+
+        ! Store variables
+        this%kernelSmoothing     = kernelSmoothing
+        this%kernelSigmaSupport  = kernelSigmaSupport
+        this%curvatureBandwidth  = curvatureBandwidth
 
 
 
