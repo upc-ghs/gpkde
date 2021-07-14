@@ -29,14 +29,18 @@ program testkernel
     character(len=200) :: particlesFileName = 'particles_1.csv'
     integer            :: nlines = 1000000
     doubleprecision, dimension(:,:), allocatable :: dataArray
+    integer :: nOptimizationLoops
     !-------------------------------------------------------------
 
     allocate( dataArray( nlines, 3 ) )
 
-    !! LOG
+    ! KDB LOG
     maxHOverLambda   = 20.0
     minHOverLambda   = 0.25
     deltaHOverLambda = 0.08
+
+
+    nOptimizationLoops = 10
 
 
     ! TIC
@@ -55,17 +59,20 @@ program testkernel
     ! Initialize gpkde
     print *, '## TEST: init gpkde' 
     allocate( gpkde )
-    call gpkde%Initialize( domainSize, binSize, &
-               minHOverLambda = minHOverLambda, & 
-               maxHOverLambda = maxHOverLambda, & 
-           deltaHOverLambda   = deltaHOverLambda, &
-           bruteOptimization  = .true.           & 
+    call gpkde%Initialize( domainSize, binSize,           &
+            minHOverLambda          = minHOverLambda,     & 
+            maxHOverLambda          = maxHOverLambda,     & 
+            deltaHOverLambda        = deltaHOverLambda,   &
+            databaseOptimization    = .true.,             & 
+            bruteOptimization       = .true.,             & 
+            anisotropicSigmaSupport = .false.,             &
+            nOptimizationLoops      = nOptimizationLoops  & 
         )
 
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
     print *, '## TEST: compute density ' 
-    call gpkde%ComputeDensity( dataArray, nOptimizationLoops=10 )
+    call gpkde%ComputeDensity( dataArray, nOptimizationLoops=gpkde%nOptimizationLoops )
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)
     elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)

@@ -79,6 +79,9 @@ module GridProjectedKDEModule
         logical :: bruteOptimization 
         logical :: anisotropicSigmaSupport 
 
+        ! Optimization loops
+        integer :: nOptimizationLoops
+
 
         ! Module constants
         doubleprecision :: supportDimensionConstant
@@ -150,7 +153,8 @@ contains
                                 databaseOptimization, flatKernelDatabase, &
                                           minHOverLambda, maxHOverLambda, &
                                      deltaHOverLambda, logKernelDatabase, &
-                               bruteOptimization, anisotropicSigmaSupport )
+                              bruteOptimization, anisotropicSigmaSupport, &
+                                                      nOptimizationLoops  )
         !------------------------------------------------------------------------------
         !
         !------------------------------------------------------------------------------
@@ -168,6 +172,9 @@ contains
         logical, intent(in), optional :: logKernelDatabase
         ! Brute optimization, no kernel database
         logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
+        ! Optimization loops
+        integer, intent(in), optional :: nOptimizationLoops 
+
         !------------------------------------------------------------------------------
 
 
@@ -224,14 +231,21 @@ contains
         ! bruteOptimization and anisotropicSigmaSupport
         if ( present( bruteOptimization ) ) then 
             this%bruteOptimization = bruteOptimization
-            if ( present( anisotropicSigmaSupport ) ) then 
-                this%anisotropicSigmaSupport = anisotropicSigmaSupport
-            else 
-                this%anisotropicSigmaSupport = defaultAnisotropicSigmaSupport
-            end if
         else 
-            this%bruteOptimization       = defaultBruteOptimization       
-            this%anisotropicSigmaSupport = defaultAnisotropicSigmaSupport 
+            this%bruteOptimization = defaultBruteOptimization       
+        end if 
+        if ( present( anisotropicSigmaSupport ) ) then 
+            this%anisotropicSigmaSupport = anisotropicSigmaSupport
+        else 
+            this%anisotropicSigmaSupport = defaultAnisotropicSigmaSupport
+        end if
+
+
+        ! nOptimizationLoops
+        if ( present( nOptimizationLoops ) ) then 
+            this%nOptimizationLoops = nOptimizationLoops
+        else 
+            this%nOptimizationLoops = defaultNOptLoops
         end if 
 
 
@@ -240,9 +254,24 @@ contains
         if ( present( initialSmoothing ) ) then 
             this%initialSmoothing = initialSmoothing
         else
-            this%initialSmoothing = ( this%histogram%binVolume )**( 1d0/nDim )
+            this%initialSmoothing = 0.5*( this%histogram%binVolume )**( 1d0/nDim )
         end if 
    
+
+        ! LOGGER
+        print *, '#############################################################'
+        print *, '## GPKDE: INIT PARAMETERS'
+        print *, ' delta_hoverlambda'       , this%deltaHOverLambda(1)
+        print *, ' min_hoverlambda'         , this%minHOverLambda(1)
+        print *, ' max_hoverlambda'         , this%maxHOverLambda(1)
+        print *, ' log_kerneldatabase'      , this%logKernelDatabase
+        print *, ' database_optimization'   , this%databaseOptimization 
+        print *, ' flat_kerneldatabase'     , this%flatKernelDatabase
+        print *, ' brute_optimization'      , this%bruteOptimization 
+        print *, ' anisotropic_sigmasupport', this%anisotropicSigmaSupport 
+        print *, ' n_optimization_loops'    , this%nOptimizationLoops 
+        print *, '#############################################################'
+
 
         ! Initialize kernel database 
         if ( this%databaseOptimization ) then
@@ -677,6 +706,8 @@ contains
                       this%histogram%nActiveBins
 
 
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
         ! Density optimization 
         if ( this%databaseOptimization ) then
 
@@ -713,14 +744,25 @@ contains
             call this%DropKernelDatabase()
 
         end if 
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        print *, '## GPKDE database_optimization_time ', elapsedTime, ' seconds'
 
 
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
         if ( this%bruteOptimization ) then 
-
+            print *, '#############################################'
             print *, '## GPKDE: brute optimization stage'
-            call this%ComputeDensityParallel()
+            call this%ComputeDensityParallel(&
+                anisotropicSigmaSupport = this%anisotropicSigmaSupport )
 
         end if 
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        print *, '## GPKDE brute_optimization_time ', elapsedTime, ' seconds'
 
         
         return
@@ -2089,7 +2131,7 @@ contains
 
 
     ! Density optimization in its raw form, no kernel database
-    subroutine prComputeDensityParallel( this )
+    subroutine prComputeDensityParallel( this, nOptimizationLoops, anisotropicSigmaSupport )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -2141,11 +2183,13 @@ contains
         type( KernelMultiGaussianType ), dimension(:), allocatable, target :: kernelSigmaArray
        
         
-        logical :: anisotropicSigmaSupport = .true.
+        logical, intent(in), optional :: anisotropicSigmaSupport
+        logical :: localAnisotropicSigmaSupport
 
+        integer, intent(in), optional :: nOptimizationLoops
+        integer                       :: nOptLoops
 
         integer :: n, m
-        integer :: nFinalOptLoops = 10
         integer :: iX, iY, iZ
         integer :: convergenceCount = 0
         integer :: softConvergenceCount = 0
@@ -2164,6 +2208,24 @@ contains
         doubleprecision :: kernelMatrixMemory = 0d0
         !------------------------------------------------------------------------------
    
+
+        ! Process anisotropicSigmaSupport 
+        if ( present( anisotropicSigmaSupport ) ) then 
+            localAnisotropicSigmaSupport = anisotropicSigmaSupport
+        else
+            localAnisotropicSigmaSupport = defaultAnisotropicSigmaSupport
+        end if
+
+        print *, 'LOCAL ANISOT SIGMA SUPPOR', localAnisotropicSigmaSupport
+
+
+        ! Define nOptLoops
+        if ( present( nOptimizationLoops ) ) then 
+            nOptLoops = nOptimizationLoops
+        else 
+            nOptLoops = defaultNOptLoops
+        end if 
+
 
         ! Allocate activeGridCells 
         allocate( activeGridCells( this%histogram%nActiveBins ) )
@@ -2199,6 +2261,9 @@ contains
         allocate(     roughnessYYArray( this%histogram%nActiveBins ) )
         allocate(     roughnessZZArray( this%histogram%nActiveBins ) )
         allocate(    netRoughnessArray( this%histogram%nActiveBins ) )
+
+
+
 
 
         ! IF NO DENSITY FROM PREVIOUS 
@@ -2283,7 +2348,7 @@ contains
 
 
         ! Optimization loop
-        do m = 1, nFinalOptLoops
+        do m = 1, nOptLoops
             print *, '########################################################'
             print *, 'final_optimization_loop ', m
       
@@ -2322,7 +2387,7 @@ contains
             call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                                nEstimateArray, kernelSigmaSupportScale )
 
-            if ( anisotropicSigmaSupport ) then 
+            if ( localAnisotropicSigmaSupport ) then 
                 ! Anisotropic
                 kernelSigmaSupport(:,1) = kernelSigmaSupportScale*kernelSmoothingShape(:,1)
                 kernelSigmaSupport(:,2) = kernelSigmaSupportScale*kernelSmoothingShape(:,2)
@@ -2649,7 +2714,7 @@ contains
             end do
             !$omp end parallel do 
 
-            if ( anisotropicSigmaSupport ) then 
+            if ( localAnisotropicSigmaSupport ) then 
                 ! Optimal smoothing and shape
                 call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                                 roughnessXXArray, roughnessYYArray, roughnessZZArray, &
