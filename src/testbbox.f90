@@ -27,7 +27,7 @@ program testkernel
     integer :: res
     integer :: line_no, ix
     character(len=200) :: particlesFileName = 'particles_1.csv'
-    integer            :: nlines = 1000000
+    integer            :: nlines = 10000
     doubleprecision, dimension(:,:), allocatable :: dataArray
     integer :: nOptimizationLoops
     !-------------------------------------------------------------
@@ -39,7 +39,6 @@ program testkernel
     minHOverLambda   = 0.25
     deltaHOverLambda = 0.25
     !deltaHOverLambda = 0.08
-
 
     nOptimizationLoops = 10
 
@@ -66,7 +65,7 @@ program testkernel
             deltaHOverLambda        = deltaHOverLambda,   &
             databaseOptimization    = .true.,             & 
             bruteOptimization       = .false.,             & 
-            anisotropicSigmaSupport = .false.,             &
+            anisotropicSigmaSupport = .true.,             &
             nOptimizationLoops      = nOptimizationLoops  & 
         )
 
