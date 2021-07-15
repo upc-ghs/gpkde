@@ -41,7 +41,7 @@ program testkernel
     !deltaHOverLambda = 0.08
 
 
-    nOptimizationLoops = 20
+    nOptimizationLoops = 10
 
 
     ! TIC

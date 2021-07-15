@@ -990,7 +990,8 @@ contains
         allocate(      kernelSigmaSupportScale( this%nComputeBins ) )
         allocate(      kernelSigmaSupport( nDim, this%nComputeBins ) )
         !allocate(      kernelSmoothing( this%nComputeBins, nDim ) )
-        allocate(   curvatureBandwidth( this%nComputeBins, nDim ) )
+        !allocate(   curvatureBandwidth( this%nComputeBins, nDim ) )
+        allocate(   curvatureBandwidth( nDim, this%nComputeBins ) )
         allocate( densityEstimateArray( this%nComputeBins ) )
         allocate(       nEstimateArray( this%nComputeBins ) )
         allocate(     roughnessXXArray( this%nComputeBins ) )  
@@ -1175,7 +1176,6 @@ contains
             print *, 'n_estimate_initial_time ', elapsedTime, ' seconds'
 
 
-            call exit(0)
         
 
             !! LOGGER
@@ -1187,13 +1187,16 @@ contains
             call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                                nEstimateArray, kernelSigmaSupportScale )
             ! Spread it, isotropic 
-            kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
+            kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, nDim )
+            !kernelSigmaSupport = spread( kernelSigmaSupportScale, 2, nDim )
 
 
             !! LOGGER
             !print *, 'debug_kernelsigmasupport_max', maxval( kernelSigmaSupport )
             !print *, 'debug_kernelsigmasupport_min', minval( kernelSigmaSupport )
            
+            ! TIC
+            call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
             ! Update nEstimate
             !$omp parallel do &
@@ -1208,8 +1211,10 @@ contains
 
                 ! Compute indexes on kernel database
                 ! transposeKernelSigma will always be false as this kernel is isotropic
-                call this%ComputeKernelDatabaseFlatIndexes( kernelSigmaSupport( n, : ), &
+                call this%ComputeKernelDatabaseFlatIndexes( kernelSigmaSupport( :, n ), &
                                    gc%kernelSigmaDBFlatIndexes, gc%transposeKernelSigma ) 
+                !call this%ComputeKernelDatabaseFlatIndexes( kernelSigmaSupport( n, : ), &
+                !                   gc%kernelSigmaDBFlatIndexes, gc%transposeKernelSigma ) 
 
                 ! Assign pointer
                 gc%kernelSigma => this%kernelDatabaseFlat(&
@@ -1239,16 +1244,25 @@ contains
             end do
             !$omp end parallel do 
 
+            ! TOC
+            call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            print *, 'n_estimate_second_time ', elapsedTime, ' seconds'
 
             !! LOGGER
             !print *, 'debug_nestimate_max', maxval( nEstimateArray )
             !print *, 'debug_nestimate_min', minval( nEstimateArray )
 
 
+            !call exit(0)
+
+
+
             ! Curvature bandwidths
             call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
                       nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
                                  kernelSigmaSupportScale, curvatureBandwidth )
+
 
             !! LOGGER
             !print *, 'debug_curvaturebandwidth_max', maxval( curvatureBandwidth )
@@ -1267,7 +1281,8 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                gc%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( curvatureBandwidth( n, : ) )
+                gc%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( curvatureBandwidth( :, n ) )
+                !gc%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( curvatureBandwidth( n, : ) )
 
                 ! X
                 ! Assign pointer
@@ -1552,8 +1567,10 @@ contains
                 !if (gc%convergence) cycle
 
                 ! Compute indexes on kernel database
-                call this%ComputeKernelDatabaseFlatIndexes( kernelSmoothing( n, : ), &
+                call this%ComputeKernelDatabaseFlatIndexes( kernelSmoothing( :, n ), &
                                           gc%kernelDBFlatIndexes, gc%transposeKernel )
+                !call this%ComputeKernelDatabaseFlatIndexes( kernelSmoothing( n, : ), &
+                !                          gc%kernelDBFlatIndexes, gc%transposeKernel )
 
                 ! Assign kernel pointer
                 gc%kernel => this%kernelDatabaseFlat( gc%kernelDBFlatIndexes(1), gc%kernelDBFlatIndexes(2) )
@@ -3065,15 +3082,16 @@ contains
         nVirtualPowerBeta = ( ( sqrtEightPi*kernelSigmaSupportScale )**nDim*&
             nEstimate**2/densityEstimate )**betaDimensionConstant
 
+
         ! Allocate local arrays
         nActiveBins = size( nEstimate ) ! Maybe removed
-        allocate( kernelSmoothingShape( nActiveBins, nDim ) )
-        allocate(            shapeTerm( nActiveBins, nDim ) )
+        allocate( kernelSmoothingShape( nDim, nActiveBins ) )
+        allocate(            shapeTerm( nDim, nActiveBins ) )
 
 
         ! Compute shape factors
         do n = 1, nDim
-            kernelSmoothingShape( :, n ) = kernelSmoothing( :, n )/kernelSmoothingScale    
+            kernelSmoothingShape( n, : ) = kernelSmoothing( n, : )/kernelSmoothingScale    
         end do 
 
         ! Compute the shape dependent terms
@@ -3083,18 +3101,50 @@ contains
 
             ! This could be expressed in term of dimensionality,
             ! generalized
-            shapeTerm( :, n ) = (                                           &
-                ( 1d0/( nDim + 4 )/( kernelSmoothingShape( :, n )**4 ) )*   &
+            shapeTerm( n, : ) = (                                           &
+                ( 1d0/( nDim + 4 )/( kernelSmoothingShape( n, : )**4 ) )*   &
                     (                                                       &
-                        shapeTermNums(1)/( kernelSmoothingShape(:,1)**2 ) + &
-                        shapeTermNums(2)/( kernelSmoothingShape(:,2)**2 ) + &
-                        shapeTermNums(3)/( kernelSmoothingShape(:,3)**2 )   &
+                        shapeTermNums(1)/( kernelSmoothingShape(1,:)**2 ) + &
+                        shapeTermNums(2)/( kernelSmoothingShape(2,:)**2 ) + &
+                        shapeTermNums(3)/( kernelSmoothingShape(3,:)**2 )   &
                     )                                                       &
                 )**( -1d0/( nDim + 6 ) )
 
-            curvatureBandwidth( :, n ) = alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( :, n )
+            curvatureBandwidth( n, : ) = alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( n, : )
 
         end do 
+
+
+        !! Allocate local arrays
+        !nActiveBins = size( nEstimate ) ! Maybe removed
+        !allocate( kernelSmoothingShape( nActiveBins, nDim ) )
+        !allocate(            shapeTerm( nActiveBins, nDim ) )
+
+
+        !! Compute shape factors
+        !do n = 1, nDim
+        !    kernelSmoothingShape( :, n ) = kernelSmoothing( :, n )/kernelSmoothingScale    
+        !end do 
+
+        !! Compute the shape dependent terms
+        !do n = 1, nDim
+        !    shapeTermNums     = 1
+        !    shapeTermNums(n)  = 5
+
+        !    ! This could be expressed in term of dimensionality,
+        !    ! generalized
+        !    shapeTerm( :, n ) = (                                           &
+        !        ( 1d0/( nDim + 4 )/( kernelSmoothingShape( :, n )**4 ) )*   &
+        !            (                                                       &
+        !                shapeTermNums(1)/( kernelSmoothingShape(:,1)**2 ) + &
+        !                shapeTermNums(2)/( kernelSmoothingShape(:,2)**2 ) + &
+        !                shapeTermNums(3)/( kernelSmoothingShape(:,3)**2 )   &
+        !            )                                                       &
+        !        )**( -1d0/( nDim + 6 ) )
+
+        !    curvatureBandwidth( :, n ) = alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( :, n )
+
+        !end do 
 
 
         ! Should deallocate ?
@@ -3133,7 +3183,8 @@ contains
         !------------------------------------------------------------------------------
 
         nActiveBins = size( nEstimate ) ! Maybe removed
-        allocate( kernelSmoothingShape( nActiveBins, nDim ) )
+        allocate( kernelSmoothingShape( nDim, nActiveBins ) )
+        !allocate( kernelSmoothingShape( nActiveBins, nDim ) )
       
         ! Compute the smoothing scale
         kernelSmoothingScale = 0d0
@@ -3141,14 +3192,24 @@ contains
 
         ! Compute the shape factors
         roughnessScale               = ( roughnessXXActive*roughnessYYActive*roughnessZZActive )**( 1d0/nDim )
-        kernelSmoothingShape( :, 1 ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
-        kernelSmoothingShape( :, 2 ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
-        kernelSmoothingShape( :, 3 ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
+
+        kernelSmoothingShape( 1, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
+        kernelSmoothingShape( 2, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
+        kernelSmoothingShape( 3, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
 
 
-        kernelSmoothing( :, 1 ) = kernelSmoothingShape( :, 1 )*kernelSmoothingScale
-        kernelSmoothing( :, 2 ) = kernelSmoothingShape( :, 2 )*kernelSmoothingScale
-        kernelSmoothing( :, 3 ) = kernelSmoothingShape( :, 3 )*kernelSmoothingScale
+        kernelSmoothing( 1, : ) = kernelSmoothingShape( 1, : )*kernelSmoothingScale
+        kernelSmoothing( 2, : ) = kernelSmoothingShape( 2, : )*kernelSmoothingScale
+        kernelSmoothing( 3, : ) = kernelSmoothingShape( 3, : )*kernelSmoothingScale
+
+        !kernelSmoothingShape( :, 1 ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
+        !kernelSmoothingShape( :, 2 ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
+        !kernelSmoothingShape( :, 3 ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
+
+
+        !kernelSmoothing( :, 1 ) = kernelSmoothingShape( :, 1 )*kernelSmoothingScale
+        !kernelSmoothing( :, 2 ) = kernelSmoothingShape( :, 2 )*kernelSmoothingScale
+        !kernelSmoothing( :, 3 ) = kernelSmoothingShape( :, 3 )*kernelSmoothingScale
 
 
         deallocate( kernelSmoothingShape )
