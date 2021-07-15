@@ -37,8 +37,8 @@ program testkernel
     ! KDB LOG
     maxHOverLambda   = 20.0
     minHOverLambda   = 0.25
-    !deltaHOverLambda = 0.25
-    deltaHOverLambda = 0.08
+    deltaHOverLambda = 0.25
+    !deltaHOverLambda = 0.08
 
 
     nOptimizationLoops = 20
