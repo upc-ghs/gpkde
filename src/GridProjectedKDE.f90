@@ -721,6 +721,9 @@ contains
 
         ! Bounding box or active bins
         if ( useBoundingBox ) then 
+
+            call system_clock(clockCountStart, clockCountRate, clockCountMax)
+
             ! Compute bounding box
             call this%histogram%ComputeBoundingBox()
             print *, '## GPKDE: histogram with nBBoxBins', &
@@ -754,6 +757,10 @@ contains
             do n = 1, this%histogram%nBBoxBins
 
                 ! Determine spans
+                !call filterKernel%ComputeGridSpans(&
+                !    this%histogram%boundingBoxBinIds( :, n ), this%nBins, &
+                !                         xGridSpan, yGridSpan, zGridSpan, & 
+                !                   xKernelSpan, yKernelSpan, zKernelSpan  ) 
                 call filterKernel%ComputeGridSpans(&
                     this%histogram%boundingBoxBinIds( n, : ), this%nBins, &
                                          xGridSpan, yGridSpan, zGridSpan, & 
@@ -778,6 +785,7 @@ contains
             ! Fill computeBinIds
             do n = 1, this%histogram%nBBoxBins
                 if ( computeThisBin( n ) ) then 
+                    !this%computeBinIds( bcount, : ) = this%histogram%boundingBoxBinIds( :, n )
                     this%computeBinIds( bcount, : ) = this%histogram%boundingBoxBinIds( n, : )
                     bcount = bcount + 1
                 end if 
@@ -790,8 +798,10 @@ contains
             deallocate( computeThisBin )
    
 
-            !this%computeBinIds => this%histogram%boundingBoxBinIds
-            !this%nComputeBins  => this%histogram%nBBoxBins
+            ! TOC
+            call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            print *, '## GPKDE detecting nComputeBins ', elapsedTime, ' seconds'
 
 
         else
@@ -806,6 +816,8 @@ contains
 
         end if 
 
+
+        !call exit(0)
 
 
         ! Density optimization 
