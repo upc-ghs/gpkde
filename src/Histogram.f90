@@ -18,6 +18,8 @@ module HistogramModule
         doubleprecision                            :: binVolume
         integer, dimension(:,:), allocatable       :: activeBinIds
         integer                                    :: nActiveBins
+        integer, dimension(:,:), allocatable       :: boundingBoxBinIds
+        integer                                    :: nBBoxBins 
 
     contains
 
@@ -27,6 +29,7 @@ module HistogramModule
         procedure :: ComputeCounts => prComputeCounts
         procedure :: Export        => prExport
         procedure :: ComputeActiveBinIds => prComputeActiveBinIds
+        procedure :: ComputeBoundingBox  => prComputeBoundingBox
 
     end type 
 
@@ -123,7 +126,6 @@ contains
 
     subroutine prComputeActiveBinIds( this )
         !------------------------------------------------------------------------------
-        ! 
         !
         !------------------------------------------------------------------------------
         ! Specifications 
@@ -154,6 +156,71 @@ contains
 
 
     end subroutine prComputeActiveBinIds
+
+
+    
+    subroutine prComputeBoundingBox( this )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class( HistogramType ) :: this
+        integer, dimension(2)  :: xBounds
+        integer, dimension(2)  :: yBounds
+        integer, dimension(2)  :: zBounds
+        integer                :: ix, iy, iz
+        integer                :: icount = 1 
+        !------------------------------------------------------------------------------
+
+        ! If no active bins, compute them 
+        if ( .not. allocated( this%activeBinIds ) ) then 
+            call this%ComputeActiveBinIds()
+        end if 
+
+        ! Get bounding box boundaries
+        xBounds(1) = minval( this%activeBinIds(:,1) )
+        xBounds(2) = maxval( this%activeBinIds(:,1) )
+        yBounds(1) = minval( this%activeBinIds(:,2) )
+        yBounds(2) = maxval( this%activeBinIds(:,2) )
+        zBounds(1) = minval( this%activeBinIds(:,3) )
+        zBounds(2) = maxval( this%activeBinIds(:,3) )
+
+        ! Compute number of bins
+        this%nBBoxBins = ( xBounds(2) - xBounds(1) + 1 )*&
+                         ( yBounds(2) - yBounds(1) + 1 )*&
+                         ( zBounds(2) - zBounds(1) + 1 )
+
+        print *, this%nBBoxBins
+
+        ! Maybe something that verifies the number of bins 
+        if ( allocated( this%boundingBoxBinIds ) ) deallocate( this%boundingBoxBinIds )
+        allocate( this%boundingBoxBinIds( this%nBBoxBins , 3 ) )
+
+
+        do iz = 1, this%nBins(3)
+            do iy = 1, this%nBins(2)
+                do ix = 1, this%nBins(1)
+                    if ( &
+                        ! OUTSIDE
+                        ( ix .lt. xBounds(1) ) .or. ( ix .gt. xBounds(2) ) .or. &
+                        ( iy .lt. yBounds(1) ) .or. ( iy .gt. yBounds(2) ) .or. &
+                        ( iz .lt. zBounds(1) ) .or. ( iz .gt. zBounds(2) )      &
+                    ) cycle
+                    this%boundingBoxBinIds( icount , : ) = [ ix, iy, iz ]
+                    icount = icount + 1
+                end do
+            end do
+        end do
+
+
+        return
+        
+
+    end subroutine 
+
 
 
 

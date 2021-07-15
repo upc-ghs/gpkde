@@ -82,9 +82,14 @@ module GridProjectedKDEModule
         ! Optimization loops
         integer :: nOptimizationLoops
 
-
         ! Module constants
         doubleprecision :: supportDimensionConstant
+
+        ! DEV
+        integer, dimension(:,:), allocatable :: computeBinIds
+        integer                 :: nComputeBins
+        !integer, dimension(:,:), allocatable, pointer :: computeBinIds
+        !integer, pointer                 :: nComputeBins
 
         ! Interface
         procedure( ComputeIndexes )    , pass, pointer :: ComputeKernelDatabaseIndexes     => null()
@@ -254,6 +259,8 @@ contains
         if ( present( initialSmoothing ) ) then 
             this%initialSmoothing = initialSmoothing
         else
+            ! The initial estimate could be improved, something with more
+            ! theoretical background
             this%initialSmoothing = 0.5*( this%histogram%binVolume )**( 1d0/nDim )
         end if 
    
@@ -686,6 +693,16 @@ contains
         integer, intent(in), optional :: nOptimizationLoops
         integer :: localNOptimizationLoops
 
+        ! DEV
+        logical :: useBoundingBox = .true.
+        type( KernelMultiGaussianType ) :: filterKernel
+        integer, dimension(2) :: xGridSpan, yGridSpan, zGridSpan
+        ! Kernel span are not used but required by filterKernel%ComputeGridSpans function
+        integer, dimension(2) :: xKernelSpan, yKernelSpan, zKernelSpan
+        integer :: n
+        integer :: bcount = 1
+        logical, dimension(:), allocatable :: computeThisBin
+
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
         doubleprecision :: elapsedTime
@@ -701,15 +718,100 @@ contains
 
         ! Histogram quantities
         call this%histogram%ComputeCounts( dataPoints )
-        call this%histogram%ComputeActiveBinIds()
-        print *, '## GPKDE: histogram with nActiveBins', &
-                      this%histogram%nActiveBins
+
+        ! Bounding box or active bins
+        if ( useBoundingBox ) then 
+            ! Compute bounding box
+            call this%histogram%ComputeBoundingBox()
+            print *, '## GPKDE: histogram with nBBoxBins', &
+                          this%histogram%nBBoxBins
+
+            ! At this stage should be a filtering of 
+            ! the total active cells
+
+            ! For all cells in boundingBoxBinIds
+            ! compute spans for some kernel and 
+            ! verify if any cell within that 
+            ! domain has non zero particle count.
+        
+            ! Initialize filterKernel
+            call filterKernel%Initialize(  this%binSize, matrixRange=defaultKernelRange )
+
+            ! This could be a factor times the initial smoothing, needs elegance
+            call filterKernel%SetupMatrix( this%initialSmoothing ) 
+            
+            ! Allocate the identifier 
+            allocate( computeThisBin( this%histogram%nBBoxBins ) )
+            computeThisBin = .false.
 
 
-        ! TIC
-        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+            ! Now loop over the cells within the bounding box,
+            ! and count how many bins will be computed.
+            
+            !$omp parallel do                                &
+            !$omp private( xGridSpan, yGridSpan, zGridSpan ) &  
+            !$omp private( xKernelSpan, yKernelSpan, zKernelSpan ) 
+            do n = 1, this%histogram%nBBoxBins
+
+                ! Determine spans
+                call filterKernel%ComputeGridSpans(&
+                    this%histogram%boundingBoxBinIds( n, : ), this%nBins, &
+                                         xGridSpan, yGridSpan, zGridSpan, & 
+                                   xKernelSpan, yKernelSpan, zKernelSpan  ) 
+
+                if ( any( this%histogram%counts(    &
+                        xGridSpan(1):xGridSpan(2),  &
+                        yGridSpan(1):yGridSpan(2),  & 
+                        zGridSpan(1):zGridSpan(2) ) .gt. 0 ) ) then ! Cell active
+
+                   computeThisBin( n ) = .true.
+
+                end if
+
+            end do
+            !$omp end parallel do 
+
+            ! Count how many and allocate
+            this%nComputeBins = count( computeThisBin )
+            allocate( this%computeBinIds( this%nComputeBins, 3 ) )
+
+            ! Fill computeBinIds
+            do n = 1, this%histogram%nBBoxBins
+                if ( computeThisBin( n ) ) then 
+                    this%computeBinIds( bcount, : ) = this%histogram%boundingBoxBinIds( n, : )
+                    bcount = bcount + 1
+                end if 
+            end do 
+
+
+            print *, '## GPKDE: after filtering there are nComputeBins', this%nComputeBins
+
+
+            deallocate( computeThisBin )
+   
+
+            !this%computeBinIds => this%histogram%boundingBoxBinIds
+            !this%nComputeBins  => this%histogram%nBBoxBins
+
+
+        else
+            ! Active bins: Only cells with particles
+            call this%histogram%ComputeActiveBinIds()
+            print *, '## GPKDE: histogram with nActiveBins', &
+                          this%histogram%nActiveBins
+            !this%computeBinIds => this%histogram%activeBinIds
+            !this%nComputeBins  => this%histogram%nActiveBins
+            this%computeBinIds = this%histogram%activeBinIds
+            this%nComputeBins  = this%histogram%nActiveBins
+
+        end if 
+
+
+
         ! Density optimization 
         if ( this%databaseOptimization ) then
+            ! TIC
+            call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
             if ( this%flatKernelDatabase ) then 
 
@@ -743,26 +845,29 @@ contains
             ! YES ? 
             call this%DropKernelDatabase()
 
+            ! TOC
+            call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            print *, '## GPKDE database_optimization_time ', elapsedTime, ' seconds'
+
         end if 
-        ! TOC
-        call system_clock(clockCountStop, clockCountRate, clockCountMax)
-        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-        print *, '## GPKDE database_optimization_time ', elapsedTime, ' seconds'
 
 
-        ! TIC
-        call system_clock(clockCountStart, clockCountRate, clockCountMax)
         if ( this%bruteOptimization ) then 
+            ! TIC
+            call system_clock(clockCountStart, clockCountRate, clockCountMax)
             print *, '#############################################'
             print *, '## GPKDE: brute optimization stage'
             call this%ComputeDensityParallel(&
                 anisotropicSigmaSupport = this%anisotropicSigmaSupport )
-
+            ! TOC
+            call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            print *, '## GPKDE brute_optimization_time ', elapsedTime, ' seconds'
         end if 
-        ! TOC
-        call system_clock(clockCountStop, clockCountRate, clockCountMax)
-        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-        print *, '## GPKDE brute_optimization_time ', elapsedTime, ' seconds'
+
+        
+        call this%ExportDensity( 'gpkde_density_output_new_' )
 
         
         return
@@ -841,7 +946,8 @@ contains
    
 
         ! Allocate activeGridCells 
-        allocate( activeGridCells( this%histogram%nActiveBins ) )
+        allocate( activeGridCells( this%nComputeBins ) )
+        !allocate( activeGridCells( this%histogram%nActiveBins ) )
 
 
         ! Allocate grids
@@ -865,14 +971,22 @@ contains
 
 
         ! Allocate arrays
-        allocate(      kernelSmoothing( this%histogram%nActiveBins, nDim ) )
-        allocate(   curvatureBandwidth( this%histogram%nActiveBins, nDim ) )
-        allocate( densityEstimateArray( this%histogram%nActiveBins ) )
-        allocate(       nEstimateArray( this%histogram%nActiveBins ) )
-        allocate(     roughnessXXArray( this%histogram%nActiveBins ) )  
-        allocate(     roughnessYYArray( this%histogram%nActiveBins ) )
-        allocate(     roughnessZZArray( this%histogram%nActiveBins ) )
-        allocate(    netRoughnessArray( this%histogram%nActiveBins ) )
+        allocate(      kernelSmoothing( this%nComputeBins, nDim ) )
+        allocate(   curvatureBandwidth( this%nComputeBins, nDim ) )
+        allocate( densityEstimateArray( this%nComputeBins ) )
+        allocate(       nEstimateArray( this%nComputeBins ) )
+        allocate(     roughnessXXArray( this%nComputeBins ) )  
+        allocate(     roughnessYYArray( this%nComputeBins ) )
+        allocate(     roughnessZZArray( this%nComputeBins ) )
+        allocate(    netRoughnessArray( this%nComputeBins ) )
+        !allocate(      kernelSmoothing( this%histogram%nActiveBins, nDim ) )
+        !allocate(   curvatureBandwidth( this%histogram%nActiveBins, nDim ) )
+        !allocate( densityEstimateArray( this%histogram%nActiveBins ) )
+        !allocate(       nEstimateArray( this%histogram%nActiveBins ) )
+        !allocate(     roughnessXXArray( this%histogram%nActiveBins ) )  
+        !allocate(     roughnessYYArray( this%histogram%nActiveBins ) )
+        !allocate(     roughnessZZArray( this%histogram%nActiveBins ) )
+        !allocate(    netRoughnessArray( this%histogram%nActiveBins ) )
 
 
         ! Define nOptLoops
@@ -885,14 +999,21 @@ contains
 
         ! Initialize active grid cells
         !$omp parallel do
-        do n = 1, this%histogram%nActiveBins
-            call activeGridCells(n)%Initialize( this%histogram%activeBinIds( n, : ) )
+        do n = 1, this%nComputeBins
+            call activeGridCells(n)%Initialize( this%computeBinIds( n, : ) )
         end do
-        !$omp end parallel do 
+        !$omp end parallel do
+
+        !!$omp parallel do
+        !do n = 1, this%histogram%nActiveBins
+        !    call activeGridCells(n)%Initialize( this%histogram%activeBinIds( n, : ) )
+        !end do
+        !!$omp end parallel do 
 
 
         ! Define the initial smoothing array
-        kernelSmoothing         = spread( this%initialSmoothing, 1, this%histogram%nActiveBins )
+        kernelSmoothing         = spread( this%initialSmoothing, 1, this%nComputeBins )
+        !kernelSmoothing         = spread( this%initialSmoothing, 1, this%histogram%nActiveBins )
         kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
         kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
@@ -903,7 +1024,8 @@ contains
         !$omp private( gc ) &
         !$omp private( kernelMatrix ) & 
         !$omp private( transposedKernelMatrix )        
-        do n = 1, this%histogram%nActiveBins
+        do n = 1, this%nComputeBins
+        !do n = 1, this%histogram%nActiveBins
 
             ! Assign gc pointer 
             gc => activeGridCells(n)
@@ -970,7 +1092,8 @@ contains
             ! nEstimate 
             !$omp parallel do &
             !$omp private( gc )            
-            do n = 1, this%histogram%nActiveBins
+            !do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
 
                 ! Assign gc pointer
                 gc => activeGridCells( n )
@@ -1030,7 +1153,8 @@ contains
             ! Update nEstimate
             !$omp parallel do &
             !$omp private( gc )
-            do n = 1, this%histogram%nActiveBins
+            !do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
 
                 ! Assign gc pointer 
                 gc => activeGridCells(n)
@@ -1089,7 +1213,8 @@ contains
             ! Curvatures, kappa
             !$omp parallel do &        
             !$omp private( gc )                       
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
     
                 ! Assign gc pointer 
                 gc => activeGridCells(n)
@@ -1180,7 +1305,8 @@ contains
             ! XX
             !$omp parallel do &
             !$omp private( gc )
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1204,7 +1330,8 @@ contains
             ! YY
             !$omp parallel do &
             !$omp private( gc )
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1228,7 +1355,8 @@ contains
             ! ZZ
             !$omp parallel do &
             !$omp private( gc )
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1252,7 +1380,8 @@ contains
             ! XY
             !$omp parallel do &
             !$omp private( gc )
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1276,7 +1405,8 @@ contains
             ! XZ
             !$omp parallel do &
             !$omp private( gc )
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1300,7 +1430,8 @@ contains
             ! YZ
             !$omp parallel do &
             !$omp private( gc )
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1325,7 +1456,8 @@ contains
             !$omp parallel do         &        
             !$omp private( gc )       & 
             !$omp private( iX, iY, iZ )  
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1366,7 +1498,8 @@ contains
             !$omp private( gc ) & 
             !$omp private( kernelMatrix ) & 
             !$omp private( transposedKernelMatrix )        
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
 
                 ! Assign pointer 
                 gc => activeGridCells(n)
@@ -1423,7 +1556,8 @@ contains
             !$omp parallel do &
             !$omp reduction( +:convergenceCount ) &
             !$omp reduction( +:softConvergenceCount ) 
-            do n = 1, this%histogram%nActiveBins
+            do n = 1, this%nComputeBins
+            !do n = 1, this%histogram%nActiveBins
                 if ( relativeDensityChange(n) < 0.01 ) then 
                     convergenceCount = convergenceCount + 1
                 end if
@@ -2207,16 +2341,14 @@ contains
         doubleprecision :: kernelDBMemory = 0d0
         doubleprecision :: kernelMatrixMemory = 0d0
         !------------------------------------------------------------------------------
-   
 
+        ! Maybe these parameters should access the properties in object   
         ! Process anisotropicSigmaSupport 
         if ( present( anisotropicSigmaSupport ) ) then 
             localAnisotropicSigmaSupport = anisotropicSigmaSupport
         else
             localAnisotropicSigmaSupport = defaultAnisotropicSigmaSupport
         end if
-
-        print *, 'LOCAL ANISOT SIGMA SUPPOR', localAnisotropicSigmaSupport
 
 
         ! Define nOptLoops
@@ -3221,14 +3353,21 @@ contains
         open( outputUnit, file=outputFileName, status='replace' )
 
 
-        do n = 1, this%histogram%nActiveBins
-            ix = this%histogram%activeBinIds( n, 1 )
-            iy = this%histogram%activeBinIds( n, 2 )
-            iz = this%histogram%activeBinIds( n, 3 )
+        do n = 1, this%nComputeBins
+            ix = this%computeBinIds( n, 1 )
+            iy = this%computeBinIds( n, 2 )
+            iz = this%computeBinIds( n, 3 )
             ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
             write(outputUnit,"(I6,I6,I6,F15.6)") ix, iy, iz, this%densityEstimate( n )
         end do
 
+        !do n = 1, this%histogram%nActiveBins
+        !    ix = this%histogram%activeBinIds( n, 1 )
+        !    iy = this%histogram%activeBinIds( n, 2 )
+        !    iz = this%histogram%activeBinIds( n, 3 )
+        !    ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
+        !    write(outputUnit,"(I6,I6,I6,F15.6)") ix, iy, iz, this%densityEstimate( n )
+        !end do
 
         ! Finished
         close(outputUnit)

@@ -281,7 +281,7 @@ contains
         ! local
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------
-        ! VERIFY WHAT HAPPENS WITH OCTANTS IN 2D
+        ! VERIFY WHAT HAPPENS WITH OCTANTS IN 1D/2D
 
         nx = this%matrixPositiveShape(1)
         ny = this%matrixPositiveShape(2)
