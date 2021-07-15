@@ -757,14 +757,14 @@ contains
             do n = 1, this%histogram%nBBoxBins
 
                 ! Determine spans
-                !call filterKernel%ComputeGridSpans(&
-                !    this%histogram%boundingBoxBinIds( :, n ), this%nBins, &
-                !                         xGridSpan, yGridSpan, zGridSpan, & 
-                !                   xKernelSpan, yKernelSpan, zKernelSpan  ) 
                 call filterKernel%ComputeGridSpans(&
-                    this%histogram%boundingBoxBinIds( n, : ), this%nBins, &
+                    this%histogram%boundingBoxBinIds( :, n ), this%nBins, &
                                          xGridSpan, yGridSpan, zGridSpan, & 
                                    xKernelSpan, yKernelSpan, zKernelSpan  ) 
+                !call filterKernel%ComputeGridSpans(&
+                !    this%histogram%boundingBoxBinIds( n, : ), this%nBins, &
+                !                         xGridSpan, yGridSpan, zGridSpan, & 
+                !                   xKernelSpan, yKernelSpan, zKernelSpan  ) 
 
                 if ( any( this%histogram%counts(    &
                         xGridSpan(1):xGridSpan(2),  &
@@ -780,13 +780,15 @@ contains
 
             ! Count how many and allocate
             this%nComputeBins = count( computeThisBin )
-            allocate( this%computeBinIds( this%nComputeBins, 3 ) )
+            allocate( this%computeBinIds( 3, this%nComputeBins ) )
+            !allocate( this%computeBinIds( this%nComputeBins, 3 ) )
 
             ! Fill computeBinIds
             do n = 1, this%histogram%nBBoxBins
                 if ( computeThisBin( n ) ) then 
+                    this%computeBinIds( :, bcount ) = this%histogram%boundingBoxBinIds( :, n )
                     !this%computeBinIds( bcount, : ) = this%histogram%boundingBoxBinIds( :, n )
-                    this%computeBinIds( bcount, : ) = this%histogram%boundingBoxBinIds( n, : )
+                    !this%computeBinIds( bcount, : ) = this%histogram%boundingBoxBinIds( n, : )
                     bcount = bcount + 1
                 end if 
             end do 
@@ -983,7 +985,11 @@ contains
 
 
         ! Allocate arrays
-        allocate(      kernelSmoothing( this%nComputeBins, nDim ) )
+        allocate(      kernelSmoothing( nDim, this%nComputeBins ) )
+        allocate(      kernelSmoothingScale(    this%nComputeBins ) )
+        allocate(      kernelSigmaSupportScale( this%nComputeBins ) )
+        allocate(      kernelSigmaSupport( nDim, this%nComputeBins ) )
+        !allocate(      kernelSmoothing( this%nComputeBins, nDim ) )
         allocate(   curvatureBandwidth( this%nComputeBins, nDim ) )
         allocate( densityEstimateArray( this%nComputeBins ) )
         allocate(       nEstimateArray( this%nComputeBins ) )
@@ -1012,7 +1018,8 @@ contains
         ! Initialize active grid cells
         !$omp parallel do
         do n = 1, this%nComputeBins
-            call activeGridCells(n)%Initialize( this%computeBinIds( n, : ) )
+            call activeGridCells(n)%Initialize( this%computeBinIds( :, n ) )
+            !call activeGridCells(n)%Initialize( this%computeBinIds( n, : ) )
         end do
         !$omp end parallel do
 
@@ -1024,13 +1031,18 @@ contains
 
 
         ! Define the initial smoothing array
-        kernelSmoothing         = spread( this%initialSmoothing, 1, this%nComputeBins )
-        !kernelSmoothing         = spread( this%initialSmoothing, 1, this%histogram%nActiveBins )
-        kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
+        kernelSmoothing         = spread( this%initialSmoothing, 2, this%nComputeBins )
+        kernelSmoothingScale    = ( kernelSmoothing(1,:)*kernelSmoothing(2,:)*kernelSmoothing(3,:) )**( 1d0/nDim )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
-        kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
+        kernelSigmaSupport      = spread( kernelSigmaSupportScale, 1, nDim )
+        !kernelSmoothing         = spread( this%initialSmoothing, 1, this%nComputeBins )
+        !kernelSmoothingScale    = ( kernelSmoothing(:,1)*kernelSmoothing(:,2)*kernelSmoothing(:,3) )**( 1d0/nDim )
+        !kernelSigmaSupportScale = 3d0*kernelSmoothingScale
+        !kernelSigmaSupport      = spread( kernelSigmaSupportScale, 2, nDim )
 
 
+            ! TIC
+            call system_clock(clockCountStart, clockCountRate, clockCountMax)
         ! Initialize density estimate
         !$omp parallel do   &
         !$omp private( gc ) &
@@ -1045,8 +1057,10 @@ contains
             !if (gc%convergence) cycle
 
             ! Compute indexes on kernel database
-            call this%ComputeKernelDatabaseFlatIndexes( kernelSmoothing( n, : ), &
+            call this%ComputeKernelDatabaseFlatIndexes( kernelSmoothing( :, n ), &
                                       gc%kernelDBFlatIndexes, gc%transposeKernel )
+            !call this%ComputeKernelDatabaseFlatIndexes( kernelSmoothing( n, : ), &
+            !                          gc%kernelDBFlatIndexes, gc%transposeKernel )
 
             ! Assign kernel pointer
             gc%kernel => this%kernelDatabaseFlat( gc%kernelDBFlatIndexes(1), gc%kernelDBFlatIndexes(2) )
@@ -1086,6 +1100,13 @@ contains
         !$omp end parallel do 
         this%densityEstimate =  densityEstimateArray
 
+            ! TOC
+            call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            print *, 'density_initial_time ', elapsedTime, ' seconds'
+
+
+
         ! LOGGER 
         !print *, '################################################################################' 
         !print *, 'debug_initial_density_max ', maxval( densityEstimateArray )
@@ -1114,8 +1135,10 @@ contains
 
                 ! Compute indexes on kernel database
                 ! transposeKernelSigma will always be false as this kernel is isotropic
-                call this%ComputeKernelDatabaseFlatIndexes( kernelSigmaSupport( n, : ), &
+                call this%ComputeKernelDatabaseFlatIndexes( kernelSigmaSupport( :, n ), &
                                    gc%kernelSigmaDBFlatIndexes, gc%transposeKernelSigma ) 
+                !call this%ComputeKernelDatabaseFlatIndexes( kernelSigmaSupport( n, : ), &
+                !                   gc%kernelSigmaDBFlatIndexes, gc%transposeKernelSigma ) 
 
                 ! Assign pointer
                 gc%kernelSigma => this%kernelDatabaseFlat(&
@@ -1144,6 +1167,16 @@ contains
             end do
             !$omp end parallel do
 
+
+
+            ! TOC
+            call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            print *, 'n_estimate_initial_time ', elapsedTime, ' seconds'
+
+
+            call exit(0)
+        
 
             !! LOGGER
             !print *, 'debug_nestimate_max', maxval( nEstimateArray )
