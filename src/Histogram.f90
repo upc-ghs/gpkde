@@ -193,11 +193,12 @@ contains
                          ( yBounds(2) - yBounds(1) + 1 )*&
                          ( zBounds(2) - zBounds(1) + 1 )
 
-        print *, this%nBBoxBins
+        !print *, this%nBBoxBins
 
         ! Maybe something that verifies the number of bins 
         if ( allocated( this%boundingBoxBinIds ) ) deallocate( this%boundingBoxBinIds )
-        allocate( this%boundingBoxBinIds( this%nBBoxBins , 3 ) )
+        allocate( this%boundingBoxBinIds( 3, this%nBBoxBins ) )
+        !allocate( this%boundingBoxBinIds( this%nBBoxBins , 3 ) )
 
 
         do iz = 1, this%nBins(3)
@@ -209,7 +210,8 @@ contains
                         ( iy .lt. yBounds(1) ) .or. ( iy .gt. yBounds(2) ) .or. &
                         ( iz .lt. zBounds(1) ) .or. ( iz .gt. zBounds(2) )      &
                     ) cycle
-                    this%boundingBoxBinIds( icount , : ) = [ ix, iy, iz ]
+                    this%boundingBoxBinIds( :, icount ) = [ ix, iy, iz ]
+                    !this%boundingBoxBinIds( icount , : ) = [ ix, iy, iz ]
                     icount = icount + 1
                 end do
             end do
