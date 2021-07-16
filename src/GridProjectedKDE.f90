@@ -115,6 +115,7 @@ module GridProjectedKDEModule
         procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
         procedure :: ExportDensity                   => prExportDensity
         procedure :: GenerateLogSpaceData            => prGenerateLogSpaceData
+        procedure :: ComputeXYTranspose              => prComputeXYTranspose
 
     end type
 
@@ -1085,12 +1086,17 @@ contains
             ! LOGGER
             print *, '################################################################################' 
             print *, 'optimization_loop ', m
-      
             ! TIC
             call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
             ! nEstimate 
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( this ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( densityEstimateGrid ) &
+            !$omp shared( nEstimateGrid, nEstimateArray ) &
+            !$omp shared( kernelSigmaSupport ) &
             !$omp private( gc )            
             !do n = 1, this%histogram%nActiveBins
             do n = 1, this%nComputeBins
@@ -1152,6 +1158,12 @@ contains
 
             ! Update nEstimate
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( this ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( densityEstimateGrid ) &
+            !$omp shared( nEstimateGrid, nEstimateArray ) &
+            !$omp shared( kernelSigmaSupport ) &
             !$omp private( gc )
             !do n = 1, this%histogram%nActiveBins
             do n = 1, this%nComputeBins
@@ -1200,6 +1212,7 @@ contains
             !print *, 'debug_nestimate_min', minval( nEstimateArray )
 
 
+            ! THIS IS NOT PARALLEL AND COULD BE
             ! Curvature bandwidths
             call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
                       nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
@@ -1212,6 +1225,11 @@ contains
 
             ! Curvatures, kappa
             !$omp parallel do &        
+            !$omp default( none ) &
+            !$omp shared( this ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( curvatureX, curvatureY, curvatureZ ) &
+            !$omp shared( curvatureBandwidth ) &
             !$omp private( gc )                       
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1304,6 +1322,10 @@ contains
             ! Roughnesses
             ! XX
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( curvatureXX )     &
+            !$omp shared( roughnessXX )     & 
             !$omp private( gc )
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1329,6 +1351,10 @@ contains
 
             ! YY
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( curvatureYY )     &
+            !$omp shared( roughnessYY )     & 
             !$omp private( gc )
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1354,6 +1380,10 @@ contains
 
             ! ZZ
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( curvatureZZ )     &
+            !$omp shared( roughnessZZ )     & 
             !$omp private( gc )
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1379,6 +1409,10 @@ contains
 
             ! XY
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( curvatureXY )     &
+            !$omp shared( roughnessXY )     & 
             !$omp private( gc )
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1404,6 +1438,10 @@ contains
 
             ! XZ
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( curvatureXZ )     &
+            !$omp shared( roughnessXZ )     & 
             !$omp private( gc )
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1429,6 +1467,10 @@ contains
 
             ! YZ
             !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( curvatureYZ )     &
+            !$omp shared( roughnessYZ )     & 
             !$omp private( gc )
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1453,8 +1495,16 @@ contains
             !$omp end parallel do 
 
             ! Net roughness
-            !$omp parallel do         &        
-            !$omp private( gc )       & 
+            !$omp parallel do               &        
+            !$omp default( none )           &
+            !$omp shared( activeGridCells ) &
+            !$omp shared( roughnessXX, roughnessYY, roughnessZZ ) &
+            !$omp shared( roughnessXY, roughnessXZ, roughnessYZ ) & 
+            !$omp shared( roughnessXXArray )  &
+            !$omp shared( roughnessYYArray )  &
+            !$omp shared( roughnessZZArray )  &
+            !$omp shared( netRoughnessArray ) &
+            !$omp private( gc )               & 
             !$omp private( iX, iY, iZ )  
             do n = 1, this%nComputeBins
             !do n = 1, this%histogram%nActiveBins
@@ -1494,7 +1544,11 @@ contains
 
 
             ! Update density
-            !$omp parallel do &        
+            !$omp parallel do &
+            !$omp default( none ) &
+            !$omp shared( this )  &
+            !$omp shared( activeGridCells, kernelSmoothing ) & 
+            !$omp shared( densityEstimateGrid, densityEstimateArray ) & 
             !$omp private( gc ) & 
             !$omp private( kernelMatrix ) & 
             !$omp private( transposedKernelMatrix )        
@@ -1519,7 +1573,7 @@ contains
                     call gc%kernel%ComputeGridSpansTranspose( gc%id, this%nBins, &
                               gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
                               gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  )
-                    transposedKernelMatrix = prComputeXYTranspose( this, gc%kernel%matrix )
+                    transposedKernelMatrix = this%ComputeXYTranspose( gc%kernel%matrix )
                     kernelMatrix => transposedKernelMatrix
                 else
                     ! Determine spans
@@ -1547,9 +1601,9 @@ contains
             end do
             !$omp end parallel do
 
-            !! LOGGER
-            !print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
-            !print *, 'debug_densityestimate_min', minval( densityEstimateArray )
+            ! LOGGER
+            print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
+            print *, 'debug_densityestimate_min', minval( densityEstimateArray )
 
             relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
 
