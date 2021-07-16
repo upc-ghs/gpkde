@@ -958,7 +958,7 @@ contains
         doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
 
         ! Utils
-        integer            :: n, m
+        integer            :: n, m, o, p
         integer            :: iX, iY, iZ
         integer            :: convergenceCount = 0
         integer            :: softConvergenceCount = 0
@@ -1384,10 +1384,11 @@ contains
             ! XX
             !$omp parallel do &
             !$omp default( none ) &
-            !$omp shared( this )  & 
+            !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
             !$omp shared( curvatureXX )     &
             !$omp shared( roughnessXX )     & 
+            !!$omp private( o, p )           & 
             !$omp private( gc )
             do n = 1, this%nComputeBins
 
@@ -1406,6 +1407,21 @@ contains
                         gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
                         gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
                         gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+
+                !p = gc%kernelSigmaZGSpan(2) - gc%kernelSigmaZGSpan(1)
+                !do o = 0, p
+                !    roughnessXX( gc%id(1), gc%id(2), gc%id(3) )  = &
+                !        roughnessXX( gc%id(1), gc%id(2), gc%id(3) ) + &
+                !            sum( curvatureXX(&
+                !                gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+                !                gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+                !                gc%kernelSigmaZGSpan(1) + o )*&
+                !            gc%kernelSigma%matrix(&
+                !                gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+                !                gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+                !                gc%kernelSigmaZMSpan(1) + o ) )  
+                !end do  
+
 
                 !roughnessXX( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
                 !    matmul( curvatureXX(&
@@ -1429,7 +1445,7 @@ contains
             ! YY
             !$omp parallel do &
             !$omp default( none ) &
-            !$omp shared( this )  & 
+            !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
             !$omp shared( curvatureYY )     &
             !$omp shared( roughnessYY )     & 
@@ -1464,7 +1480,7 @@ contains
             ! ZZ
             !$omp parallel do &
             !$omp default( none ) &
-            !$omp shared( this )  & 
+            !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
             !$omp shared( curvatureZZ )     &
             !$omp shared( roughnessZZ )     & 
@@ -1499,7 +1515,7 @@ contains
             ! XY
             !$omp parallel do &
             !$omp default( none ) &
-            !$omp shared( this )  & 
+            !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
             !$omp shared( curvatureXY )     &
             !$omp shared( roughnessXY )     & 
@@ -1534,7 +1550,7 @@ contains
             ! XZ
             !$omp parallel do &
             !$omp default( none ) &
-            !$omp shared( this )  & 
+            !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
             !$omp shared( curvatureXZ )     &
             !$omp shared( roughnessXZ )     & 
@@ -1569,7 +1585,7 @@ contains
             ! YZ
             !$omp parallel do &
             !$omp default( none ) &
-            !$omp shared( this )  & 
+            !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
             !$omp shared( curvatureYZ )     &
             !$omp shared( roughnessYZ )     & 
@@ -1604,7 +1620,7 @@ contains
             ! Net roughness
             !$omp parallel do               &        
             !$omp default( none )           &
-            !$omp shared( this )  & 
+            !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
             !$omp shared( roughnessXX, roughnessYY, roughnessZZ ) &
             !$omp shared( roughnessXY, roughnessXZ, roughnessYZ ) & 
