@@ -49,7 +49,12 @@ contains
         class(HistogramType)          :: this
         integer, dimension(:)         :: nBins
         doubleprecision, dimension(:) :: binSize
+        integer                       :: nBinsShape
         !------------------------------------------------------------------------------
+
+        nBinsShape = size( nBins ) 
+        allocate(   this%nBins( nBinsShape ) ) 
+        allocate( this%binSize( nBinsShape ) ) 
 
         this%nBins     = nBins
         this%binSize   = binSize
@@ -97,7 +102,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none 
         class(HistogramType) :: this
-        doubleprecision, dimension(:,:)    :: dataPoints
+        doubleprecision, dimension(:,:), intent(in) :: dataPoints
         !integer                            :: nPoints
         integer, dimension(2)              :: nPointsShape
         integer                            :: np, ix, iy, iz
@@ -109,7 +114,7 @@ contains
 
         ! This could be done with OpenMP 
         do np = 1, nPointsShape(1)
-            
+
             ix = floor( dataPoints( np, 1 )/this%binSize(1) ) + 1 
             iy = floor( dataPoints( np, 2 )/this%binSize(2) ) + 1 
             iz = floor( dataPoints( np, 3 )/this%binSize(3) ) + 1 
