@@ -84,6 +84,8 @@ module GridProjectedKDEModule
 
         ! Module constants
         doubleprecision :: supportDimensionConstant
+        doubleprecision :: alphaDimensionConstant
+        doubleprecision :: betaDimensionConstant
 
         ! DEV
         integer, dimension(:,:), allocatable :: computeBinIds
@@ -348,13 +350,13 @@ contains
         class( GridProjectedKDEType ) :: this 
         !------------------------------------------------------------------------------
 
+        ! Compute constants
         this%supportDimensionConstant = ( ( nDim + 2 )*( 8*pi )**( 0.5*nDim ) )**( 0.25 )
 
+        this%alphaDimensionConstant = ( ( 1 + 2d0**(0.5*nDim + 2) )/( 3*2d0**( 4d0/( nDim + 4 ) ) ) )**( 1d0/(nDim + 6) )*&
+                                 ( nDim + 2 )**( 1d0/(nDim + 4) )/( ( nDim + 4 )**( 1d0/(nDim + 6) ) )
 
-        !! Compute constants
-        !alphaDimensionConstant = ( ( 1 + 2d0**(0.5*nDim + 2) )/( 3*2d0**( 4d0/( nDim + 4 ) ) ) )**( 1d0/(nDim + 6) )*&
-        !                         ( nDim + 2 )**( 1d0/(nDim + 4) )/( ( nDim + 4 )**( 1d0/(nDim + 6) ) )
-        !betaDimensionConstant  = 2d0/( nDim + 4)/( nDim + 6 ) 
+        this%betaDimensionConstant  = 2d0/( nDim + 4)/( nDim + 6 ) 
 
 
         return
@@ -905,6 +907,7 @@ contains
         class( GridProjectedKDEType ), target:: this
         doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
         doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
+        doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
         doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
         doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
         doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
@@ -986,6 +989,7 @@ contains
         ! Allocate arrays
         allocate(         kernelSmoothing( nDim, this%nComputeBins ) )
         allocate(      kernelSigmaSupport( nDim, this%nComputeBins ) )
+        allocate(    kernelSmoothingShape( nDim, this%nComputeBins ) )
         allocate(      curvatureBandwidth( nDim, this%nComputeBins ) )
         allocate(    kernelSmoothingScale( this%nComputeBins ) )
         allocate( kernelSigmaSupportScale( this%nComputeBins ) )
@@ -1018,6 +1022,11 @@ contains
         kernelSmoothingScale    = ( kernelSmoothing(1,:)*kernelSmoothing(2,:)*kernelSmoothing(3,:) )**( 1d0/nDim )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
         kernelSigmaSupport      = spread( kernelSigmaSupportScale, 1, nDim )
+        where ( kernelSmoothingScale .gt. 0d0 ) 
+            kernelSmoothingShape(1,:) = kernelSmoothing(1,:)/kernelSmoothingScale
+            kernelSmoothingShape(2,:) = kernelSmoothing(2,:)/kernelSmoothingScale
+            kernelSmoothingShape(3,:) = kernelSmoothing(3,:)/kernelSmoothingScale
+        end where
 
 
         ! Initialize density estimate
@@ -1132,9 +1141,9 @@ contains
             !$omp end parallel do
 
 
-            if ( any( nEstimateArray .eq. 0d0 ) ) then  
-                print *, 'SOME ZERO N ESTIMATE, WILL LEAD TO ZERO SUPPORT SCALE'
-            end if 
+            !if ( any( nEstimateArray .eq. 0d0 ) ) then  
+            !    print *, 'SOME ZERO N ESTIMATE, WILL LEAD TO ZERO SUPPORT SCALE'
+            !end if 
 
 
             !! LOGGER
@@ -1200,9 +1209,9 @@ contains
 
 
             ! Curvature bandwidths
-            call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
-                      nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
-                                 kernelSigmaSupportScale, curvatureBandwidth )
+            call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
+                                kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, & 
+                                                 kernelSigmaSupportScale, curvatureBandwidth )
 
 
             !! LOGGER
@@ -1472,9 +1481,9 @@ contains
             !$omp end parallel do 
 
             ! Optimal smoothing
-            call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
-                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                           kernelSmoothing, kernelSmoothingScale  )
+            call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
+                                    roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                              kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
 
             !! LOGGER
             !print *, 'debug_kernelsmoothing_x_max', maxval( kernelSmoothing(:,1) )
@@ -1577,9 +1586,9 @@ contains
             softConvergenceCount = 0
             this%densityEstimate =  densityEstimateArray
 
-            if ( any( densityEstimateArray .eq. 0d0 ) ) then  
-                print *, 'SOME ZERO DENSITY ESTIMATE'
-            end if 
+            !if ( any( densityEstimateArray .eq. 0d0 ) ) then  
+            !    print *, 'SOME ZERO DENSITY ESTIMATE'
+            !end if 
 
             ! TOC
             call system_clock(clockCountStop, clockCountRate, clockCountMax)
@@ -1616,6 +1625,7 @@ contains
         class( GridProjectedKDEType ), target:: this
         doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
         doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
+        doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
         doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
         doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
         doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
@@ -1890,9 +1900,9 @@ contains
 
 
             ! Curvature bandwidths
-            call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
-                      nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
-                                 kernelSigmaSupportScale, curvatureBandwidth )
+            call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
+                                kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, & 
+                                                 kernelSigmaSupportScale, curvatureBandwidth )
 
             !! LOGGER
             !print *, 'debug_curvaturebandwidth_max', maxval( curvatureBandwidth )
@@ -2420,13 +2430,38 @@ contains
         kernelSmoothingScale      = ( kernelSmoothing(1,:)*kernelSmoothing(2,:)*kernelSmoothing(3,:) )**( 1d0/nDim )
         kernelSigmaSupport        = this%kernelSigmaSupport ! Why not a pointer ?
         kernelSigmaSupportScale   = ( kernelSigmaSupport(1,:)*kernelSigmaSupport(2,:)*kernelSigmaSupport(3,:) )**( 1d0/nDim )
-  
 
-        if ( anisotropicSigmaSupport ) then
-            ! Anisotropic
+        !print *, 'VERIFYNG SMOOTHING SCALE ' 
+        !do n = 1, this%nComputeBins
+        !    if ( kernelSmoothingScale( n ) .eq. 0d0 ) then 
+        !        print *, n, 'FOUND ZERO ', kernelSmoothingScale( n )
+        !    end if
+        !end do 
+
+        !print *, 'VERIFYNG SMOOTHING LENGTH ' 
+        !do n = 1, this%nComputeBins
+        !    if ( any( isnan( kernelSmoothing( :, n ) ) ) ) then 
+        !        print *, n, 'FOUND NAN ', kernelSmoothing( :, n )
+        !    end if
+        !end do 
+
+        kernelSmoothingShape = 0d0 
+        where ( kernelSmoothingScale .gt. 0d0 ) 
             kernelSmoothingShape(1,:) = kernelSmoothing(1,:)/kernelSmoothingScale
             kernelSmoothingShape(2,:) = kernelSmoothing(2,:)/kernelSmoothingScale
             kernelSmoothingShape(3,:) = kernelSmoothing(3,:)/kernelSmoothingScale
+        end where
+
+
+        !print *, 'VERIFYNG SMOOTHING SHAPE ' 
+        !do n = 1, this%nComputeBins
+        !    if ( any( isnan( kernelSmoothingShape( :, n ) ) ) ) then 
+        !        print *, n, 'FOUND NAN ', kernelSmoothingShape(:,n)
+        !    end if
+        !end do 
+
+        if ( anisotropicSigmaSupport ) then
+            ! Anisotropic
             kernelSigmaSupport(1,:)   = kernelSigmaSupportScale*kernelSmoothingShape(1,:)
             kernelSigmaSupport(2,:)   = kernelSigmaSupportScale*kernelSmoothingShape(2,:)
             kernelSigmaSupport(3,:)   = kernelSigmaSupportScale*kernelSmoothingShape(3,:)
@@ -2444,6 +2479,12 @@ contains
         end do
         !$omp end parallel do 
 
+        !print *, 'VERIFYNG SIGMA SUPPORT ' 
+        !do n = 1, this%nComputeBins
+        !    if ( any( isnan( kernelSigmaSupport( :, n ) ) ) ) then 
+        !        print *, n, 'FOUND NAN ', kernelSigmaSupport(:,n)
+        !    end if
+        !end do 
 
         print *, '## GPKDE Initializing kernelsigmaarray'
         ! Initialize kernelSigmaArray
@@ -2461,7 +2502,7 @@ contains
             call gc%kernelSigma%Initialize( this%binSize ) 
 
             ! Setup kernel matrix
-            print *, n, kernelSigmaSupport( :, n ), kernelSmoothingScale(n), kernelSmoothing( :, n ), this%densityEstimate( n ) 
+            !print *, n, kernelSigmaSupport(:,n) 4383
             call gc%kernelSigma%SetupMatrix( kernelSigmaSupport( :, n ) )
 
             ! Determine spans
@@ -2596,9 +2637,9 @@ contains
 
 
             ! Curvature bandwidths
-            call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, &
-                      nEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
-                                 kernelSigmaSupportScale, curvatureBandwidth )
+            call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
+                                kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, & 
+                                                 kernelSigmaSupportScale, curvatureBandwidth )
 
             ! LOGGER
             !print *, 'debug_curvaturebandwidth_max', maxval( curvatureBandwidth )
@@ -2857,17 +2898,17 @@ contains
             end do
             !$omp end parallel do 
 
-            if ( localAnisotropicSigmaSupport ) then 
-                ! Optimal smoothing and shape
-                call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
-                                        roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                  kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
-            else
-                ! Optimal smoothing
-                call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
-                                roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                               kernelSmoothing, kernelSmoothingScale  )
-            end if 
+            !if ( localAnisotropicSigmaSupport ) then 
+            ! Optimal smoothing and shape
+            call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
+                                    roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                              kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
+            !else
+            !    ! Optimal smoothing
+            !    call this%ComputeOptimalSmoothing( nEstimateArray, netRoughnessArray, & 
+            !                    roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+            !                                   kernelSmoothing, kernelSmoothingScale  )
+            !end if 
 
             !! LOGGER
             !print *, 'debug_kernelsmoothing_x_max', maxval( kernelSmoothing(:,1) )
@@ -2982,8 +3023,13 @@ contains
         doubleprecision, dimension(:), intent(inout) :: kernelSigmaSupportScale
         !------------------------------------------------------------------------------
 
-        kernelSigmaSupportScale = nEstimate**(0.5)*kernelSmoothingScale**( 1d0 + 0.25*nDim )/&
-                       ( ( 4d0*densityEstimate )**0.25 )*this%supportDimensionConstant
+        kernelSigmaSupportScale = 0d0
+
+        where ( densityEstimate > 0d0 ) 
+            kernelSigmaSupportScale = nEstimate**(0.5)*kernelSmoothingScale**( 1d0 + 0.25*nDim )/&
+                           ( ( 4d0*densityEstimate )**0.25 )*this%supportDimensionConstant
+        end where
+
 
         return
 
@@ -2993,8 +3039,8 @@ contains
 
 
     subroutine prComputeCurvatureKernelBandwidth( this, densityEstimate, nEstimate, &
-                   kernelSmoothing, kernelSmoothingScale,  kernelSigmaSupportScale, &
-                                                                 curvatureBandwidth )
+                       kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, &
+                                        kernelSigmaSupportScale, curvatureBandwidth )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -3008,12 +3054,12 @@ contains
         doubleprecision, dimension(:),   intent(in)    :: densityEstimate
         doubleprecision, dimension(:,:), intent(in)    :: kernelSmoothing
         doubleprecision, dimension(:),   intent(in)    :: kernelSmoothingScale
+        doubleprecision, dimension(:,:), intent(in)    :: kernelSmoothingShape
         doubleprecision, dimension(:),   intent(in)    :: kernelSigmaSupportScale
         doubleprecision, dimension(:,:), intent(inout) :: curvatureBandwidth
 
         !doubleprecision, dimension(:),   allocatable   :: nVirtual
         doubleprecision, dimension(:),   allocatable   :: nVirtualPowerBeta
-        doubleprecision, dimension(:,:), allocatable   :: kernelSmoothingShape
         doubleprecision, dimension(:,:), allocatable   :: shapeTerm
         integer, dimension(3)                          :: shapeTermNums = 1
         doubleprecision :: alphaDimensionConstant, betaDimensionConstant
@@ -3022,25 +3068,29 @@ contains
         !------------------------------------------------------------------------------
 
         ! Compute constants
-        alphaDimensionConstant = ( ( 1 + 2d0**(0.5*nDim + 2) )/( 3*2d0**( 4d0/( nDim + 4 ) ) ) )**( 1d0/(nDim + 6) )*&
-                                 ( nDim + 2 )**( 1d0/(nDim + 4) )/( ( nDim + 4 )**( 1d0/(nDim + 6) ) )
-        betaDimensionConstant  = 2d0/( nDim + 4)/( nDim + 6 ) 
-
-        ! Compute virtual particle cloud size 
-        nVirtualPowerBeta = ( ( sqrtEightPi*kernelSigmaSupportScale )**nDim*&
-            nEstimate**2/densityEstimate )**betaDimensionConstant
-
+        !alphaDimensionConstant = ( ( 1 + 2d0**(0.5*nDim + 2) )/( 3*2d0**( 4d0/( nDim + 4 ) ) ) )**( 1d0/(nDim + 6) )*&
+        !                         ( nDim + 2 )**( 1d0/(nDim + 4) )/( ( nDim + 4 )**( 1d0/(nDim + 6) ) )
+        !betaDimensionConstant  = 2d0/( nDim + 4)/( nDim + 6 ) 
 
         ! Allocate local arrays
         nActiveBins = size( nEstimate ) ! Maybe removed
-        allocate( kernelSmoothingShape( nDim, nActiveBins ) )
-        allocate(            shapeTerm( nDim, nActiveBins ) )
+        allocate( shapeTerm( nDim, nActiveBins   ) )
+        allocate( nVirtualPowerBeta( nActiveBins ) )
+
+        ! Compute virtual particle cloud size
+        nVirtualPowerBeta = 0d0
+        where ( densityEstimate .gt. 0d0 )  
+            nVirtualPowerBeta = ( ( sqrtEightPi*kernelSigmaSupportScale )**nDim*&
+                nEstimate**2/densityEstimate )**this%betaDimensionConstant
+        end where
 
 
-        ! Compute shape factors
-        do n = 1, nDim
-            kernelSmoothingShape( n, : ) = kernelSmoothing( n, : )/kernelSmoothingScale    
-        end do 
+        !! Compute shape factors
+        !do n = 1, nDim
+        !    kernelSmoothingShape( n, : ) = kernelSmoothing( n, : )/kernelSmoothingScale    
+        !end do 
+
+        ! Verify what happens with kernelSmoothingShape(:,someId) == 0 
 
         ! Compute the shape dependent terms
         do n = 1, nDim
@@ -3058,14 +3108,14 @@ contains
                     )                                                       &
                 )**( -1d0/( nDim + 6 ) )
 
-            curvatureBandwidth( n, : ) = alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( n, : )
+            curvatureBandwidth( n, : ) = this%alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( n, : )
 
         end do 
 
 
         ! Should deallocate ?
         deallocate( shapeTerm )
-        deallocate( kernelSmoothingShape )
+        deallocate( nVirtualPowerBeta )
   
 
         return
@@ -3155,14 +3205,21 @@ contains
       
         ! Compute the smoothing scale
         kernelSmoothingScale = 0d0
-        kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( 1d0/( nDim + 4 ) )
+        where ( abs( netRoughness ) .gt. 0d0 )
+            kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( 1d0/( nDim + 4 ) )
+        end where
 
         ! Compute the shape factors
         roughnessScale               = ( roughnessXXActive*roughnessYYActive*roughnessZZActive )**( 1d0/nDim )
-        kernelSmoothingShape( 1, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
-        kernelSmoothingShape( 2, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
-        kernelSmoothingShape( 3, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
-
+        where ( abs( roughnessXXActive ) .gt. 0d0 ) 
+            kernelSmoothingShape( 1, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
+        end where
+        where ( abs( roughnessYYActive ) .gt. 0d0 ) 
+            kernelSmoothingShape( 2, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
+        end where
+        where ( abs( roughnessZZActive ) .gt. 0d0 ) 
+            kernelSmoothingShape( 3, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
+        end where
 
         kernelSmoothing( 1, : ) = kernelSmoothingShape( 1, : )*kernelSmoothingScale
         kernelSmoothing( 2, : ) = kernelSmoothingShape( 2, : )*kernelSmoothingScale
