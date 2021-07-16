@@ -351,7 +351,8 @@ contains
         class( KernelMultiGaussianType ) :: this 
         integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
         ! local 
-        doubleprecision, dimension(:)    , allocatable :: hLambda
+        doubleprecision, dimension(3) :: hLambda
+        !doubleprecision, dimension(:)    , allocatable :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------
@@ -403,7 +404,8 @@ contains
         class( KernelSecondDerivativeXType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(3) :: hLambda
+        !doubleprecision, dimension(:), allocatable     :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         doubleprecision :: aDenom, aNum, aCoeff
@@ -471,7 +473,8 @@ contains
         class( KernelSecondDerivativeYType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(3) :: hLambda
+        !doubleprecision, dimension(:), allocatable     :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         doubleprecision :: aDenom, aNum, aCoeff
@@ -539,7 +542,8 @@ contains
         class( KernelSecondDerivativeZType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(3) :: hLambda
+        !doubleprecision, dimension(:), allocatable     :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         doubleprecision :: aDenom, aNum, aCoeff

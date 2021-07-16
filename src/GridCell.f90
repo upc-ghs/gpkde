@@ -30,6 +30,10 @@ module GridCellModule
         logical               :: transposeKernelSigma = .false.
 
 
+        ! For the cases with zero support
+        logical               :: skipKernelSigma = .false.
+
+
         ! Spans
         integer, dimension(2) :: kernelXGSpan = 0
         integer, dimension(2) :: kernelYGSpan = 0
