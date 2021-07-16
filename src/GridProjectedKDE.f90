@@ -618,6 +618,7 @@ contains
         allocate( this%kernelSDZDatabase( nDelta ) )
 
 
+        print *, '## GPKDE: W kernels :'
         ! Kernel database
         !$omp parallel do             &
         !$omp private( n, m, dbi )    &
@@ -635,7 +636,7 @@ contains
         !$omp end parallel do
 
         
-
+        print *, '## GPKDE: SD kernels :'
         ! Second derivatives
         !$omp parallel do             &
         !$omp private( inputSmoothing )
@@ -1395,15 +1396,25 @@ contains
                 if ( gc%skipKernelSigma ) cycle
 
                 ! Compute roughness grid estimates
+                !roughnessXX( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+                !    curvatureXX(&
+                !        gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+                !        gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+                !        gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+                !    )*gc%kernelSigma%matrix(&
+                !        gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+                !        gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+                !        gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+
                 roughnessXX( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
-                    curvatureXX(&
+                    matmul( curvatureXX(&
                         gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
                         gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
                         gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-                    )*gc%kernelSigma%matrix(&
+                    ), gc%kernelSigma%matrix(&
                         gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
                         gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                        gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+                        gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) ) )) 
 
             end do
             !$omp end parallel do 
