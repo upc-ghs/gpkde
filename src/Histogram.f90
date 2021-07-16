@@ -145,7 +145,7 @@ contains
 
         ! MANAGE WHAT TO DO WITH ALLOCATED ARRAY 
         if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
-        allocate( this%activeBinIds( this%nActiveBins , 3 ) )
+        allocate( this%activeBinIds( 3, this%nActiveBins ) )
        
         ! Following column-major nesting
         ! This could be in parallel with OpenMP (?)
@@ -153,7 +153,7 @@ contains
             do iy = 1, this%nBins(2)
                 do ix = 1, this%nBins(1)
                     if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
-                    this%activeBinIds( icount , : ) = [ ix, iy, iz ]
+                    this%activeBinIds( :, icount ) = [ ix, iy, iz ]
                     icount = icount + 1
                 end do
             end do
@@ -198,12 +198,10 @@ contains
                          ( yBounds(2) - yBounds(1) + 1 )*&
                          ( zBounds(2) - zBounds(1) + 1 )
 
-        !print *, this%nBBoxBins
 
         ! Maybe something that verifies the number of bins 
         if ( allocated( this%boundingBoxBinIds ) ) deallocate( this%boundingBoxBinIds )
         allocate( this%boundingBoxBinIds( 3, this%nBBoxBins ) )
-        !allocate( this%boundingBoxBinIds( this%nBBoxBins , 3 ) )
 
 
         do iz = 1, this%nBins(3)
@@ -216,7 +214,6 @@ contains
                         ( iz .lt. zBounds(1) ) .or. ( iz .gt. zBounds(2) )      &
                     ) cycle
                     this%boundingBoxBinIds( :, icount ) = [ ix, iy, iz ]
-                    !this%boundingBoxBinIds( icount , : ) = [ ix, iy, iz ]
                     icount = icount + 1
                 end do
             end do

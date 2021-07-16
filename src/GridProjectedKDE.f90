@@ -620,7 +620,7 @@ contains
 
         print *, '## GPKDE: W kernels :'
         ! Kernel database
-        !$omp parallel do             &
+        !$omp parallel do schedule( dynamic, 1 )  &
         !$omp private( n, m, dbi )    &
         !$omp private( inputSmoothing )
         do o = 1, nDelta
@@ -638,7 +638,7 @@ contains
         
         print *, '## GPKDE: SD kernels :'
         ! Second derivatives
-        !$omp parallel do             &
+        !$omp parallel do schedule( dynamic, 1 ) &
         !$omp private( inputSmoothing )
         do n = 1, nDelta
             inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
@@ -965,12 +965,16 @@ contains
         integer            :: zeroDensityCount     = 0
         character(len=200) :: densityOutputFileName
         character(len=20)  :: loopId
+        doubleprecision, dimension(:,:,:), pointer :: tempKernelMatrix
+        !doubleprecision, dimension(:,:,:), allocatable :: tempKernelMatrix
 
         ! Time monitoring
         integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-        integer :: clockCountStart2, clockCountStop2, clockCountRate2, clockCountMax2
         doubleprecision :: elapsedTime
+        integer :: clockCountStart2, clockCountStop2, clockCountRate2, clockCountMax2
         doubleprecision :: elapsedTime2
+        integer :: clockCountStart3, clockCountStop3, clockCountRate3, clockCountMax3
+        doubleprecision :: elapsedTime3
         !------------------------------------------------------------------------------
    
         ! Allocate activeGridCells 
@@ -1042,7 +1046,7 @@ contains
 
 
         ! Initialize density estimate
-        !$omp parallel do   &
+        !$omp parallel do schedule( dynamic, 1 )  &
         !$omp private( gc ) &
         !$omp private( kernelMatrix ) & 
         !$omp private( transposedKernelMatrix )        
@@ -1067,7 +1071,7 @@ contains
                 call gc%kernel%ComputeGridSpansTranspose( gc%id, this%nBins, &
                           gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
                           gc%kernelXMSpan, gc%kernelYMSpan, gc%kernelZMSpan  )
-                transposedKernelMatrix = prComputeXYTranspose( this, gc%kernel%matrix )
+                transposedKernelMatrix = this%ComputeXYTranspose( gc%kernel%matrix )
                 kernelMatrix => transposedKernelMatrix
             else
                 ! Determine spans
@@ -1108,7 +1112,7 @@ contains
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! nEstimate 
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this ) &
             !$omp shared( activeGridCells ) &
@@ -1177,6 +1181,7 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_support_scale ', elapsedTime2, ' seconds'
 
+
             !! LOGGER
             !print *, 'debug_kernelsigmasupport_max', maxval( kernelSigmaSupport )
             !print *, 'debug_kernelsigmasupport_min', minval( kernelSigmaSupport )
@@ -1185,7 +1190,7 @@ contains
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Update nEstimate
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this ) &
             !$omp shared( activeGridCells ) &
@@ -1265,12 +1270,12 @@ contains
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Curvatures, kappa
-            !$omp parallel do &        
-            !$omp default( none ) &
-            !$omp shared( this ) &
-            !$omp shared( activeGridCells ) &
+            !$omp parallel do schedule( dynamic, 1 )           & 
+            !$omp default( none )                              &
+            !$omp shared( this )                               &
+            !$omp shared( activeGridCells )                    &
             !$omp shared( curvatureX, curvatureY, curvatureZ ) &
-            !$omp shared( curvatureBandwidth ) &
+            !$omp shared( curvatureBandwidth )                 &
             !$omp private( gc )                       
             do n = 1, this%nComputeBins
     
@@ -1378,11 +1383,13 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_curvatures_product ', elapsedTime2, ' seconds'
 
+
             ! TIC
+            call system_clock(clockCountStart3, clockCountRate3, clockCountMax3)
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Roughnesses
             ! XX
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
@@ -1408,30 +1415,6 @@ contains
                         gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
                         gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
 
-                !p = gc%kernelSigmaZGSpan(2) - gc%kernelSigmaZGSpan(1)
-                !do o = 0, p
-                !    roughnessXX( gc%id(1), gc%id(2), gc%id(3) )  = &
-                !        roughnessXX( gc%id(1), gc%id(2), gc%id(3) ) + &
-                !            sum( curvatureXX(&
-                !                gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-                !                gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-                !                gc%kernelSigmaZGSpan(1) + o )*&
-                !            gc%kernelSigma%matrix(&
-                !                gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-                !                gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                !                gc%kernelSigmaZMSpan(1) + o ) )  
-                !end do  
-
-
-                !roughnessXX( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
-                !    matmul( curvatureXX(&
-                !        gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-                !        gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-                !        gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-                !    ), gc%kernelSigma%matrix(&
-                !        gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-                !        gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                !        gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) ) )) 
 
             end do
             !$omp end parallel do 
@@ -1440,10 +1423,11 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_roughness_xx ', elapsedTime2, ' seconds'
 
+
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! YY
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
@@ -1475,10 +1459,11 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_roughness_yy ', elapsedTime2, ' seconds'
 
+
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! ZZ
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
@@ -1510,10 +1495,11 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_roughness_zz ', elapsedTime2, ' seconds'
 
+
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! XY
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
@@ -1545,10 +1531,11 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_roughness_xy ', elapsedTime2, ' seconds'
 
+
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! XZ
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
@@ -1580,10 +1567,11 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_roughness_xz ', elapsedTime2, ' seconds'
 
+
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! YZ
-            !$omp parallel do &
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none ) &
             !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
@@ -1615,10 +1603,11 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_roughness_yz ', elapsedTime2, ' seconds'
 
+
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Net roughness
-            !$omp parallel do               &        
+            !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none )           &
             !$omp shared( this )  &
             !$omp shared( activeGridCells ) &
@@ -1657,6 +1646,10 @@ contains
             call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_net_roughness ', elapsedTime2, ' seconds'
+            call system_clock(clockCountStop3, clockCountRate3, clockCountMax3)
+            elapsedTime3 = dble(clockCountStop3 - clockCountStart3) / dble(clockCountRate3)
+            print *, 'timer_roughness_all ', elapsedTime3, ' seconds'
+
 
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
