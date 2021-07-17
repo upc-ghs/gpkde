@@ -267,7 +267,7 @@ contains
         else
             ! The initial estimate could be improved, something with more
             ! theoretical background
-            this%initialSmoothing = 0.5*( this%histogram%binVolume )**( 1d0/nDim )
+            this%initialSmoothing = ( this%histogram%binVolume )**( 1d0/nDim )
         end if 
    
 
@@ -3604,7 +3604,7 @@ contains
             iy = this%computeBinIds( 2, n )
             iz = this%computeBinIds( 3, n )
             ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-            write(outputUnit,"(I6,I6,I6,F15.6)") ix, iy, iz, this%densityEstimate( n )
+            write(outputUnit,"(I6,I6,I6,F16.8)") ix, iy, iz, this%densityEstimate( n )
         end do
 
         ! Finished
