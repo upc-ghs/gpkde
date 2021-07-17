@@ -762,7 +762,7 @@ contains
             call filterKernel%Initialize(  this%binSize, matrixRange=defaultKernelRange )
 
             ! This could be a factor times the initial smoothing, needs elegance
-            call filterKernel%SetupMatrix( this%initialSmoothing ) 
+            call filterKernel%SetupMatrix( 0.5*this%initialSmoothing ) 
             
             ! Allocate the identifier 
             allocate( computeThisBin( this%histogram%nBBoxBins ) )
