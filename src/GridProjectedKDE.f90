@@ -719,7 +719,7 @@ contains
         integer :: bcount = 1
         logical, dimension(:), allocatable :: computeThisBin
 
-        character(len=200) :: outputFileName =  'gpkde_density_output_new_'
+        character(len=200) :: outputFileName =  'gpkde_density_output_bbox_'
 
 
         ! Time monitoring
