@@ -186,12 +186,12 @@ contains
         end if 
 
         ! Get bounding box boundaries
-        xBounds(1) = minval( this%activeBinIds(:,1) )
-        xBounds(2) = maxval( this%activeBinIds(:,1) )
-        yBounds(1) = minval( this%activeBinIds(:,2) )
-        yBounds(2) = maxval( this%activeBinIds(:,2) )
-        zBounds(1) = minval( this%activeBinIds(:,3) )
-        zBounds(2) = maxval( this%activeBinIds(:,3) )
+        xBounds(1) = minval( this%activeBinIds( 1, : ) )
+        xBounds(2) = maxval( this%activeBinIds( 1, : ) )
+        yBounds(1) = minval( this%activeBinIds( 2, : ) )
+        yBounds(2) = maxval( this%activeBinIds( 2, : ) )
+        zBounds(1) = minval( this%activeBinIds( 3, : ) )
+        zBounds(2) = maxval( this%activeBinIds( 3, : ) )
 
         ! Compute number of bins
         this%nBBoxBins = ( xBounds(2) - xBounds(1) + 1 )*&
