@@ -89,7 +89,8 @@ module GridProjectedKDEModule
 
         ! DEV
         integer, dimension(:,:), allocatable :: computeBinIds
-        integer                 :: nComputeBins
+        integer                              :: nComputeBins
+        character( len=300 )                 :: outputFileName 
         !integer, dimension(:,:), allocatable, pointer :: computeBinIds
         !integer, pointer                 :: nComputeBins
 
@@ -404,10 +405,11 @@ contains
         integer :: localKernelRange
         integer :: localKernelSDRange
 
-        ! Mem debug
+        ! Mem monitor
         doubleprecision :: kernelMatrixMemory = 0d0
         doubleprecision :: kernelDBMemory = 0d0
         doubleprecision :: kernelSDDBMemory = 0d0
+
         !------------------------------------------------------------------------------
 
         ! Sanity check for input parameters
@@ -551,6 +553,10 @@ contains
         doubleprecision :: kernelMatrixMemory = 0d0
         doubleprecision :: kernelDBMemory = 0d0
         doubleprecision :: kernelSDDBMemory = 0d0
+
+        ! Time monitoring
+        integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+        doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
 
         ! Sanity check for input parameters
@@ -620,10 +626,14 @@ contains
         allocate( this%kernelSDZDatabase( nDelta ) )
 
 
-        print *, '## GPKDE: W kernels :'
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        print *, '## GPKDE: Computing W kernels database'
         ! Kernel database
         !$omp parallel do schedule( dynamic, 1 )  &
         !$omp private( n, m, dbi )    &
+        !$omp reduction( +:kernelDBMemory)  &
+        !$omp private( kernelMatrixMemory ) &
         !$omp private( inputSmoothing )
         do o = 1, nDelta
             do n = 1, nDelta
@@ -632,15 +642,28 @@ contains
                    inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
                    call this%kernelDatabaseFlat( dbi, o )%Initialize( this%binSize, matrixRange=localKernelRange )
                    call this%kernelDatabaseFlat( dbi, o )%SetupMatrix( inputSmoothing*this%binSize )
+                   kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( dbi, o )%matrix )/1d6
+                   kernelDBMemory    = kernelDBMemory + kernelMatrixMemory
                 end do
             end do
         end do
         !$omp end parallel do
 
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        print *, '## GPKDE Computing W kernel database took ', elapsedTime, ' seconds'
+        print *, '## GPKDE W Kernel database size GB', kernelDBMemory/1d3
         
-        print *, '## GPKDE: SD kernels :'
+
+        kernelMatrixMemory = 0d0
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        print *, '## GPKDE: Computing SD kernels database'
         ! Second derivatives
         !$omp parallel do schedule( dynamic, 1 ) &
+        !$omp reduction( +:kernelSDDBMemory)     &
+        !$omp private( kernelMatrixMemory )      &
         !$omp private( inputSmoothing )
         do n = 1, nDelta
             inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
@@ -649,18 +672,34 @@ contains
             call this%kernelSDXDatabase( n )%Initialize( this%binSize, matrixRange=localKernelSDRange )
             call this%kernelSDXDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
 
+            kernelMatrixMemory = sizeof( this%kernelSDXDatabase( n )%matrix )/1d6
+            kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
+
             ! Y
             call this%kernelSDYDatabase( n )%Initialize( this%binSize, matrixRange=localKernelSDRange )
             call this%kernelSDYDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+
+            kernelMatrixMemory = sizeof( this%kernelSDYDatabase( n )%matrix )/1d6
+            kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
 
             ! Z
             call this%kernelSDZDatabase( n )%Initialize( this%binSize, matrixRange=localKernelSDRange )
             call this%kernelSDZDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
 
+            kernelMatrixMemory = sizeof( this%kernelSDZDatabase( n )%matrix )/1d6
+            kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
         end do
         !$omp end parallel do
 
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        print *, '## GPKDE Computing SD kernel database took ', elapsedTime, ' seconds'
+        print *, '## GPKDE SD Kernel database size GB', kernelSDDBMemory/1d3
         
+
+
+
         return
 
 
@@ -698,7 +737,7 @@ contains
 
 
     ! Density computation manager 
-    subroutine prComputeDensity( this, dataPoints, nOptimizationLoops )
+    subroutine prComputeDensity( this, dataPoints, nOptimizationLoops, outputFileName )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -721,7 +760,8 @@ contains
         integer :: bcount = 1
         logical, dimension(:), allocatable :: computeThisBin
 
-        character(len=200) :: outputFileName =  'gpkde_density_output_bbox_'
+        !character(len=200) :: outputFileName =  'gpkde_density_output_bbox_'
+        character(len=300), optional :: outputFileName
 
 
         ! Time monitoring
@@ -734,6 +774,10 @@ contains
             localNOptimizationLoops = nOptimizationLoops
         else 
             localNOptimizationLoops = defaultNOptLoops
+        end if 
+
+        if ( present( outputFileName ) ) then 
+            this%outputFileName = outputFileName
         end if 
 
 
@@ -894,7 +938,7 @@ contains
         end if 
 
         
-        call this%ExportDensity( outputFileName )
+        !call this%ExportDensity( outputFileName )
 
         
         return
@@ -963,7 +1007,9 @@ contains
         integer            :: softConvergenceCount = 0
         integer            :: zeroDensityCount     = 0
         character(len=200) :: densityOutputFileName
+        character(len=500) :: varsOutputFileName
         character(len=20)  :: loopId
+        logical            :: exportOptimizationVariables  = .true.
         doubleprecision, dimension(:,:,:), pointer :: tempKernelMatrix
         !doubleprecision, dimension(:,:,:), allocatable :: tempKernelMatrix
 
@@ -1649,12 +1695,6 @@ contains
 
 
 
-
-
-
-
-
-
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Optimal smoothing
@@ -1774,6 +1814,16 @@ contains
             convergenceCount     = 0
             softConvergenceCount = 0
             this%densityEstimate =  densityEstimateArray
+
+
+            if ( exportOptimizationVariables ) then
+                write( unit=loopId, fmt=* )m
+                write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
+                call prExportOptimizationVariables( this, varsOutputFileName, & 
+                    relativeDensityChange, kernelSmoothing, kernelSigmaSupportScale, &
+                    curvatureBandwidth, nEstimateArray, netRoughnessArray )
+            end if 
+
 
             ! TOC
             call system_clock(clockCountStop, clockCountRate, clockCountMax)
@@ -2951,7 +3001,52 @@ contains
 
     end subroutine prExportDensity
 
-    
+
+
+    subroutine prExportOptimizationVariables( this, outputFileName, &
+        relativeDensityChange, kernelSmoothing, kernelSigmaSupportScale, &
+        curvatureBandwidth, nEstimate, netRoughness )
+        !------------------------------------------------------------------------------
+        implicit none 
+        class(GridProjectedKDEType) :: this
+        character(len=500), intent(in) :: outputFileName
+        doubleprecision, dimension(:)  ,intent(in) :: relativeDensityChange 
+        doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
+        doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
+        doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
+        doubleprecision, dimension(:)  ,intent(in) :: nEstimate
+        doubleprecision, dimension(:)  ,intent(in) :: netRoughness
+        integer :: ix, iy, iz, n
+        integer :: outputUnit = 555
+        !------------------------------------------------------------------------------
+
+        ! Write the output file name
+        ! Add some default
+        open( outputUnit, file=outputFileName, status='replace' )
+
+
+        do n = 1, this%nComputeBins
+            ix = this%computeBinIds( 1, n )
+            iy = this%computeBinIds( 2, n )
+            iz = this%computeBinIds( 3, n )
+            ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
+            write(outputUnit,&
+                "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
+                ix, iy, iz,& 
+                this%densityEstimate( n ),  relativeDensityChange( n ),& 
+                kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
+                kernelSigmaSupportScale(n), &
+                curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
+                nEstimate(n), netRoughness(n)
+        end do
+
+        ! Finished
+        close(outputUnit)
+
+
+    end subroutine prExportOptimizationVariables
+
+
 
     function prGenerateLogSpaceData( this, initPoint, endPoint, nPoints ) result( output )
         !------------------------------------------------------------------------------
