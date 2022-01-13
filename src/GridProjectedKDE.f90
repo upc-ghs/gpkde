@@ -27,7 +27,7 @@ module GridProjectedKDEModule
     doubleprecision, parameter :: defaultMinHOverLambda   = 0.25
     doubleprecision, parameter :: defaultDeltaHOverLambda = 0.25
 
-    logical, parameter ::  defaultBruteOptimization       = .true. 
+    logical, parameter ::  defaultBruteOptimization       = .false. 
     logical, parameter ::  defaultAnisotropicSigmaSupport = .true.
 
 
@@ -373,7 +373,6 @@ contains
 
 
     end subroutine prInitializeModuleConstants 
-
 
 
     ! Kernel Database functions
