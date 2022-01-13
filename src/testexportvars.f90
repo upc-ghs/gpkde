@@ -26,22 +26,31 @@ program testkernel
     doubleprecision :: elapsedTime
     integer :: res
     integer :: line_no, ix
-    character(len=200) :: particlesFileName = 'particles_1.csv'
-    integer            :: nlines = 10000
+    character(len=100) :: baseVarsOutputFileName = 'varsOpt_01M_n_'
+    character(len=500) :: varsOutputFileName
+    character(len=20)  :: nOptLoops
+    character(len=20)  :: kernelDeltaId
+    character(len=100) :: particlesFileName = 'particles_1_01M.csv'
+    integer            :: nlines = 100000
     doubleprecision, dimension(:,:), allocatable :: dataArray
     integer :: nOptimizationLoops
     !-------------------------------------------------------------
 
     allocate( dataArray( nlines, 3 ) )
 
+
     ! KDB LOG
-    maxHOverLambda   = 20.0
-    minHOverLambda   = 0.25
-    deltaHOverLambda = 0.25
-    !deltaHOverLambda = 0.08
+    maxHOverLambda     = 20.0
+    minHOverLambda     = 0.25
+    deltaHOverLambda   = 0.5
+    kernelDeltaId      = '05'
 
-    nOptimizationLoops = 10
-
+    nOptimizationLoops = 5
+    write( unit=nOptLoops, fmt=* )nOptimizationLoops
+    print *, nOptLoops
+    write( unit=varsOutputFileName, fmt='(a)')trim(adjustl(baseVarsOutputFileName))//trim(adjustl(nOptLoops))&
+        //'_dkdb_'//trim(adjustl(kernelDeltaId))//'_'
+   
 
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
@@ -64,8 +73,8 @@ program testkernel
             maxHOverLambda          = maxHOverLambda,     & 
             deltaHOverLambda        = deltaHOverLambda,   &
             databaseOptimization    = .true.,             & 
-            bruteOptimization       = .false.,             & 
-            anisotropicSigmaSupport = .true.,             &
+            bruteOptimization       = .false.,            & 
+            anisotropicSigmaSupport = .false.,            &
             nOptimizationLoops      = nOptimizationLoops  & 
         )
 
@@ -91,12 +100,8 @@ program testkernel
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
     print *, '## TEST: compute density ' 
-    call gpkde%ComputeDensity( &
-        dataArray,                                   &
-        nOptimizationLoops=gpkde%nOptimizationLoops, &
-        outputFileName='gpkde_density_output_holy_'  &
-       )
-    !call gpkde%ComputeDensity( dataArray, nOptimizationLoops=gpkde%nOptimizationLoops )
+    call gpkde%ComputeDensity( dataArray, nOptimizationLoops=gpkde%nOptimizationLoops,&
+                                              outputFileName=varsOutputFileName )
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)
     elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)

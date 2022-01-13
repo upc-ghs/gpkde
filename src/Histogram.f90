@@ -61,7 +61,9 @@ contains
         this%binVolume = product( binSize )
 
         ! Verify what happens in the 2D case
-
+        ! if nBins(j) = 0, allocation still leaves
+        ! one index in dimension j
+        ! e.g. nBins(nx,ny,0) => (nx, ny, 1)
         allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
         this%counts = 0
 
@@ -110,6 +112,9 @@ contains
 
         nPointsShape = shape(dataPoints)
         
+        print *, 'HISTOGRAM:: NPOINTS SHAPE', nPointsShape
+
+
         ! Verify the 1D, 2D case
 
         ! This could be done with OpenMP 

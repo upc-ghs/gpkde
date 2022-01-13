@@ -8,7 +8,7 @@ program testkernel
     type( GridProjectedKDEType ), allocatable:: gpkde
     type( KernelMultiGaussianType ):: kernel
     
-    doubleprecision, dimension(3)             :: domainSize         = [ 500.0 , 150.0 , 100.0 ] 
+    doubleprecision, dimension(3)             :: domainSize         = [ 1500.0 , 300.0 , 1.0 ] 
     doubleprecision, dimension(3)             :: binSize            = [ 1.0    , 1.0  , 1.0  ]
 
     doubleprecision :: maxHOverLambda 
@@ -26,8 +26,8 @@ program testkernel
     doubleprecision :: elapsedTime
     integer :: res
     integer :: line_no, ix
-    character(len=200) :: particlesFileName = 'particles_1.csv'
-    integer            :: nlines = 10000
+    character(len=200) :: particlesFileName = 'rwsolution_ani_10_01M__7_.csv'
+    integer            :: nlines = 100122
     doubleprecision, dimension(:,:), allocatable :: dataArray
     integer :: nOptimizationLoops
     !-------------------------------------------------------------
@@ -40,7 +40,7 @@ program testkernel
     deltaHOverLambda = 0.25
     !deltaHOverLambda = 0.08
 
-    nOptimizationLoops = 10
+    nOptimizationLoops = 5
 
 
     ! TIC
@@ -93,8 +93,8 @@ program testkernel
     print *, '## TEST: compute density ' 
     call gpkde%ComputeDensity( &
         dataArray,                                   &
-        nOptimizationLoops=gpkde%nOptimizationLoops, &
-        outputFileName='gpkde_density_output_holy_'  &
+        nOptimizationLoops=gpkde%nOptimizationLoops, & 
+        outputFileName='gpkde_output_baks_2d_' &
        )
     !call gpkde%ComputeDensity( dataArray, nOptimizationLoops=gpkde%nOptimizationLoops )
     ! TOC
