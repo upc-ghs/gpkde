@@ -59,6 +59,7 @@ module GridCellModule
     contains
 
         procedure :: Initialize => prInitialize
+        procedure :: Reset      => prReset
 
     end type GridCellType
 
@@ -76,11 +77,65 @@ contains
         implicit none
         class( GridCellType ) :: this
         integer, dimension(3), intent(in) :: id
+        type( KernelMultiGaussianType )     :: ikernel      
+        type( KernelMultiGaussianType )     :: ikernelSigma 
+        type( KernelSecondDerivativeXType ) :: ikernelSDX   
+        type( KernelSecondDerivativeYType ) :: ikernelSDY   
+        type( KernelSecondDerivativeZType ) :: ikernelSDZ   
         !------------------------------------------------------------------------------
 
         this%id = id
 
     end subroutine prInitialize
+
+
+    subroutine prReset( this )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridCellType ) :: this
+        !------------------------------------------------------------------------------
+
+        ! Kernel pointers
+        this%kernel      => null()
+        this%kernelSigma => null()
+        this%kernelSDX   => null()
+        this%kernelSDY   => null()
+        this%kernelSDZ   => null()
+
+        ! Kernel indexes
+        this%kernelDBIndexes          = 0
+        this%kernelSigmaDBIndexes     = 0
+        this%kernelSDDBIndexes        = 0
+        this%kernelDBFlatIndexes      = 0
+        this%kernelSigmaDBFlatIndexes = 0
+        this%transposeKernel          = .false.
+        this%transposeKernelSigma     = .false.
+        this%skipKernelSigma          = .false.
+        this%kernelXGSpan = 0
+        this%kernelYGSpan = 0
+        this%kernelZGSpan = 0
+        this%kernelXMSpan = 0
+        this%kernelYMSpan = 0
+        this%kernelZMSpan = 0
+        this%kernelSigmaXGSpan = 0
+        this%kernelSigmaYGSpan = 0
+        this%kernelSigmaZGSpan = 0
+        this%kernelSigmaXMSpan = 0
+        this%kernelSigmaYMSpan = 0
+        this%kernelSigmaZMSpan = 0
+        this%kernelSDXGSpan = 0
+        this%kernelSDYGSpan = 0
+        this%kernelSDZGSpan = 0
+        this%kernelSDXMSpan = 0
+        this%kernelSDYMSpan = 0
+        this%kernelSDZMSpan = 0
+
+    end subroutine
 
 
 end module GridCellModule

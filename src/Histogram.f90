@@ -110,10 +110,14 @@ contains
         integer                            :: np, ix, iy, iz
         !------------------------------------------------------------------------------
 
+        ! Reset counts
+        this%counts = 0
+
         nPointsShape = shape(dataPoints)
         
-        print *, 'HISTOGRAM:: NPOINTS SHAPE', nPointsShape
-
+        !print *, 'HISTOGRAM:: NPOINTS SHAPE', nPointsShape
+        !print *, 'HISTOGRAM:: binSize', this%binSize
+        !print *, 'HISTOGRAM:: nBINS', this%nBins
 
         ! Verify the 1D, 2D case
 
@@ -123,6 +127,20 @@ contains
             ix = floor( dataPoints( np, 1 )/this%binSize(1) ) + 1 
             iy = floor( dataPoints( np, 2 )/this%binSize(2) ) + 1 
             iz = floor( dataPoints( np, 3 )/this%binSize(3) ) + 1 
+
+            ! Points outside the grid are not taken into account
+            if( ( ix .gt. this%nBins(1) ) .or. ( ix .le. 0 ) ) then
+                !print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
+                cycle
+            end if
+            if( ( iy .gt. this%nBins(2) ) .or. ( iy .le. 0 ) ) then
+                !print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
+                cycle
+            end if
+            if( ( iz .gt. this%nBins(3) ) .or. ( iz .le. 0 ) ) then
+                !print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
+                cycle
+            end if
 
             ! Increase counter
             this%counts( ix, iy, iz ) = this%counts( ix, iy, iz ) + 1
@@ -146,12 +164,18 @@ contains
         integer              :: icount = 1 
         !------------------------------------------------------------------------------
 
+        ! Reset icount
+        icount = 1
+
         this%nActiveBins = count( this%counts/=0 )
 
         ! MANAGE WHAT TO DO WITH ALLOCATED ARRAY 
         if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
         allocate( this%activeBinIds( 3, this%nActiveBins ) )
-       
+        
+        print *, 'NACTIVEBINS ', this%nActiveBins, icount
+
+
         ! Following column-major nesting
         ! This could be in parallel with OpenMP (?)
         do iz = 1, this%nBins(3)
