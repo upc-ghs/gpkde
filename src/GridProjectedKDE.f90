@@ -1135,8 +1135,8 @@ contains
         end if 
 
        
-        if ( present( outputFileUnit ) .and. present( outputDataId ) ) then
-            call this%ExportDensityUnit( outputFileUnit, outputDataId )
+        if ( present( outputFileUnit ) .and. present( outputDataId ) .and. present( particleGroupId )) then
+            call this%ExportDensityUnit( outputFileUnit, outputDataId, particleGroupId )
         else 
             call this%ExportDensity( outputFileName )
         end if
@@ -3258,7 +3258,8 @@ contains
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
                     ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES/COLUMNS
-                    write(outputUnit,"(I6,I6,I6,I6,I6,F16.8)") outputDataId, particleGroupId, ix, iy, iz, this%densityEstimateGrid( ix, iy, iz )
+                    write(outputUnit,"(I6,I6,I6,I6,I6,F16.8)") outputDataId, particleGroupId, &
+                        ix, iy, iz, this%densityEstimateGrid( ix, iy, iz )
                 end do
             end do
         end do
