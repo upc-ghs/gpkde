@@ -928,6 +928,7 @@ contains
     ! Density computation manager 
     subroutine prComputeDensity( this, dataPoints, nOptimizationLoops, &
                          outputFileName, outputFileUnit, outputDataId, &
+                                                      particleGroupId, &
                                               persistentKernelDatabase )
         !------------------------------------------------------------------------------
         ! 
@@ -955,6 +956,7 @@ contains
         ! For integration with modpath 
         integer, intent(in), optional :: outputFileUnit
         integer, intent(in), optional :: outputDataId
+        integer, intent(in), optional :: particleGroupId
         logical, intent(in), optional :: persistentKernelDatabase
         logical :: persistKDB = .true.
 
@@ -3235,7 +3237,7 @@ contains
     end subroutine prExportDensity
 
 
-    subroutine prExportDensityUnit( this, outputUnit, outputDataId )
+    subroutine prExportDensityUnit( this, outputUnit, outputDataId, particleGroupId )
         !------------------------------------------------------------------------------
         ! 
         !------------------------------------------------------------------------------
@@ -3245,6 +3247,7 @@ contains
         class(GridProjectedKDEType) :: this
         integer, intent(in) :: outputUnit
         integer, intent(in) :: outputDataId
+        integer, intent(in) :: particleGroupId
         integer :: ix, iy, iz, n
         !------------------------------------------------------------------------------
 
@@ -3254,8 +3257,8 @@ contains
             do iy = 1, this%nBins(2)
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-                    ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-                    write(outputUnit,"(I6,I6,I6,I6,F16.8)") outputDataId, ix, iy, iz, this%densityEstimateGrid( ix, iy, iz )
+                    ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES/COLUMNS
+                    write(outputUnit,"(I6,I6,I6,I6,I6,F16.8)") outputDataId, particleGroupId, ix, iy, iz, this%densityEstimateGrid( ix, iy, iz )
                 end do
             end do
         end do
