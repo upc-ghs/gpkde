@@ -488,8 +488,17 @@ contains
         this%domainSize = domainSize
         this%nBins      = ceiling( domainSize/binSize )
 
-        print  *, 'GPKDEINIT: DOMAINSIZE', domainSize, this%domainSize
-        print  *, 'GPKDEINIT: BINSIZE', binSize, this%binSize, this%domainSize
+        print  *, 'GPKDEINIT: DOMAINSIZE', domainSize
+        print  *, 'GPKDEINIT: BINSIZE', binSize 
+        print  *, 'GPKDEINIT: NBINS', this%nBins
+
+        
+        ! Depending on nBins, is the number of dimensions 
+        ! of the reconstruction process. If any nBins is 1, 
+        ! then that dimension is compressed. e.g. nBins = (10,1,20),
+        ! then it is a 2D reconstruction process where dimensions
+        ! x and z define the 2D plane.
+
 
         ! Initialize histogram
         call this%histogram%Initialize( this%nBins, this%binSize )
@@ -1401,17 +1410,17 @@ contains
             !print *, 'debug_nestimate_min', minval( nEstimateArray )
 
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Update kernelSigmaSupport 
             call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                                nEstimateArray, kernelSigmaSupportScale )
             ! Spread it, isotropic 
             kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, nDim )
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, 'timer_support_scale ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, 'timer_support_scale ', elapsedTime2, ' seconds'
 
 
             !! LOGGER

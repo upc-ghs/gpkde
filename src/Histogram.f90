@@ -138,7 +138,7 @@ contains
                 cycle
             end if
             if( ( iz .gt. this%nBins(3) ) .or. ( iz .le. 0 ) ) then
-                !print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
+                print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
                 cycle
             end if
 
