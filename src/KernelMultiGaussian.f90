@@ -320,6 +320,12 @@ contains
 
         ! Assign kernel properties
         this%bandwidth = bandwidth
+
+        ! It should be expected that for less than 3D, bandwith of compressed 
+        ! dimension should be zero
+
+        ! This means that matrixPositiveShape will have a zero in the compressed dimension
+
         this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
 
         allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
@@ -352,8 +358,7 @@ contains
         class( KernelMultiGaussianType ) :: this 
         integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
         ! local 
-        doubleprecision, dimension(3) :: hLambda
-        !doubleprecision, dimension(:)    , allocatable :: hLambda
+        doubleprecision, dimension(3)                  :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------

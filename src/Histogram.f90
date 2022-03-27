@@ -38,7 +38,7 @@ module HistogramModule
 contains
 
 
-    subroutine prInitialize( this, nBins, binSize )
+    subroutine prInitialize( this, nBins, binSize, dimensionMask )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -46,24 +46,31 @@ contains
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none 
-        class(HistogramType)          :: this
-        integer, dimension(:)         :: nBins
-        doubleprecision, dimension(:) :: binSize
-        integer                       :: nBinsShape
+        class(HistogramType)            :: this
+        integer, dimension(:)           :: nBins
+        doubleprecision, dimension(:)   :: binSize
+        integer                         :: nBinsShape
+        integer, dimension(3), optional :: dimensionMask
+        integer, dimension(3)           :: locDimensionMask
         !------------------------------------------------------------------------------
 
         nBinsShape = size( nBins ) 
         allocate(   this%nBins( nBinsShape ) ) 
         allocate( this%binSize( nBinsShape ) ) 
 
+        if( present(dimensionMask) ) then 
+            locDimensionMask = dimensionMask
+        else
+            locDimensionMask = (/1,1,1/)
+        end if
+
         this%nBins     = nBins
         this%binSize   = binSize
-        this%binVolume = product( binSize )
+        this%binVolume = product( binSize, mask=(locDimensionMask.eq.1) ) 
 
-        ! Verify what happens in the 2D case
-        ! if nBins(j) = 0, allocation still leaves
-        ! one index in dimension j
-        ! e.g. nBins(nx,ny,0) => (nx, ny, 1)
+        print *, 'COMPUTED BIN VOLUME BASED ON DIMENSIONS', this%binVolume
+
+        ! Allocate and initialize histogram counts
         allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
         this%counts = 0
 
@@ -105,45 +112,35 @@ contains
         implicit none 
         class(HistogramType) :: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
-        !integer                            :: nPoints
         integer, dimension(2)              :: nPointsShape
-        integer                            :: np, ix, iy, iz
+        integer                            :: np, ix, iy, iz, nd
+        integer, dimension(3)              :: gridIndexes
         !------------------------------------------------------------------------------
 
         ! Reset counts
-        this%counts = 0
-
+        this%counts  = 0
         nPointsShape = shape(dataPoints)
-        
-        !print *, 'HISTOGRAM:: NPOINTS SHAPE', nPointsShape
-        !print *, 'HISTOGRAM:: binSize', this%binSize
-        !print *, 'HISTOGRAM:: nBINS', this%nBins
 
-        ! Verify the 1D, 2D case
 
-        ! This could be done with OpenMP 
+        ! This could be done with OpenMP (?) 
         do np = 1, nPointsShape(1)
 
-            ix = floor( dataPoints( np, 1 )/this%binSize(1) ) + 1 
-            iy = floor( dataPoints( np, 2 )/this%binSize(2) ) + 1 
-            iz = floor( dataPoints( np, 3 )/this%binSize(3) ) + 1 
+            gridIndexes = 1
+            do nd = 1, 3
+                if ( this%nBins(nd) .gt. 1 ) then
+                    gridIndexes(nd) = floor( dataPoints( np, nd )/this%binSize(nd) ) + 1
+                end if 
+            end do
 
             ! Points outside the grid are not taken into account
-            if( ( ix .gt. this%nBins(1) ) .or. ( ix .le. 0 ) ) then
-                !print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
-                cycle
-            end if
-            if( ( iy .gt. this%nBins(2) ) .or. ( iy .le. 0 ) ) then
-                !print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
-                cycle
-            end if
-            if( ( iz .gt. this%nBins(3) ) .or. ( iz .le. 0 ) ) then
-                print *, 'ERROR INCONSISTENT ', dataPoints( np, : )
+            if( any( gridIndexes .gt. this%nBins ) .or. any( gridIndexes .le. 0 ) ) then
+                print *, ' GPKDE:HISTOGRAM: INCONSISTENCY '
                 cycle
             end if
 
             ! Increase counter
-            this%counts( ix, iy, iz ) = this%counts( ix, iy, iz ) + 1
+            this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+                this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1
 
         end do 
        
@@ -169,13 +166,10 @@ contains
 
         this%nActiveBins = count( this%counts/=0 )
 
-        ! MANAGE WHAT TO DO WITH ALLOCATED ARRAY 
+        ! Reallocate activeBinIds to new size 
         if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
         allocate( this%activeBinIds( 3, this%nActiveBins ) )
         
-        print *, 'NACTIVEBINS ', this%nActiveBins, icount
-
-
         ! Following column-major nesting
         ! This could be in parallel with OpenMP (?)
         do iz = 1, this%nBins(3)
