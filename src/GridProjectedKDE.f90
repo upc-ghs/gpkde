@@ -647,9 +647,11 @@ contains
         
         nDim = sum(dimensionMask)
 
-        print *, 'NDIMENSIONS SETTED TO', nDim 
+        print *, 'NDIMENSIONS SETTED TO ', nDim 
 
         this%dimensionMask = dimensionMask
+
+        print *, 'DIMENSION MASK ', this%dimensionMask
 
         return
 
@@ -1495,7 +1497,7 @@ contains
     
                 ! Assign gc pointer 
                 gc => activeGridCells(n)
-   
+  
                 if ( any( curvatureBandwidth( :, n ) .lt. 0d0 ) ) cycle
 
                 ! Compute indexes on kernel database
@@ -1872,6 +1874,12 @@ contains
                 !netRoughnessArray( n ) = 2*( roughnessXX(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/2) + 2*roughnessXZ(iX,iY,iZ)
                 ! 2D y,z
                 !netRoughnessArray( n ) = 2*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ) )**(1d0/2) + 2*roughnessYZ(iX,iY,iZ)
+                ! 1D x
+                !netRoughnessArray( n ) = roughnessXX(iX,iY,iZ)
+                ! 1D y
+                !netRoughnessArray( n ) = roughnessYY(iX,iY,iZ)
+                ! 1D z
+                !netRoughnessArray( n ) = roughnessZZ(iX,iY,iZ)
 
             end do
             !$omp end parallel do 
@@ -1974,11 +1982,11 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_density_update ', elapsedTime2, ' seconds'
 
-        print *, maxval( this%histogram%counts )
-        print *, maxval( densityEstimateGrid )*this%histogram%binVolume 
-        print *, maxval( kernelSmoothing )
-        print *, sum( kernelSmoothing )
-        !call exit(0)
+            print *, maxval( this%histogram%counts )
+            print *, maxval( densityEstimateGrid )*this%histogram%binVolume 
+            print *, maxval( kernelSmoothing )
+            print *, sum( kernelSmoothing )
+            !call exit(0)
             !! LOGGER
             !!print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
             !!print *, 'debug_densityestimate_min', minval( densityEstimateArray )
@@ -2939,6 +2947,7 @@ contains
 
 
         ! Compute shape dependent terms
+        curvatureBandwidth = 0d0
         do nd = 1, 3
             
             if ( this%dimensionMask(nd) .eq. 1 ) then 
@@ -3119,6 +3128,7 @@ contains
         ! Compute indexes where smoothing > 0d0
         do nd = 1, 3
             if ( smoothing( nd ) .le. 0d0 ) cycle
+            !print *, smoothing(nd), this%binSize(nd), this%minHOverLambda(nd), this%deltaHOverLambda(nd)
             indexes(nd) = min(&
                 max(&
                     floor(&
