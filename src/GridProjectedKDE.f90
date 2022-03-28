@@ -400,9 +400,12 @@ contains
         this%domainSize = domainSize
         this%nBins      = ceiling( domainSize/binSize )
 
-        print  *, 'GPKDEINIT: DOMAINSIZE', domainSize
-        print  *, 'GPKDEINIT: BINSIZE', binSize 
-        print  *, 'GPKDEINIT: NBINS', this%nBins
+        print *, '#############################################################'
+        print *, '# GPKDE: INITIALIZATION '
+        print *, '# '
+        print *, '# DOMAINSIZE ', domainSize
+        print *, '# BINSIZE    ', binSize 
+        print *, '# NBINS      ', this%nBins
 
         
         ! Depending on nBins, is the number of dimensions 
@@ -410,16 +413,43 @@ contains
         ! then that dimension is compressed. e.g. nBins = (10,1,20),
         ! then it is a 2D reconstruction process where dimensions
         ! x and z define the 2D plane.
-        ! Initialize module constants
+
+
+        ! Initialize module dimensions
         call prInitializeModuleDimensions( this, nDim, dimensionMask ) 
         
 
-        ! Initialize module constants
+        ! Initialize module constants, uses nDim
         call this%InitializeModuleConstants()
 
+        
+        ! Curvature functions
+        !! if 3D requires XX, YY, ZZ
+        !if ( nDim .eq. 3 ) then 
+
+        !else if ( nDim .eq. 2 ) then 
+        !! if 2D requires according
+        !! x,y: dimensionMask = (1,1,0): XX, YY
+        !! x,z: dimensionMask = (1,0,1): XX, ZZ
+        !! y,z: dimensionMask = (0,1,1): YY, ZZ 
+
+        !else
+        !! if 1D requires
+        !! x: dimensionMask = (1,0,0): XX
+        !! y: dimensionMask = (0,1,0): YY
+        !! z: dimensionMask = (0,0,1): ZZ
+
+        !end if 
+        
+        ! Initialize roughness functions
 
         ! NUMBER OF DIMENSIONS ALSO DETERMINE THE FUNCTION EMPLOYED FOR COMPUTATION 
         ! OF ROUGHNESS
+
+        ! Note that dimensionality also determines allocation of variables
+        ! kernel database and so on
+
+
 
         ! Initialize histogram
         call this%histogram%Initialize( this%nBins, this%binSize, dimensionMask=dimensionMask )
@@ -590,7 +620,7 @@ contains
         !doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
 
         print *, ' END OF GPKDE MODULE INITIALIZATION ' 
-        !call exit(0)
+        call exit(0)
 
 
     end subroutine prInitialize
@@ -670,7 +700,6 @@ contains
         class( GridProjectedKDEType ) :: this 
         !------------------------------------------------------------------------------
 
-        print *, 'INITILIZA MODULE CONSTNATWS', nDim
 
         ! Compute constants
         this%supportDimensionConstant = ( ( nDim + 2 )*( 8*pi )**( 0.5*nDim ) )**( 0.25 )
@@ -685,6 +714,63 @@ contains
 
 
     end subroutine prInitializeModuleConstants 
+
+
+
+    subroutine prInitializeCurvatureFunctions( this ) 
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        class( GridProjectedKDEType ) :: this 
+        !------------------------------------------------------------------------------
+
+
+        !! if 3D requires XX, YY, ZZ
+        !if ( nDim .eq. 3 ) then
+
+            ! this%ComputeCurvatures => prComputeCurvatures3D 
+            ! this%ComputeNetRoughness => prComputeNetRoughness3D
+
+        !else if ( nDim .eq. 2 ) then
+
+            !! if 2D requires according
+            !! x,y: dimensionMask = (1,1,0): XX, YY
+            ! this%ComputeCurvatures => prComputeCurvatures2DXY
+            ! this%ComputeNetRoughness => prComputeNetRoughness2DXY
+
+            !! x,z: dimensionMask = (1,0,1): XX, ZZ
+            ! this%ComputeCurvatures => prComputeCurvatures2DXZ
+            ! this%ComputeNetRoughness => prComputeNetRoughness2DXZ
+
+            !! y,z: dimensionMask = (0,1,1): YY, ZZ 
+            ! this%ComputeCurvatures => prComputeCurvatures2DYZ
+            ! this%ComputeNetRoughness => prComputeNetRoughness2DYZ
+
+        !else
+
+            !! if 1D requires
+            !! x: dimensionMask = (1,0,0): XX
+            ! this%ComputeCurvatures => prComputeCurvatures1DX
+            ! this%ComputeNetRoughness => prComputeNetRoughness1DX
+
+            !! y: dimensionMask = (0,1,0): YY
+            ! this%ComputeCurvatures => prComputeCurvatures1DY
+            ! this%ComputeNetRoughness => prComputeNetRoughness1DY
+
+            !! z: dimensionMask = (0,0,1): ZZ
+            ! this%ComputeCurvatures => prComputeCurvatures1DZ
+            ! this%ComputeNetRoughness => prComputeNetRoughness1DZ
+
+        !end if 
+
+
+    end subroutine prInitializeCurvatureFunctions
+
+
+
 
 
 
@@ -1172,6 +1258,8 @@ contains
 
         ! Reset grid values
         densityEstimateGrid = 0d0
+
+        ! Define allocation function for grids
         nEstimateGrid = 0d0
         curvatureX    = 0d0     
         curvatureY    = 0d0
@@ -1415,6 +1503,7 @@ contains
                 gc => activeGridCells(n)
 
                 ! Verify if should be skipped in subsequent computations
+                ! can this really happen ?
                 if (  kernelSigmaSupportScale( n ) .lt. 0d0 ) then 
                     gc%skipKernelSigma = .true.
                     cycle
@@ -1477,6 +1566,12 @@ contains
             !print *, 'debug_curvaturebandwidth_max', maxval( curvatureBandwidth )
             !print *, 'debug_curvaturebandwidth_min', minval( curvatureBandwidth )
 
+
+            !! CURVATURES
+            ! REQUIRES:
+            ! activeGridCells
+            ! curvatureX, curvatureY, curvatureZ
+            ! curvatureBandwith
 
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
@@ -1590,6 +1685,8 @@ contains
 
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+
+
             ! Product curvatures and restart roughnesses
             curvatureXX = curvatureX*curvatureX
             curvatureYY = curvatureY*curvatureY
@@ -1833,6 +1930,7 @@ contains
 
             ! TIC
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+
             ! Net roughness
             !$omp parallel do schedule( dynamic, 1 ) &
             !$omp default( none )           &
@@ -1882,7 +1980,8 @@ contains
                 !netRoughnessArray( n ) = roughnessZZ(iX,iY,iZ)
 
             end do
-            !$omp end parallel do 
+            !$omp end parallel do
+
             ! TOC
             call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
@@ -1904,6 +2003,7 @@ contains
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             print *, 'timer_optimal_smoothing_and_shape ', elapsedTime2, ' seconds'
 
+
             !! LOGGER
             !print *, 'debug_kernelsmoothing_x_max', maxval( kernelSmoothing(:,1) )
             !print *, 'debug_kernelsmoothing_x_min', minval( kernelSmoothing(:,1) )
@@ -1917,14 +2017,15 @@ contains
             call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Update density
             densityEstimateGrid = 0d0
-            !$omp parallel do schedule( dynamic, 1 ) &
-            !$omp default( none ) &
-            !$omp shared( this )  &
-            !$omp shared( activeGridCells, kernelSmoothing ) & 
-            !$omp shared( densityEstimateArray ) & 
+            !$omp parallel do schedule( dynamic, 1 )  &
+            !$omp default( none )                     &
+            !$omp shared( this )                      &
+            !$omp shared( activeGridCells )           & 
+            !$omp shared( kernelSmoothing )           & 
+            !$omp shared( densityEstimateArray )      & 
             !$omp reduction( +: densityEstimateGrid ) & 
-            !$omp private( gc ) & 
-            !$omp private( kernelMatrix ) & 
+            !$omp private( gc )                       & 
+            !$omp private( kernelMatrix )             & 
             !$omp private( transposedKernelMatrix )        
             do n = 1, this%nComputeBins
 
@@ -1941,7 +2042,6 @@ contains
                 gc%kernel => this%kernelDatabaseFlat( gc%kernelDBFlatIndexes(1), gc%kernelDBFlatIndexes(2) )
 
                 if ( gc%transposeKernel ) then 
-                    !print *, 'update density TRANSPOSE!!'
                     ! Determine spans
                     call gc%kernel%ComputeGridSpansTranspose( gc%id, this%nBins, &
                               gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan, & 
