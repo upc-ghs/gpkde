@@ -3,7 +3,8 @@ module GridCellModule
     use KernelMultiGaussianModule, only : KernelMultiGaussianType, &
                                       KernelSecondDerivativeXType, &
                                       KernelSecondDerivativeYType, &
-                                      KernelSecondDerivativeZType
+                                      KernelSecondDerivativeZType, &
+                                      KernelType
     implicit none
 
     type GridCellType
@@ -17,6 +18,7 @@ module GridCellModule
         type( KernelSecondDerivativeXType ), pointer :: kernelSDX   => null()
         type( KernelSecondDerivativeYType ), pointer :: kernelSDY   => null()
         type( KernelSecondDerivativeZType ), pointer :: kernelSDZ   => null()
+        class( KernelType )                , pointer :: kernelSD    => null()
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0

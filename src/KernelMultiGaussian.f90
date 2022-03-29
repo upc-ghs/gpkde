@@ -20,7 +20,7 @@ module KernelMultiGaussianModule
     private
 
 
-    type, abstract :: KernelType
+    type, public, abstract :: KernelType
         
         ! Properties
         doubleprecision, dimension(3) :: binSize     = 0d0
