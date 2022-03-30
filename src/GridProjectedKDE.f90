@@ -1909,7 +1909,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
 
-        print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: NOPTLOOPS'
+        !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: NOPTLOOPS'
 
         ! Define nOptimizationLoops
         if ( present( nOptimizationLoops ) ) then 
@@ -1918,19 +1918,19 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             localNOptimizationLoops = defaultNOptLoops
         end if 
 
-        print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: OUTPUTFILENAME'
+        !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: OUTPUTFILENAME'
         if ( present( outputFileName ) ) then 
             this%outputFileName = outputFileName
         end if 
 
-        print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB'
+        !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB'
         if ( present( persistentKernelDatabase ) ) then
-            print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB: INSIDE IF'
+            !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB: INSIDE IF'
             persistKDB = persistentKernelDatabase
-            print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB: AFTER ASSIGNMENT '
+            !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB: AFTER ASSIGNMENT '
         end if
 
-        print *, 'GPKDE: COMPUTE HISTOGRAM COUNTS '
+        !print *, 'GPKDE: COMPUTE HISTOGRAM COUNTS '
 
         ! Histogram quantities
         call this%histogram%ComputeCounts( dataPoints )
@@ -1939,12 +1939,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Bounding box or active bins
         if ( useBoundingBox ) then 
 
-            call system_clock(clockCountStart, clockCountRate, clockCountMax)
+            !! TIC
+            !call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
             ! Compute bounding box
             call this%histogram%ComputeBoundingBox()
-            print *, '## GPKDE: histogram with nBBoxBins', &
-                          this%histogram%nBBoxBins
+            !print *, '## GPKDE: histogram with nBBoxBins', &
+            !              this%histogram%nBBoxBins
 
             ! At this stage should be a filtering of 
             ! the total active cells
@@ -2005,18 +2006,18 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 end if 
             end do 
 
-            print *, '## GPKDE: after filtering there are nComputeBins', this%nComputeBins
+            !print *, '## GPKDE: after filtering there are nComputeBins', this%nComputeBins
             deallocate( computeThisBin )
    
 
-            ! TOC
-            call system_clock(clockCountStop, clockCountRate, clockCountMax)
-            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-            print *, '## GPKDE detecting nComputeBins ', elapsedTime, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            !print *, '## GPKDE detecting nComputeBins ', elapsedTime, ' seconds'
 
 
         else
-            print *, 'GPKDE: WILL COMPUTE ACTIVE BIN IDS'
+            !print *, 'GPKDE: WILL COMPUTE ACTIVE BIN IDS'
 
             ! Active bins: Only cells with particles
             call this%histogram%ComputeActiveBinIds()
@@ -2029,9 +2030,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Density optimization 
         if ( this%databaseOptimization ) then
-            print *, 'GPKDE: ENTERED DATABASE OPTIMIZATION: '
-            ! TIC
-            call system_clock(clockCountStart, clockCountRate, clockCountMax)
+            !print *, 'GPKDE: ENTERED DATABASE OPTIMIZATION: '
+            !! TIC
+            !call system_clock(clockCountStart, clockCountRate, clockCountMax)
             ! Initialize database if not allocated
             if ( .not. allocated( this%kernelDatabaseFlat ) ) then 
                 call this%InitializeKernelDatabaseFlat( this%minHOverLambda(1), &
@@ -2048,26 +2049,26 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 call this%DropKernelDatabase()
             end if
 
-            ! TOC
-            call system_clock(clockCountStop, clockCountRate, clockCountMax)
-            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-            print *, '## GPKDE database_optimization_time ', elapsedTime, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            !print *, '## GPKDE database_optimization_time ', elapsedTime, ' seconds'
 
 
         end if 
 
 
         if ( this%bruteOptimization ) then 
-            ! TIC
-            call system_clock(clockCountStart, clockCountRate, clockCountMax)
-            print *, '#############################################'
-            print *, '## GPKDE: brute optimization stage'
+            !! TIC
+            !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+            !print *, '#############################################'
+            !print *, '## GPKDE: brute optimization stage'
             call this%ComputeDensityParallel( nOptimizationLoops=localNOptimizationLoops, &
                                    anisotropicSigmaSupport = this%anisotropicSigmaSupport )
-            ! TOC
-            call system_clock(clockCountStop, clockCountRate, clockCountMax)
-            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-            print *, '## GPKDE brute_optimization_time ', elapsedTime, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            !print *, '## GPKDE brute_optimization_time ', elapsedTime, ' seconds'
         end if 
 
        
@@ -2211,8 +2212,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 end where
             end if 
         end do
-        print *, 'GPKDE: COMPUTED THE KERNEL SMOOTHING SCALE'
-        print *, 'GPKDE: THE INITIAL SMOOTHING ', this%initialSmoothing
+        !print *, 'GPKDE: COMPUTED THE KERNEL SMOOTHING SCALE'
+        !print *, 'GPKDE: THE INITIAL SMOOTHING ', this%initialSmoothing
 
         ! Initialize density grid
         !$omp parallel do schedule( dynamic, 1 )  &
@@ -2275,21 +2276,21 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         end do
         !$omp end parallel do 
 
-        print *, 'GPKDE: COMPUTED INITIAL DENSITY ESTIMATE'
-        print *, maxval( this%histogram%counts )
-        print *, maxval( densityEstimateGrid )*this%histogram%binVolume 
+        !print *, 'GPKDE: COMPUTED INITIAL DENSITY ESTIMATE'
+        !print *, maxval( this%histogram%counts )
+        !print *, maxval( densityEstimateGrid )*this%histogram%binVolume 
         !call exit(0)
 
 
         ! Optimization loop
         do m = 1, nOptLoops
-            ! LOGGER
-            print *, '################################################################################' 
-            print *, 'optimization_loop ', m
-            ! TIC
-            call system_clock(clockCountStart, clockCountRate, clockCountMax)
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! LOGGER
+            !print *, '################################################################################' 
+            !print *, 'optimization_loop ', m
+            !! TIC
+            !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
 
             ! nEstimate 
             !$omp parallel do schedule( dynamic, 1 ) &
@@ -2338,10 +2339,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             end do
             !$omp end parallel do
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            !print *, 'timer_n_estimate_first ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !!print *, 'timer_n_estimate_first ', elapsedTime2, ' seconds'
 
 
             !! LOGGER
@@ -2362,14 +2363,12 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             !print *, 'timer_support_scale ', elapsedTime2, ' seconds'
 
-
             !! LOGGER
             !print *, 'debug_kernelsigmasupport_max', maxval( kernelSigmaSupport )
             !print *, 'debug_kernelsigmasupport_min', minval( kernelSigmaSupport )
-           
 
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             ! Update nEstimate
             nEstimateGrid  = 0d0
             nEstimateArray = 0d0
@@ -2424,10 +2423,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             end do
             !$omp end parallel do 
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            !print *, 'timer_n_estimate_second ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !!print *, 'timer_n_estimate_second ', elapsedTime2, ' seconds'
 
 
             ! Curvature bandwidths
@@ -3033,26 +3032,26 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             ! Net roughness
             ! not so fast as previous version without interface
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             call this%ComputeKernelDatabaseNetRoughness(activeGridCells, curvatureBandwidth, &
                                        roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                                                            netRoughnessArray )
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            print *, 'timer_net_roughness_interface_ ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !print *, 'timer_net_roughness_interface_ ', elapsedTime2, ' seconds'
 
 
             ! Optimal smoothing
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                                     roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                               kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             !print *, 'timer_optimal_smoothing_and_shape ', elapsedTime2, ' seconds'
 
 
@@ -3066,8 +3065,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
 
             ! Update density
-            ! TIC
-            call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
+            !! TIC
+            !call system_clock(clockCountStart2, clockCountRate2, clockCountMax2)
             densityEstimateGrid = 0d0
             !$omp parallel do schedule( dynamic, 1 )  &
             !$omp default( none )                     &
@@ -3129,15 +3128,15 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             end do
             !$omp end parallel do
-            ! TOC
-            call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
-            elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
-            !print *, 'timer_density_update ', elapsedTime2, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
+            !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
+            !!print *, 'timer_density_update ', elapsedTime2, ' seconds'
 
-            print *, 'max_histogram ', maxval( this%histogram%counts )
-            print *, 'max_density_volume ', maxval( densityEstimateGrid )*this%histogram%binVolume 
-            print *, 'max_kernel_smoothing', maxval( kernelSmoothing )
-            print *, 'sum_kernel_smoothing', sum( kernelSmoothing )
+            !print *, 'max_histogram ', maxval( this%histogram%counts )
+            !print *, 'max_density_volume ', maxval( densityEstimateGrid )*this%histogram%binVolume 
+            !print *, 'max_kernel_smoothing', maxval( kernelSmoothing )
+            !print *, 'sum_kernel_smoothing', sum( kernelSmoothing )
             !call exit(0)
             !! LOGGER
             !!print *, 'debug_densityestimate_max', maxval( densityEstimateArray )
@@ -3188,10 +3187,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !end if 
 
 
-            ! TOC
-            call system_clock(clockCountStop, clockCountRate, clockCountMax)
-            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-            print *, 'optimization_loop_time ', elapsedTime, ' seconds'
+            !! TOC
+            !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            !print *, 'optimization_loop_time ', elapsedTime, ' seconds'
 
 
         end do
