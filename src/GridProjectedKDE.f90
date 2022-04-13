@@ -1941,15 +1941,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB: AFTER ASSIGNMENT '
         end if
 
-        print *, 'GPKDE: COMPUTE HISTOGRAM COUNTS '
 
         ! Histogram quantities
         call this%histogram%ComputeCounts( dataPoints )
+
         
-        print *, 'GPKDE: PASSED COMPUTE HISTOGRAM COUNTS '
-
-        print *, maxval( this%histogram%counts )
-
         ! Bounding box or active bins
         if ( useBoundingBox ) then 
 
@@ -2044,7 +2040,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Density optimization 
         if ( this%databaseOptimization ) then
-            print *, 'GPKDE: ENTERED DATABASE OPTIMIZATION: '
+            !print *, 'GPKDE: ENTERED DATABASE OPTIMIZATION: '
             !! TIC
             !call system_clock(clockCountStart, clockCountRate, clockCountMax)
             ! Initialize database if not allocated
@@ -2202,8 +2198,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             nOptLoops = defaultNOptLoops
         end if 
 
-        print *, defaultNOptLoops
-        print *, nOptLoops
+        !print *, defaultNOptLoops
+        !print *, nOptLoops
 
 
         ! Initialize active grid cells
@@ -2229,22 +2225,22 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 end where
             end if 
         end do
-        print *, 'GPKDE: COMPUTED THE KERNEL SMOOTHING SCALE'
-        print *, 'GPKDE: THE INITIAL SMOOTHING ', this%initialSmoothing
 
-        print *, 'N COMPUTE BINS ', this%nComputeBins
-        print *, 'SHAPE DENSITY GRID ', shape( densityEstimateGrid ) 
+        !print *, 'GPKDE: COMPUTED THE KERNEL SMOOTHING SCALE'
+        !print *, 'GPKDE: THE INITIAL SMOOTHING ', this%initialSmoothing
+        !print *, 'N COMPUTE BINS ', this%nComputeBins
+        !print *, 'SHAPE DENSITY GRID ', shape( densityEstimateGrid ) 
 
         ! Initialize density grid
-        !!$omp parallel do schedule( dynamic, 1 )  &
-        !!$omp default( none ) &
-        !!$omp shared( this )  &
-        !!$omp shared( activeGridCells, kernelSmoothing ) & 
-        !!$omp shared( densityEstimateArray ) & 
-        !!$omp reduction( +: densityEstimateGrid ) & 
-        !!$omp private( gc ) & 
-        !!$omp private( kernelMatrix ) & 
-        !!$omp private( transposedKernelMatrix )        
+        !$omp parallel do schedule( dynamic, 1 )  &
+        !$omp default( none ) &
+        !$omp shared( this )  &
+        !$omp shared( activeGridCells, kernelSmoothing ) & 
+        !$omp shared( densityEstimateArray ) & 
+        !$omp reduction( +: densityEstimateGrid ) & 
+        !$omp private( gc ) & 
+        !$omp private( kernelMatrix ) & 
+        !$omp private( transposedKernelMatrix )        
         do n = 1, this%nComputeBins
             
             ! Assign gc pointer 
@@ -2274,13 +2270,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 kernelMatrix => gc%kernel%matrix
             end if 
 
-
-            !print *, 'INDEX', n, gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan
-            !print *, 'INDEX', n, gc%id
-            print *, 'INDEX', n, gc%kernelDBFlatIndexes
-
-
-
             ! Compute estimate
             densityEstimateGrid(                           &
                     gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
@@ -2301,16 +2290,16 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
 
         end do
-        !!$omp end parallel do 
+        !$omp end parallel do 
 
-        print *, 'GPKDE: COMPUTED INITIAL DENSITY ESTIMATE'
+        !print *, 'GPKDE: COMPUTED INITIAL DENSITY ESTIMATE'
 
 
         ! Optimization loop
         do m = 1, nOptLoops
             ! LOGGER
-            print *, '################################################################################' 
-            print *, 'optimization_loop ', m
+            !print *, '################################################################################' 
+            !print *, 'optimization_loop ', m
             !! TIC
             !call system_clock(clockCountStart, clockCountRate, clockCountMax)
             !! TIC
@@ -2368,7 +2357,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             !!print *, 'timer_n_estimate_first ', elapsedTime2, ' seconds'
 
-            print *, 'CHECKPOINT'
+            !print *, 'CHECKPOINT'
 
             !! LOGGER
             !print *, 'debug_nestimate_max', maxval( nEstimateArray )
@@ -2383,7 +2372,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             ! Spread it, isotropic 
             kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, 3 )
 
-            print *, 'CHECKPOINT'
+            !print *, 'CHECKPOINT'
 
             !! TOC
             !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
@@ -2468,7 +2457,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !print *, 'timer_curvature_bandwidth ', elapsedTime2, ' seconds'
 
 
-            print *, 'CURVATURE BANDWITH'
+            !print *, 'CURVATURE BANDWITH'
 
 
 
@@ -3160,7 +3149,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             end do
             !$omp end parallel do
-            print *, 'UPDATE DENSIT'
+            !print *, 'UPDATE DENSIT'
             !! TOC
             !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
             !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
@@ -3225,7 +3214,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
             !print *, 'optimization_loop_time ', elapsedTime, ' seconds'
 
-            print *, 'FINISHED ONLE LOPP'
+            !print *, 'FINISHED ONLE LOPP'
 
         end do
         !call exit(0)
