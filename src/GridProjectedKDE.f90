@@ -116,6 +116,7 @@ module GridProjectedKDEModule
         ! Initialization
         doubleprecision, dimension(3)   :: binSize
         doubleprecision, dimension(3)   :: domainSize
+        doubleprecision, dimension(3)   :: domainOrigin
         doubleprecision, dimension(3)   :: initialSmoothing
         integer        , dimension(3)   :: nBins
         integer        , dimension(3)   :: dimensionMask
@@ -401,7 +402,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                                       minHOverLambda, maxHOverLambda, &
                                  deltaHOverLambda, logKernelDatabase, &
                           bruteOptimization, anisotropicSigmaSupport, &
-                                                  nOptimizationLoops  )
+                                    nOptimizationLoops, domainOrigin  )
     !------------------------------------------------------------------------------
     !
     !------------------------------------------------------------------------------
@@ -412,9 +413,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
     ! Reconstruction grid parameters
     doubleprecision, dimension(3), intent(in) :: domainSize
     doubleprecision, dimension(3), intent(in) :: binSize
-    ! Optimization loops
-    integer, intent(in), optional :: nOptimizationLoops 
+    doubleprecision, dimension(3), intent(in), optional :: domainOrigin
     doubleprecision, dimension(3), intent(in), optional :: initialSmoothing
+    integer, intent(in), optional :: nOptimizationLoops 
     ! Kernel database parameters
     logical, intent(in), optional :: databaseOptimization, flatKernelDatabase
     doubleprecision, intent(in), optional :: minHOverLambda, maxHOverLambda
@@ -428,27 +429,34 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
     ! Time monitoring
     integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
     doubleprecision :: elapsedTime
-
     !------------------------------------------------------------------------------
 
 
-    ! Initialize grid 
-    this%binSize    = binSize
-    this%domainSize = domainSize
-    this%nBins      = ceiling( domainSize/binSize )
+        ! Initialize reconstruction grid 
+        this%binSize    = binSize
+        this%domainSize = domainSize
+        this%nBins      = ceiling( domainSize/binSize )
 
-    print *, '#############################################################'
-    print *, '# GPKDE: INITIALIZATION '
-    print *, '# '
-    print *, '# DOMAINSIZE ', domainSize
-    print *, '# BINSIZE    ', binSize 
-    print *, '# NBINS      ', this%nBins
+        ! domainOrigin
+        if ( present( domainOrigin ) ) then 
+            this%domainOrigin = domainOrigin
+        else 
+            this%domainOrigin = (/0,0,0/)
+        end if
 
-    
-    ! Depending on nBins, is the number of dimensions 
-    ! of the reconstruction process. If any nBins is 1, 
-    ! then that dimension is compressed. e.g. nBins = (10,1,20),
-    ! then it is a 2D reconstruction process where dimensions
+        print *, '#############################################################'
+        print *, '# GPKDE: INITIALIZATION '
+        print *, '# '
+        print *, '# ORIGIN     ', this%domainOrigin
+        print *, '# DOMAINSIZE ', domainSize
+        print *, '# BINSIZE    ', binSize 
+        print *, '# NBINS      ', this%nBins
+
+        
+        ! Depending on nBins, is the number of dimensions 
+        ! of the reconstruction process. If any nBins is 1, 
+        ! then that dimension is compressed. e.g. nBins = (10,1,20),
+        ! then it is a 2D reconstruction process where dimensions
         ! x and z define the 2D plane.
 
         ! Initialize module dimensions
@@ -460,7 +468,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         
         ! Initialize histogram
-        call this%histogram%Initialize( this%nBins, this%binSize, dimensionMask=dimensionMask )
+        call this%histogram%Initialize( &
+              this%nBins, this%binSize, &
+           dimensionMask=dimensionMask, & 
+         domainOrigin=this%domainOrigin )
 
         
         ! Process optional arguments
@@ -1909,7 +1920,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
 
-        !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: NOPTLOOPS'
+        print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: NOPTLOOPS'
 
         ! Define nOptimizationLoops
         if ( present( nOptimizationLoops ) ) then 
@@ -1930,11 +1941,14 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: PERSISTENT KDB: AFTER ASSIGNMENT '
         end if
 
-        !print *, 'GPKDE: COMPUTE HISTOGRAM COUNTS '
+        print *, 'GPKDE: COMPUTE HISTOGRAM COUNTS '
 
         ! Histogram quantities
         call this%histogram%ComputeCounts( dataPoints )
         
+        print *, 'GPKDE: PASSED COMPUTE HISTOGRAM COUNTS '
+
+        print *, maxval( this%histogram%counts )
 
         ! Bounding box or active bins
         if ( useBoundingBox ) then 
@@ -2030,7 +2044,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Density optimization 
         if ( this%databaseOptimization ) then
-            !print *, 'GPKDE: ENTERED DATABASE OPTIMIZATION: '
+            print *, 'GPKDE: ENTERED DATABASE OPTIMIZATION: '
             !! TIC
             !call system_clock(clockCountStart, clockCountRate, clockCountMax)
             ! Initialize database if not allocated
@@ -2188,6 +2202,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             nOptLoops = defaultNOptLoops
         end if 
 
+        print *, defaultNOptLoops
+        print *, nOptLoops
+
 
         ! Initialize active grid cells
         !$omp parallel do
@@ -2212,21 +2229,24 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 end where
             end if 
         end do
-        !print *, 'GPKDE: COMPUTED THE KERNEL SMOOTHING SCALE'
-        !print *, 'GPKDE: THE INITIAL SMOOTHING ', this%initialSmoothing
+        print *, 'GPKDE: COMPUTED THE KERNEL SMOOTHING SCALE'
+        print *, 'GPKDE: THE INITIAL SMOOTHING ', this%initialSmoothing
+
+        print *, 'N COMPUTE BINS ', this%nComputeBins
+        print *, 'SHAPE DENSITY GRID ', shape( densityEstimateGrid ) 
 
         ! Initialize density grid
-        !$omp parallel do schedule( dynamic, 1 )  &
-        !$omp default( none ) &
-        !$omp shared( this )  &
-        !$omp shared( activeGridCells, kernelSmoothing ) & 
-        !$omp shared( densityEstimateArray ) & 
-        !$omp reduction( +: densityEstimateGrid ) & 
-        !$omp private( gc ) & 
-        !$omp private( kernelMatrix ) & 
-        !$omp private( transposedKernelMatrix )        
+        !!$omp parallel do schedule( dynamic, 1 )  &
+        !!$omp default( none ) &
+        !!$omp shared( this )  &
+        !!$omp shared( activeGridCells, kernelSmoothing ) & 
+        !!$omp shared( densityEstimateArray ) & 
+        !!$omp reduction( +: densityEstimateGrid ) & 
+        !!$omp private( gc ) & 
+        !!$omp private( kernelMatrix ) & 
+        !!$omp private( transposedKernelMatrix )        
         do n = 1, this%nComputeBins
-
+            
             ! Assign gc pointer 
             gc => activeGridCells(n)
 
@@ -2254,6 +2274,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 kernelMatrix => gc%kernel%matrix
             end if 
 
+
+            !print *, 'INDEX', n, gc%kernelXGSpan, gc%kernelYGSpan, gc%kernelZGSpan
+            !print *, 'INDEX', n, gc%id
+            print *, 'INDEX', n, gc%kernelDBFlatIndexes
+
+
+
             ! Compute estimate
             densityEstimateGrid(                           &
                     gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
@@ -2274,19 +2301,16 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
 
         end do
-        !$omp end parallel do 
+        !!$omp end parallel do 
 
-        !print *, 'GPKDE: COMPUTED INITIAL DENSITY ESTIMATE'
-        !print *, maxval( this%histogram%counts )
-        !print *, maxval( densityEstimateGrid )*this%histogram%binVolume 
-        !call exit(0)
+        print *, 'GPKDE: COMPUTED INITIAL DENSITY ESTIMATE'
 
 
         ! Optimization loop
         do m = 1, nOptLoops
-            !! LOGGER
-            !print *, '################################################################################' 
-            !print *, 'optimization_loop ', m
+            ! LOGGER
+            print *, '################################################################################' 
+            print *, 'optimization_loop ', m
             !! TIC
             !call system_clock(clockCountStart, clockCountRate, clockCountMax)
             !! TIC
@@ -2344,6 +2368,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             !!print *, 'timer_n_estimate_first ', elapsedTime2, ' seconds'
 
+            print *, 'CHECKPOINT'
 
             !! LOGGER
             !print *, 'debug_nestimate_max', maxval( nEstimateArray )
@@ -2357,6 +2382,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                                                nEstimateArray, kernelSigmaSupportScale )
             ! Spread it, isotropic 
             kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, 3 )
+
+            print *, 'CHECKPOINT'
 
             !! TOC
             !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
@@ -2439,6 +2466,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
             elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
             !print *, 'timer_curvature_bandwidth ', elapsedTime2, ' seconds'
+
+
+            print *, 'CURVATURE BANDWITH'
+
+
 
 
             ! Net roughness
@@ -3128,6 +3160,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             end do
             !$omp end parallel do
+            print *, 'UPDATE DENSIT'
             !! TOC
             !call system_clock(clockCountStop2, clockCountRate2, clockCountMax2)
             !elapsedTime2 = dble(clockCountStop2 - clockCountStart2) / dble(clockCountRate2)
@@ -3192,6 +3225,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
             !print *, 'optimization_loop_time ', elapsedTime, ' seconds'
 
+            print *, 'FINISHED ONLE LOPP'
 
         end do
         !call exit(0)

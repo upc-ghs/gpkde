@@ -20,6 +20,8 @@ module HistogramModule
         integer                                    :: nActiveBins
         integer, dimension(:,:), allocatable       :: boundingBoxBinIds
         integer                                    :: nBBoxBins 
+        doubleprecision, dimension(:), allocatable :: domainOrigin ! of the reconstruction grid 
+        !doubleprecision, dimension(3)              :: domainOrigin ! of the reconstruction grid 
 
     contains
 
@@ -38,7 +40,7 @@ module HistogramModule
 contains
 
 
-    subroutine prInitialize( this, nBins, binSize, dimensionMask )
+    subroutine prInitialize( this, nBins, binSize, dimensionMask, domainOrigin )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -52,23 +54,32 @@ contains
         integer                         :: nBinsShape
         integer, dimension(3), optional :: dimensionMask
         integer, dimension(3)           :: locDimensionMask
+        doubleprecision, dimension(:), optional :: domainOrigin
         !------------------------------------------------------------------------------
 
         nBinsShape = size( nBins ) 
         allocate(   this%nBins( nBinsShape ) ) 
         allocate( this%binSize( nBinsShape ) ) 
+        allocate( this%domainOrigin( nBinsShape ) ) 
 
+        ! dimensionMask
         if( present(dimensionMask) ) then 
             locDimensionMask = dimensionMask
         else
             locDimensionMask = (/1,1,1/)
         end if
 
+        ! domainOrigin
+        if ( present( domainOrigin ) ) then 
+            this%domainOrigin = domainOrigin
+        else 
+            this%domainOrigin = 0 
+        end if
+
         this%nBins     = nBins
         this%binSize   = binSize
         this%binVolume = product( binSize, mask=(locDimensionMask.eq.1) ) 
 
-        print *, 'COMPUTED BIN VOLUME BASED ON DIMENSIONS', this%binVolume
 
         ! Allocate and initialize histogram counts
         allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
@@ -128,7 +139,7 @@ contains
             gridIndexes = 1
             do nd = 1, 3
                 if ( this%nBins(nd) .gt. 1 ) then
-                    gridIndexes(nd) = floor( dataPoints( np, nd )/this%binSize(nd) ) + 1
+                    gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
                 end if 
             end do
 
