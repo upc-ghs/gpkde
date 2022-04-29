@@ -535,12 +535,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Initialize smoothing,
         ! could be a vector for active bins 
         if ( present( initialSmoothing ) ) then
-            print *, ' INITIAL SMOOTHING WAS GIVEN ' 
             this%initialSmoothing = initialSmoothing
         else
             ! The initial estimate could be improved, something with more
             ! theoretical background
-            print *, ' INITIAL SMOOTHING IS SET WITH DEFAULT VALUE ', nDim
             this%initialSmoothing = ( this%histogram%binVolume )**( 1d0/nDim )
         end if 
   
@@ -1920,7 +1918,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
 
-        print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: NOPTLOOPS'
+        !print *, 'GPKDE: WILL DEFINE SOME PARAMETERS: NOPTLOOPS'
 
         ! Define nOptimizationLoops
         if ( present( nOptimizationLoops ) ) then 
@@ -4495,8 +4493,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
                     ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES/COLUMNS
-                    write(outputUnit,"(I6,I6,I6,I6,I6,F16.8)") outputDataId, particleGroupId, &
-                        ix, iy, iz, this%densityEstimateGrid( ix, iy, iz )
+                    write(outputUnit,"(I6,I6,I6,I6,I6,F16.8,I6)") outputDataId, particleGroupId, &
+                        ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
+                                       this%histogram%counts( ix, iy, iz ) 
                 end do
             end do
         end do

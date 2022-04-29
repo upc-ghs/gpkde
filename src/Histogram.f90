@@ -145,7 +145,6 @@ contains
 
             ! Points outside the grid are not taken into account
             if( any( gridIndexes .gt. this%nBins ) .or. any( gridIndexes .le. 0 ) ) then
-                print *, ' GPKDE:HISTOGRAM: INCONSISTENCY '
                 cycle
             end if
 
