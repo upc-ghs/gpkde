@@ -1297,7 +1297,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             ! Assign pointer 
             gc => activeGridCells(n)
 
-            !if ( gc%skipKernelSigma ) cycle
+            if ( gc%skipKernelSigma ) cycle
 
             ! Compute roughness grid estimates
             roughness22( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
@@ -1326,7 +1326,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             ! Assign pointer 
             gc => activeGridCells(n)
 
-            !if ( gc%skipKernelSigma ) cycle
+            if ( gc%skipKernelSigma ) cycle
 
             ! Compute roughness grid estimates
             roughness12( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
@@ -1363,7 +1363,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             ! Assign pointer 
             gc => activeGridCells(n)
 
-            !if ( gc%skipKernelSigma ) cycle
+            if ( gc%skipKernelSigma ) cycle
 
             iX = gc%id(1)
             iY = gc%id(2)
@@ -1610,7 +1610,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 ! Assign pointer 
                 gc => activeGridCells(n)
 
-                !if ( gc%skipKernelSigma ) cycle
+                if ( gc%skipKernelSigma ) cycle
 
                 ! Compute roughness grid estimates
                 roughness( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
@@ -2368,6 +2368,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             call this%ComputeKernelDatabaseNetRoughness(activeGridCells, curvatureBandwidth, &
                                        roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                                                            netRoughnessArray )
+
             ! Optimal smoothing
             call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                                     roughnessXXArray, roughnessYYArray, roughnessZZArray, &
