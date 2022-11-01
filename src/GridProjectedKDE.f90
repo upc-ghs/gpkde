@@ -24,9 +24,9 @@ module GridProjectedKDEModule
     logical, parameter :: defaultDatabaseOptimization = .true.
     logical, parameter :: defaultLogKernelDatabase    = .true.
 
-    doubleprecision, parameter :: defaultMaxHOverLambda   = 10
-    doubleprecision, parameter :: defaultMinHOverLambda   = 0.1
-    doubleprecision, parameter :: defaultDeltaHOverLambda = 0.1
+    real*4, parameter :: defaultMaxHOverLambda   = 10
+    real*4, parameter :: defaultMinHOverLambda   = 0.1
+    real*4, parameter :: defaultDeltaHOverLambda = 0.1
 
     logical, parameter ::  defaultBruteOptimization       = .false. 
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
@@ -35,8 +35,8 @@ module GridProjectedKDEModule
 
     ! Numerical Parameters
     !integer, parameter         :: nDim         = 3
-    doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
-    doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
+    real*4, parameter :: pi           = 4.d0*atan(1.d0)
+    real*4, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
 
     ! Module parameters defined after initialization
     integer  :: nDim
@@ -48,33 +48,33 @@ module GridProjectedKDEModule
 
 
     ! Grids
-    doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureX
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureY
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXX 
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXY
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYY
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXX 
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXY
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYY
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessZZ
+    real*4, dimension(:,:,:), allocatable :: nEstimateGrid
+    real*4, dimension(:,:,:), allocatable,target :: curvatureX
+    real*4, dimension(:,:,:), allocatable,target :: curvatureY
+    real*4, dimension(:,:,:), allocatable,target :: curvatureZ
+    real*4, dimension(:,:,:), allocatable,target :: curvatureXX 
+    real*4, dimension(:,:,:), allocatable,target :: curvatureXY
+    real*4, dimension(:,:,:), allocatable,target :: curvatureXZ
+    real*4, dimension(:,:,:), allocatable,target :: curvatureYY
+    real*4, dimension(:,:,:), allocatable,target :: curvatureYZ
+    real*4, dimension(:,:,:), allocatable,target :: curvatureZZ
+    real*4, dimension(:,:,:), allocatable,target :: roughnessXX 
+    real*4, dimension(:,:,:), allocatable,target :: roughnessXY
+    real*4, dimension(:,:,:), allocatable,target :: roughnessXZ
+    real*4, dimension(:,:,:), allocatable,target :: roughnessYY
+    real*4, dimension(:,:,:), allocatable,target :: roughnessYZ
+    real*4, dimension(:,:,:), allocatable,target :: roughnessZZ
 
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature2
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature11
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature22
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature12
-    !doubleprecision, dimension(:,:,:), allocatable, target :: roughness11
-    !doubleprecision, dimension(:,:,:), allocatable, target :: roughness22
-    !doubleprecision, dimension(:,:,:), allocatable, target :: roughness12
-    !doubleprecision, dimension(:), pointer :: roughness11Array
-    !doubleprecision, dimension(:), pointer :: roughness22Array
+    !real*4, dimension(:,:,:), allocatable, target :: curvature1
+    !real*4, dimension(:,:,:), allocatable, target :: curvature2
+    !real*4, dimension(:,:,:), allocatable, target :: curvature11
+    !real*4, dimension(:,:,:), allocatable, target :: curvature22
+    !real*4, dimension(:,:,:), allocatable, target :: curvature12
+    !real*4, dimension(:,:,:), allocatable, target :: roughness11
+    !real*4, dimension(:,:,:), allocatable, target :: roughness22
+    !real*4, dimension(:,:,:), allocatable, target :: roughness12
+    !real*4, dimension(:), pointer :: roughness11Array
+    !real*4, dimension(:), pointer :: roughness22Array
 
     !class( KernelType ), dimension(:), pointer :: kernelSDDatabase
 
@@ -84,20 +84,20 @@ module GridProjectedKDEModule
     !class( KernelType ), dimension(:), pointer :: kernelSDDatabase2
 
 
-    doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
-    doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
-    doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
-    doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
-    doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
-    doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
-    doubleprecision, dimension(:,:)  , allocatable :: relativeSmoothingChange
-    doubleprecision, dimension(:)    , allocatable :: relativeDensityChange
-    doubleprecision, dimension(:)    , allocatable :: densityEstimateArray 
-    doubleprecision, dimension(:)    , allocatable :: nEstimateArray
-    doubleprecision, dimension(:)    , allocatable , target :: roughnessXXArray
-    doubleprecision, dimension(:)    , allocatable , target :: roughnessYYArray
-    doubleprecision, dimension(:)    , allocatable , target :: roughnessZZArray
-    doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
+    real*4, dimension(:,:)  , allocatable :: kernelSmoothing
+    real*4, dimension(:)    , allocatable :: kernelSmoothingScale
+    real*4, dimension(:,:)  , allocatable :: kernelSmoothingShape
+    real*4, dimension(:,:)  , allocatable :: kernelSigmaSupport
+    real*4, dimension(:)    , allocatable :: kernelSigmaSupportScale
+    real*4, dimension(:,:)  , allocatable :: curvatureBandwidth
+    real*4, dimension(:,:)  , allocatable :: relativeSmoothingChange
+    real*4, dimension(:)    , allocatable :: relativeDensityChange
+    real*4, dimension(:)    , allocatable :: densityEstimateArray 
+    real*4, dimension(:)    , allocatable :: nEstimateArray
+    real*4, dimension(:)    , allocatable , target :: roughnessXXArray
+    real*4, dimension(:)    , allocatable , target :: roughnessYYArray
+    real*4, dimension(:)    , allocatable , target :: roughnessZZArray
+    real*4, dimension(:)    , allocatable :: netRoughnessArray
     
     type( GridCellType ), dimension(:), allocatable, target :: activeGridCellsMod
     
@@ -121,24 +121,24 @@ module GridProjectedKDEModule
 
 
         ! Initialization
-        doubleprecision, dimension(3)   :: binSize
-        doubleprecision, dimension(3)   :: domainSize
-        doubleprecision, dimension(3)   :: domainOrigin
-        doubleprecision, dimension(3)   :: initialSmoothing
+        real*4, dimension(3)   :: binSize
+        real*4, dimension(3)   :: domainSize
+        real*4, dimension(3)   :: domainOrigin
+        real*4, dimension(3)   :: initialSmoothing
         integer        , dimension(3)   :: nBins
         integer        , dimension(3)   :: dimensionMask
     
         ! Variables 
-        doubleprecision, dimension(:)    , allocatable :: densityEstimate
-        doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
-        doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
-        doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
-        doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
+        real*4, dimension(:)    , allocatable :: densityEstimate
+        real*4, dimension(:,:,:), allocatable :: densityEstimateGrid
+        real*4, dimension(:,:)  , allocatable :: kernelSmoothing
+        real*4, dimension(:,:)  , allocatable :: kernelSigmaSupport
+        real*4, dimension(:,:)  , allocatable :: curvatureBandwidth
         
         ! Kernel database params 
-        doubleprecision, dimension(3) :: deltaHOverLambda
-        doubleprecision, dimension(3) :: minHOverLambda
-        doubleprecision, dimension(3) :: maxHOverLambda
+        real*4, dimension(3) :: deltaHOverLambda
+        real*4, dimension(3) :: minHOverLambda
+        real*4, dimension(3) :: maxHOverLambda
         integer, dimension(3)         :: nDeltaHOverLambda ! Computed at kernel databases
         logical                       :: logKernelDatabase
         logical                       :: databaseOptimization 
@@ -152,9 +152,9 @@ module GridProjectedKDEModule
         integer :: nOptimizationLoops
     
         ! Module constants
-        doubleprecision :: supportDimensionConstant
-        doubleprecision :: alphaDimensionConstant
-        doubleprecision :: betaDimensionConstant
+        real*4 :: supportDimensionConstant
+        real*4 :: alphaDimensionConstant
+        real*4 :: betaDimensionConstant
     
         ! Bins to compute
         integer, dimension(:,:), pointer :: computeBinIds
@@ -205,7 +205,7 @@ module GridProjectedKDEModule
             import GridProjectedKDEType
             implicit none
             class( GridProjectedKDEType )             :: this
-            doubleprecision, dimension(3), intent(in) :: smoothing
+            real*4, dimension(3), intent(in) :: smoothing
             integer, dimension(3) :: indexes 
             integer :: nd 
         end function ComputeIndexes
@@ -216,7 +216,7 @@ module GridProjectedKDEModule
             import GridProjectedKDEType
             implicit none
             class( GridProjectedKDEType )             :: this
-            doubleprecision, dimension(3), intent(in) :: smoothing
+            real*4, dimension(3), intent(in) :: smoothing
             integer, dimension(2), intent(inout)      :: flatDBIndexes
             logical, intent(inout)                    :: transposeKernel
             integer, dimension(3) :: indexes 
@@ -233,11 +233,11 @@ module GridProjectedKDEModule
             implicit none 
             class( GridProjectedKDEType ), target :: this
             type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
-            doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
-            doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
-            doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
-            doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
-            doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
+            real*4, dimension(:,:), intent(in)            :: curvatureBandwidth
+            real*4, dimension(:), intent(inout), target   :: roughnessXXArray
+            real*4, dimension(:), intent(inout), target   :: roughnessYYArray
+            real*4, dimension(:), intent(inout), target   :: roughnessZZArray
+            real*4, dimension(:), intent(inout)           :: netRoughnessArray
         end subroutine ComputeNetRoughness
    
 
@@ -250,7 +250,7 @@ module GridProjectedKDEModule
             class( GridProjectedKDEType ), target                  :: this
             type( GridCellType ), intent(inout)                    :: gridCell
             class( KernelType ), target, intent(inout) :: kernel
-            doubleprecision, dimension(3), intent(in)              :: smoothing
+            real*4, dimension(3), intent(in)              :: smoothing
         end subroutine SetKernelInterface
 
         ! SetKernelInterface2D
@@ -263,7 +263,7 @@ module GridProjectedKDEModule
             type( GridCellType ), intent(inout)                    :: gridCell
             class( KernelType ), target, intent(inout)             :: kernel1
             class( KernelType ), target, intent(inout)             :: kernel2
-            doubleprecision, dimension(3), intent(in)              :: smoothing
+            real*4, dimension(3), intent(in)              :: smoothing
         end subroutine SetKernelInterface2D
     
         ! SetKernelInterface3D
@@ -277,7 +277,7 @@ module GridProjectedKDEModule
             class( KernelType ), target, intent(inout)             :: kernel1
             class( KernelType ), target, intent(inout)             :: kernel2
             class( KernelType ), target, intent(inout)             :: kernel3
-            doubleprecision, dimension(3), intent(in)              :: smoothing
+            real*4, dimension(3), intent(in)              :: smoothing
         end subroutine SetKernelInterface3D
 
     end interface
@@ -379,30 +379,30 @@ subroutine prAllocateArrays( nComputeBins,  &
     !------------------------------------------------------------------------------
     implicit none
     integer, intent(in) :: nComputeBins
-    doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothing
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSmoothingScale
-    doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothingShape
-    doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSigmaSupport
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSigmaSupportScale
-    doubleprecision, dimension(:,:), allocatable, intent(out) :: incurvatureBandwidth
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: indensityEstimateArray 
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: innEstimateArray
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessXXArray
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessYYArray
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessZZArray
-    doubleprecision, dimension(:)  , allocatable, intent(out) :: innetRoughnessArray
-    doubleprecision, dimension(:,:), allocatable :: lockernelSmoothing
-    doubleprecision, dimension(:)  , allocatable :: lockernelSmoothingScale
-    doubleprecision, dimension(:,:), allocatable :: lockernelSmoothingShape
-    doubleprecision, dimension(:,:), allocatable :: lockernelSigmaSupport
-    doubleprecision, dimension(:)  , allocatable :: lockernelSigmaSupportScale
-    doubleprecision, dimension(:,:), allocatable :: loccurvatureBandwidth
-    doubleprecision, dimension(:)  , allocatable :: locdensityEstimateArray 
-    doubleprecision, dimension(:)  , allocatable :: locnEstimateArray
-    doubleprecision, dimension(:)  , allocatable :: locroughnessXXArray
-    doubleprecision, dimension(:)  , allocatable :: locroughnessYYArray
-    doubleprecision, dimension(:)  , allocatable :: locroughnessZZArray
-    doubleprecision, dimension(:)  , allocatable :: locnetRoughnessArray
+    real*4, dimension(:,:), allocatable, intent(out) :: inkernelSmoothing
+    real*4, dimension(:)  , allocatable, intent(out) :: inkernelSmoothingScale
+    real*4, dimension(:,:), allocatable, intent(out) :: inkernelSmoothingShape
+    real*4, dimension(:,:), allocatable, intent(out) :: inkernelSigmaSupport
+    real*4, dimension(:)  , allocatable, intent(out) :: inkernelSigmaSupportScale
+    real*4, dimension(:,:), allocatable, intent(out) :: incurvatureBandwidth
+    real*4, dimension(:)  , allocatable, intent(out) :: indensityEstimateArray 
+    real*4, dimension(:)  , allocatable, intent(out) :: innEstimateArray
+    real*4, dimension(:)  , allocatable, intent(out) :: inroughnessXXArray
+    real*4, dimension(:)  , allocatable, intent(out) :: inroughnessYYArray
+    real*4, dimension(:)  , allocatable, intent(out) :: inroughnessZZArray
+    real*4, dimension(:)  , allocatable, intent(out) :: innetRoughnessArray
+    real*4, dimension(:,:), allocatable :: lockernelSmoothing
+    real*4, dimension(:)  , allocatable :: lockernelSmoothingScale
+    real*4, dimension(:,:), allocatable :: lockernelSmoothingShape
+    real*4, dimension(:,:), allocatable :: lockernelSigmaSupport
+    real*4, dimension(:)  , allocatable :: lockernelSigmaSupportScale
+    real*4, dimension(:,:), allocatable :: loccurvatureBandwidth
+    real*4, dimension(:)  , allocatable :: locdensityEstimateArray 
+    real*4, dimension(:)  , allocatable :: locnEstimateArray
+    real*4, dimension(:)  , allocatable :: locroughnessXXArray
+    real*4, dimension(:)  , allocatable :: locroughnessYYArray
+    real*4, dimension(:)  , allocatable :: locroughnessZZArray
+    real*4, dimension(:)  , allocatable :: locnetRoughnessArray
     type( GridCellType ), dimension(:), allocatable, intent(out) :: activeGridCellsIn
     type( GridCellType ), dimension(:), allocatable :: activeGridCellsLocal
     !------------------------------------------------------------------------------
@@ -462,15 +462,15 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
     implicit none
     class( GridProjectedKDEType ) :: this
     ! Reconstruction grid parameters
-    doubleprecision, dimension(3), intent(in) :: domainSize
-    doubleprecision, dimension(3), intent(in) :: binSize
-    doubleprecision, dimension(3), intent(in), optional :: domainOrigin
-    doubleprecision, dimension(3), intent(in), optional :: initialSmoothing
+    real*4, dimension(3), intent(in) :: domainSize
+    real*4, dimension(3), intent(in) :: binSize
+    real*4, dimension(3), intent(in), optional :: domainOrigin
+    real*4, dimension(3), intent(in), optional :: initialSmoothing
     integer, intent(in), optional :: nOptimizationLoops 
     ! Kernel database parameters
     logical, intent(in), optional :: databaseOptimization, flatKernelDatabase
-    doubleprecision, intent(in), optional :: minHOverLambda, maxHOverLambda
-    doubleprecision, intent(in), optional :: deltaHOverLambda
+    real*4, intent(in), optional :: minHOverLambda, maxHOverLambda
+    real*4, intent(in), optional :: deltaHOverLambda
     logical, intent(in), optional :: logKernelDatabase
     ! Brute optimization, no kernel database
     logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
@@ -479,7 +479,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
     ! Time monitoring
     integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-    doubleprecision :: elapsedTime
+    real*4 :: elapsedTime
     !------------------------------------------------------------------------------
 
 
@@ -698,21 +698,21 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !allocate( roughness22( this%nBins(1), this%nBins(2), this%nBins(3) )) 
         !allocate( roughness12( this%nBins(1), this%nBins(2), this%nBins(3) )) 
     
-        !doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
-        !doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
-        !doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
-        !doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
-        !doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
-        !doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
-        !doubleprecision, dimension(:,:)  , allocatable :: relativeSmoothingChange
-        !doubleprecision, dimension(:)    , allocatable :: relativeDensityChange
-        !doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
-        !doubleprecision, dimension(:)    , allocatable :: densityEstimateArray 
-        !doubleprecision, dimension(:)    , allocatable :: nEstimateArray
-        !doubleprecision, dimension(:)    , allocatable :: roughnessXXArray
-        !doubleprecision, dimension(:)    , allocatable :: roughnessYYArray
-        !doubleprecision, dimension(:)    , allocatable :: roughnessZZArray
-        !doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
+        !real*4, dimension(:,:)  , allocatable :: kernelSmoothing
+        !real*4, dimension(:)    , allocatable :: kernelSmoothingScale
+        !real*4, dimension(:,:)  , allocatable :: kernelSmoothingShape
+        !real*4, dimension(:,:)  , allocatable :: kernelSigmaSupport
+        !real*4, dimension(:)    , allocatable :: kernelSigmaSupportScale
+        !real*4, dimension(:,:)  , allocatable :: curvatureBandwidth
+        !real*4, dimension(:,:)  , allocatable :: relativeSmoothingChange
+        !real*4, dimension(:)    , allocatable :: relativeDensityChange
+        !real*4, dimension(:,:,:), allocatable :: densityEstimateGrid
+        !real*4, dimension(:)    , allocatable :: densityEstimateArray 
+        !real*4, dimension(:)    , allocatable :: nEstimateArray
+        !real*4, dimension(:)    , allocatable :: roughnessXXArray
+        !real*4, dimension(:)    , allocatable :: roughnessYYArray
+        !real*4, dimension(:)    , allocatable :: roughnessZZArray
+        !real*4, dimension(:)    , allocatable :: netRoughnessArray
 
         print *, ' END OF GPKDE MODULE INITIALIZATION ' 
 
@@ -939,19 +939,19 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !input
         class( GridProjectedKDEType ), target                  :: this
         type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
-        doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
+        real*4, dimension(:,:), intent(in)            :: curvatureBandwidth
         ! out
-        doubleprecision, dimension(:), intent(inout), target :: roughnessXXArray
-        doubleprecision, dimension(:), intent(inout), target :: roughnessYYArray
-        doubleprecision, dimension(:), intent(inout), target :: roughnessZZArray
-        doubleprecision, dimension(:), intent(inout)         :: netRoughnessArray
+        real*4, dimension(:), intent(inout), target :: roughnessXXArray
+        real*4, dimension(:), intent(inout), target :: roughnessYYArray
+        real*4, dimension(:), intent(inout), target :: roughnessZZArray
+        real*4, dimension(:), intent(inout)         :: netRoughnessArray
         ! local 
         type( GridCellType ), pointer :: gc => null()
-        doubleprecision, dimension(:), pointer :: roughness11Array
-        doubleprecision, dimension(:), pointer :: roughness22Array
-        doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
-        doubleprecision, dimension(:,:,:), allocatable, target :: curvature11
-        doubleprecision, dimension(:,:,:), allocatable, target :: roughness11
+        real*4, dimension(:), pointer :: roughness11Array
+        real*4, dimension(:), pointer :: roughness22Array
+        real*4, dimension(:,:,:), allocatable, target :: curvature1
+        real*4, dimension(:,:,:), allocatable, target :: curvature11
+        real*4, dimension(:,:,:), allocatable, target :: roughness11
         integer :: n, nd, nr
         integer :: iX, iY, iZ
         integer :: currentDim
@@ -1119,24 +1119,24 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! input
         class( GridProjectedKDEType ), target                  :: this
         type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
-        doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
+        real*4, dimension(:,:), intent(in)            :: curvatureBandwidth
         ! out
-        doubleprecision, dimension(:), intent(inout), target :: roughnessXXArray
-        doubleprecision, dimension(:), intent(inout), target :: roughnessYYArray
-        doubleprecision, dimension(:), intent(inout), target :: roughnessZZArray
-        doubleprecision, dimension(:), intent(inout)         :: netRoughnessArray
+        real*4, dimension(:), intent(inout), target :: roughnessXXArray
+        real*4, dimension(:), intent(inout), target :: roughnessYYArray
+        real*4, dimension(:), intent(inout), target :: roughnessZZArray
+        real*4, dimension(:), intent(inout)         :: netRoughnessArray
         ! local
         type( GridCellType ), pointer :: gc => null()
-        doubleprecision, dimension(:), pointer         :: roughness11Array
-        doubleprecision, dimension(:), pointer         :: roughness22Array
-        doubleprecision, dimension(:,:,:), allocatable :: curvature1
-        doubleprecision, dimension(:,:,:), allocatable :: curvature2
-        doubleprecision, dimension(:,:,:), allocatable :: curvature11
-        doubleprecision, dimension(:,:,:), allocatable :: curvature22
-        doubleprecision, dimension(:,:,:), allocatable :: curvature12
-        doubleprecision, dimension(:,:,:), allocatable :: roughness11
-        doubleprecision, dimension(:,:,:), allocatable :: roughness22
-        doubleprecision, dimension(:,:,:), allocatable :: roughness12
+        real*4, dimension(:), pointer         :: roughness11Array
+        real*4, dimension(:), pointer         :: roughness22Array
+        real*4, dimension(:,:,:), allocatable :: curvature1
+        real*4, dimension(:,:,:), allocatable :: curvature2
+        real*4, dimension(:,:,:), allocatable :: curvature11
+        real*4, dimension(:,:,:), allocatable :: curvature22
+        real*4, dimension(:,:,:), allocatable :: curvature12
+        real*4, dimension(:,:,:), allocatable :: roughness11
+        real*4, dimension(:,:,:), allocatable :: roughness22
+        real*4, dimension(:,:,:), allocatable :: roughness12
         integer :: n, nd, nr
         integer :: iX, iY, iZ
         integer :: currentDim
@@ -1413,34 +1413,34 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !input
         class( GridProjectedKDEType ), target :: this
         type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
-        doubleprecision, dimension(:,:), intent(in)    :: curvatureBandwidth
+        real*4, dimension(:,:), intent(in)    :: curvatureBandwidth
         ! out
-        doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
-        doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
-        doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
-        doubleprecision, dimension(:), intent(inout)   :: netRoughnessArray
+        real*4, dimension(:), intent(inout), target   :: roughnessXXArray
+        real*4, dimension(:), intent(inout), target   :: roughnessYYArray
+        real*4, dimension(:), intent(inout), target   :: roughnessZZArray
+        real*4, dimension(:), intent(inout)   :: netRoughnessArray
         ! local 
         class( KernelType ), dimension(:), pointer :: kernelSDDatabase 
         type( GridCellType ), pointer :: gc => null()
-        doubleprecision, dimension(:,:,:), pointer :: curvature
-        doubleprecision, dimension(:,:,:), pointer :: roughness
-        doubleprecision, dimension(:), pointer :: roughness11Array
-        doubleprecision, dimension(:), pointer :: roughness22Array
-        doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureX
-        doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureY
-        doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXX
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureZZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXX
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessZZ
+        real*4, dimension(:,:,:), pointer :: curvature
+        real*4, dimension(:,:,:), pointer :: roughness
+        real*4, dimension(:), pointer :: roughness11Array
+        real*4, dimension(:), pointer :: roughness22Array
+        real*4, dimension(:,:,:), allocatable, target ::   curvatureX
+        real*4, dimension(:,:,:), allocatable, target ::   curvatureY
+        real*4, dimension(:,:,:), allocatable, target ::   curvatureZ
+        real*4, dimension(:,:,:), allocatable, target ::  curvatureXX
+        real*4, dimension(:,:,:), allocatable, target ::  curvatureXY
+        real*4, dimension(:,:,:), allocatable, target ::  curvatureXZ
+        real*4, dimension(:,:,:), allocatable, target ::  curvatureYY
+        real*4, dimension(:,:,:), allocatable, target ::  curvatureYZ
+        real*4, dimension(:,:,:), allocatable, target ::  curvatureZZ
+        real*4, dimension(:,:,:), allocatable, target ::  roughnessXX
+        real*4, dimension(:,:,:), allocatable, target ::  roughnessXY
+        real*4, dimension(:,:,:), allocatable, target ::  roughnessXZ
+        real*4, dimension(:,:,:), allocatable, target ::  roughnessYY
+        real*4, dimension(:,:,:), allocatable, target ::  roughnessYZ
+        real*4, dimension(:,:,:), allocatable, target ::  roughnessZZ
         integer :: n, nd, nr  
         integer :: iX, iY, iZ 
         integer :: currentDim
@@ -1706,18 +1706,18 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         implicit none
         class( GridProjectedKDEType ) :: this
         ! input
-        !doubleprecision, dimension(3), intent(in) :: minHOverLambda
-        !doubleprecision, dimension(3), intent(in) :: maxHOverLambda
-        !doubleprecision, dimension(3), intent(in) :: deltaHOverLambda
-        doubleprecision,   intent(in) :: minHOverLambda
-        doubleprecision,   intent(in) :: maxHOverLambda
-        doubleprecision,   intent(in) :: deltaHOverLambda
+        !real*4, dimension(3), intent(in) :: minHOverLambda
+        !real*4, dimension(3), intent(in) :: maxHOverLambda
+        !real*4, dimension(3), intent(in) :: deltaHOverLambda
+        real*4,   intent(in) :: minHOverLambda
+        real*4,   intent(in) :: maxHOverLambda
+        real*4,   intent(in) :: deltaHOverLambda
         logical, intent(in), optional :: logKernelDatabase
         integer, intent(in), optional :: kernelRange
         integer, intent(in), optional :: kernelSDRange
         ! local
-        doubleprecision, dimension(3) :: inputSmoothing
-        doubleprecision, dimension(:), allocatable :: hOverLambda
+        real*4, dimension(3) :: inputSmoothing
+        real*4, dimension(:), allocatable :: hOverLambda
         integer :: nDelta
         integer :: i, n, m, o, dbi
         logical :: localLogDatabase
@@ -1725,13 +1725,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         integer :: localKernelSDRange
 
         ! Mem debug
-        doubleprecision :: kernelMatrixMemory = 0d0
-        doubleprecision :: kernelDBMemory     = 0d0
-        doubleprecision :: kernelSDDBMemory   = 0d0
+        real*4 :: kernelMatrixMemory = 0d0
+        real*4 :: kernelDBMemory     = 0d0
+        real*4 :: kernelSDDBMemory   = 0d0
 
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-        doubleprecision :: elapsedTime
+        real*4 :: elapsedTime
         !------------------------------------------------------------------------------
 
         ! Sanity check for input parameters
@@ -1920,7 +1920,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ), target:: this
-        doubleprecision, dimension(:,:), intent(in) :: dataPoints
+        real*4, dimension(:,:), intent(in) :: dataPoints
         integer, intent(in), optional :: nOptimizationLoops
         integer :: localNOptimizationLoops
 
@@ -1944,7 +1944,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-        doubleprecision :: elapsedTime
+        real*4 :: elapsedTime
         !------------------------------------------------------------------------------
 
 
@@ -2123,7 +2123,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ), target:: this
-        doubleprecision, dimension(:,:,:), intent(inout) :: densityEstimateGrid
+        real*4, dimension(:,:,:), intent(inout) :: densityEstimateGrid
 
         type( KernelMultiGaussianType ) :: kernel
         type( KernelMultiGaussianType ) :: kernelSigma
@@ -2137,12 +2137,12 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         type( GridCellType ), pointer :: gc => null()
 
         ! kernelMatrix pointer
-        doubleprecision, dimension(:,:,:), pointer :: kernelMatrix => null()
-        doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
+        real*4, dimension(:,:,:), pointer :: kernelMatrix => null()
+        real*4, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
 
         ! Yes ?
-        doubleprecision, dimension(:,:,:), pointer :: curvature
-        doubleprecision, dimension(:,:,:), pointer :: roughness
+        real*4, dimension(:,:,:), pointer :: curvature
+        real*4, dimension(:,:,:), pointer :: roughness
 
         ! Utils
         integer            :: n, m, o, p, q, nd, nr
@@ -2157,11 +2157,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Time monitoring
         integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-        doubleprecision :: elapsedTime
+        real*4 :: elapsedTime
         integer :: clockCountStart2, clockCountStop2, clockCountRate2, clockCountMax2
-        doubleprecision :: elapsedTime2
+        real*4 :: elapsedTime2
         integer :: clockCountStart3, clockCountStop3, clockCountRate3, clockCountMax3
-        doubleprecision :: elapsedTime3
+        real*4 :: elapsedTime3
         !------------------------------------------------------------------------------
 
         
@@ -2460,8 +2460,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(:,:), intent(in)   :: kernelSmoothing
-        doubleprecision, dimension(:), intent(inout)  :: kernelSmoothingScale
+        real*4, dimension(:,:), intent(in)   :: kernelSmoothing
+        real*4, dimension(:), intent(inout)  :: kernelSmoothingScale
         integer :: nd
         !------------------------------------------------------------------------------
             
@@ -2491,10 +2491,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(:), intent(in)    :: kernelSmoothingScale
-        doubleprecision, dimension(:), intent(in)    :: densityEstimate
-        doubleprecision, dimension(:), intent(in)    :: nEstimate
-        doubleprecision, dimension(:), intent(inout) :: kernelSigmaSupportScale
+        real*4, dimension(:), intent(in)    :: kernelSmoothingScale
+        real*4, dimension(:), intent(in)    :: densityEstimate
+        real*4, dimension(:), intent(in)    :: nEstimate
+        real*4, dimension(:), intent(inout) :: kernelSigmaSupportScale
         integer :: nd
         !------------------------------------------------------------------------------
 
@@ -2537,20 +2537,20 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         implicit none
         class( GridProjectedKDEType ) :: this
 
-        doubleprecision, dimension(:),   intent(in)    :: nEstimate
-        doubleprecision, dimension(:),   intent(in)    :: densityEstimate
-        doubleprecision, dimension(:,:), intent(in)    :: kernelSmoothing
-        doubleprecision, dimension(:),   intent(in)    :: kernelSmoothingScale
-        doubleprecision, dimension(:,:), intent(in)    :: kernelSmoothingShape
-        doubleprecision, dimension(:),   intent(in)    :: kernelSigmaSupportScale
-        doubleprecision, dimension(:,:), intent(inout) :: curvatureBandwidth
+        real*4, dimension(:),   intent(in)    :: nEstimate
+        real*4, dimension(:),   intent(in)    :: densityEstimate
+        real*4, dimension(:,:), intent(in)    :: kernelSmoothing
+        real*4, dimension(:),   intent(in)    :: kernelSmoothingScale
+        real*4, dimension(:,:), intent(in)    :: kernelSmoothingShape
+        real*4, dimension(:),   intent(in)    :: kernelSigmaSupportScale
+        real*4, dimension(:,:), intent(inout) :: curvatureBandwidth
 
-        !doubleprecision, dimension(:),   allocatable   :: nVirtual
-        doubleprecision, dimension(:),   allocatable   :: nVirtualPowerBeta
-        doubleprecision, dimension(:,:), allocatable   :: shapeTerm
-        doubleprecision, dimension(:)  , allocatable   :: shapeTermSum
+        !real*4, dimension(:),   allocatable   :: nVirtual
+        real*4, dimension(:),   allocatable   :: nVirtualPowerBeta
+        real*4, dimension(:,:), allocatable   :: shapeTerm
+        real*4, dimension(:)  , allocatable   :: shapeTermSum
         integer, dimension(3)                          :: shapeTermNums = 1
-        doubleprecision :: alphaDimensionConstant, betaDimensionConstant
+        real*4 :: alphaDimensionConstant, betaDimensionConstant
 
         integer :: n, m, nActiveBins, nd
         !------------------------------------------------------------------------------
@@ -2625,15 +2625,15 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType) :: this
-        doubleprecision, dimension(:), intent(in)      :: nEstimate 
-        doubleprecision, dimension(:), intent(in)      :: netRoughness 
-        doubleprecision, dimension(:), intent(in)      :: roughnessXXActive 
-        doubleprecision, dimension(:), intent(in)      :: roughnessYYActive 
-        doubleprecision, dimension(:), intent(in)      :: roughnessZZActive 
-        doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothing
-        doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScale
-        doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingShape
-        doubleprecision, dimension(:), allocatable     :: roughnessScale
+        real*4, dimension(:), intent(in)      :: nEstimate 
+        real*4, dimension(:), intent(in)      :: netRoughness 
+        real*4, dimension(:), intent(in)      :: roughnessXXActive 
+        real*4, dimension(:), intent(in)      :: roughnessYYActive 
+        real*4, dimension(:), intent(in)      :: roughnessZZActive 
+        real*4, dimension(:,:), intent(inout) :: kernelSmoothing
+        real*4, dimension(:),   intent(inout) :: kernelSmoothingScale
+        real*4, dimension(:,:), intent(inout) :: kernelSmoothingShape
+        real*4, dimension(:), allocatable     :: roughnessScale
         integer :: n, m, nActiveBins, nd
         !------------------------------------------------------------------------------
 
@@ -2705,7 +2705,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
+        real*4, dimension(3), intent(in) :: smoothing
         integer, dimension(3) :: indexes 
         integer :: nd 
         !------------------------------------------------------------------------------
@@ -2739,7 +2739,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
+        real*4, dimension(3), intent(in) :: smoothing
         integer, dimension(3) :: indexes 
         integer :: nd 
         !------------------------------------------------------------------------------
@@ -2775,7 +2775,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
+        real*4, dimension(3), intent(in) :: smoothing
         integer, dimension(2), intent(inout)      :: flatDBIndexes
         logical, intent(inout)                    :: transposeKernel
         ! local 
@@ -2825,7 +2825,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none
         class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
+        real*4, dimension(3), intent(in) :: smoothing
         integer, dimension(2), intent(inout)      :: flatDBIndexes
         logical, intent(inout)                    :: transposeKernel
         ! local 
@@ -2874,8 +2874,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target                  :: this
         type( GridCellType ), intent(inout)                    :: gridCell
         class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)              :: smoothing
-        doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
+        real*4, dimension(3), intent(in)              :: smoothing
+        real*4, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
         !-----------------------------------------------------------
 
         ! Compute indexes on kernel database
@@ -2913,7 +2913,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target        :: this
         type( GridCellType ),  intent(inout) :: gridCell
         class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)    :: smoothing
+        real*4, dimension(3), intent(in)    :: smoothing
         integer, dimension(:), allocatable  :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -2947,7 +2947,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target        :: this
         type( GridCellType ),  intent(inout) :: gridCell
         class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)    :: smoothing
+        real*4, dimension(3), intent(in)    :: smoothing
         integer, dimension(:), allocatable  :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -2974,7 +2974,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         type( GridCellType ),  intent(inout) :: gridCell
         class( KernelType ), target, intent(inout) :: kernel1
         class( KernelType ), target, intent(inout) :: kernel2
-        doubleprecision, dimension(3), intent(in)    :: smoothing
+        real*4, dimension(3), intent(in)    :: smoothing
         integer, dimension(:), allocatable  :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -3010,7 +3010,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( KernelType ), target, intent(inout) :: kernel1
         class( KernelType ), target, intent(inout) :: kernel2
         class( KernelType ), target, intent(inout) :: kernel3
-        doubleprecision, dimension(3), intent(in)    :: smoothing
+        real*4, dimension(3), intent(in)    :: smoothing
         integer, dimension(:), allocatable  :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -3052,8 +3052,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target          :: this
         type( GridCellType ), intent(inout)            :: gridCell
         class( KernelType ), target, intent(inout)     :: kernel
-        doubleprecision, dimension(3), intent(in)      :: smoothing
-        doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
+        real*4, dimension(3), intent(in)      :: smoothing
+        real*4, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
         !-----------------------------------------------------------
 
         ! Point to kernel object
@@ -3078,8 +3078,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target        :: this
         type( GridCellType ), intent(inout) :: gridCell
         class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)    :: smoothing
-        doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
+        real*4, dimension(3), intent(in)    :: smoothing
+        real*4, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
         integer, dimension(:), allocatable  :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -3113,7 +3113,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target      :: this
         type( GridCellType ),  intent(inout)       :: gridCell
         class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)  :: smoothing
+        real*4, dimension(3), intent(in)  :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -3142,7 +3142,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         type( GridCellType ),  intent(inout)       :: gridCell
         class( KernelType ), target, intent(inout) :: kernel1
         class( KernelType ), target, intent(inout) :: kernel2
-        doubleprecision, dimension(3), intent(in)  :: smoothing
+        real*4, dimension(3), intent(in)  :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -3183,7 +3183,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( KernelType ), target, intent(inout) :: kernel1
         class( KernelType ), target, intent(inout) :: kernel2
         class( KernelType ), target, intent(inout) :: kernel3
-        doubleprecision, dimension(3), intent(in)  :: smoothing
+        real*4, dimension(3), intent(in)  :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -3314,12 +3314,12 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         implicit none 
         class(GridProjectedKDEType) :: this
         character(len=500), intent(in) :: outputFileName
-        doubleprecision, dimension(:)  ,intent(in) :: relativeDensityChange 
-        doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
-        doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
-        doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
-        doubleprecision, dimension(:)  ,intent(in) :: nEstimate
-        doubleprecision, dimension(:)  ,intent(in) :: netRoughness
+        real*4, dimension(:)  ,intent(in) :: relativeDensityChange 
+        real*4, dimension(:,:),intent(in) :: kernelSmoothing 
+        real*4, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
+        real*4, dimension(:,:),intent(in) :: curvatureBandwidth
+        real*4, dimension(:)  ,intent(in) :: nEstimate
+        real*4, dimension(:)  ,intent(in) :: netRoughness
         integer :: ix, iy, iz, n
         integer :: outputUnit = 555
         !------------------------------------------------------------------------------
@@ -3360,11 +3360,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none 
         class(GridProjectedKDEType) :: this
-        doubleprecision, intent(in) :: initPoint, endPoint
+        real*4, intent(in) :: initPoint, endPoint
         integer, intent(in)         :: nPoints
-        doubleprecision :: deltaExponent, deltaAccumulated
-        doubleprecision :: logInit, logEnd, logBase
-        doubleprecision, dimension(:), allocatable :: output
+        real*4 :: deltaExponent, deltaAccumulated
+        real*4 :: logInit, logEnd, logBase
+        real*4, dimension(:), allocatable :: output
         integer :: n
         !-----------------------------------------
 
@@ -3401,8 +3401,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         !------------------------------------------------------------------------------
         implicit none 
         class(GridProjectedKDEType) :: this
-        doubleprecision, dimension(:,:,:), intent(in)  :: sourceMatrix
-        doubleprecision, dimension(:,:,:), allocatable :: transposedMatrix
+        real*4, dimension(:,:,:), intent(in)  :: sourceMatrix
+        real*4, dimension(:,:,:), allocatable :: transposedMatrix
         ! local
         integer, dimension(3) :: sourceShape
         integer :: n
@@ -3441,7 +3441,7 @@ end module GridProjectedKDEModule
     !    implicit none
     !    class( GridProjectedKDEType ) :: this
 
-    !    !doubleprecision, dimension(:,:,:) :: densityEstimateGrid
+    !    !real*4, dimension(:,:,:) :: densityEstimateGrid
 
 
     !    ! Optimization loops
@@ -3453,11 +3453,11 @@ end module GridProjectedKDEModule
     !    !type( GridCellType ), pointer :: gc => null()
 
     !    !! kernelMatrix pointer
-    !    !doubleprecision, dimension(:,:,:), pointer :: kernelMatrix => null()
-    !    !doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
+    !    !real*4, dimension(:,:,:), pointer :: kernelMatrix => null()
+    !    !real*4, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
 
-    !    !doubleprecision, dimension(:,:,:), pointer :: curvature
-    !    !doubleprecision, dimension(:,:,:), pointer :: roughness
+    !    !real*4, dimension(:,:,:), pointer :: curvature
+    !    !real*4, dimension(:,:,:), pointer :: roughness
     !    !! Utils
     !    !integer            :: n, m, o, p, q, nd, nr
     !    !integer            :: iX, iY, iZ
@@ -3489,15 +3489,15 @@ end module GridProjectedKDEModule
 
     !    !! Time monitoring
     !    !integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-    !    !doubleprecision :: elapsedTime
+    !    !real*4 :: elapsedTime
     !    !integer :: clockCountStart2, clockCountStop2, clockCountRate2, clockCountMax2
-    !    !doubleprecision :: elapsedTime2
+    !    !real*4 :: elapsedTime2
     !    !integer :: clockCountStart3, clockCountStop3, clockCountRate3, clockCountMax3
-    !    !doubleprecision :: elapsedTime3
+    !    !real*4 :: elapsedTime3
 
     !    !! Memory monitoring 
-    !    !doubleprecision :: kernelDBMemory = 0d0
-    !    !doubleprecision :: kernelMatrixMemory = 0d0
+    !    !real*4 :: kernelDBMemory = 0d0
+    !    !real*4 :: kernelMatrixMemory = 0d0
     !    !!------------------------------------------------------------------------------
 
 
@@ -4151,34 +4151,34 @@ end module GridProjectedKDEModule
     !    !input
     !    class( GridProjectedKDEType ), target :: this
     !    type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
-    !    doubleprecision, dimension(:,:), intent(in)    :: curvatureBandwidth
+    !    real*4, dimension(:,:), intent(in)    :: curvatureBandwidth
     !    ! out
-    !    doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
-    !    doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
-    !    doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
-    !    doubleprecision, dimension(:), intent(inout)   :: netRoughnessArray
+    !    real*4, dimension(:), intent(inout), target   :: roughnessXXArray
+    !    real*4, dimension(:), intent(inout), target   :: roughnessYYArray
+    !    real*4, dimension(:), intent(inout), target   :: roughnessZZArray
+    !    real*4, dimension(:), intent(inout)   :: netRoughnessArray
     !    ! local 
     !    class( KernelType ), dimension(:), pointer :: kernelSDDatabase 
     !    type( GridCellType ), pointer :: gc => null()
-    !    doubleprecision, dimension(:,:,:), pointer :: curvature
-    !    doubleprecision, dimension(:,:,:), pointer :: roughness
-    !    doubleprecision, dimension(:), pointer :: roughness11Array
-    !    doubleprecision, dimension(:), pointer :: roughness22Array
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureX
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureY
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureZ
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXX
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXY
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXZ
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYY
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYZ
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureZZ
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXX
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXY
-    !    doubleprecision, dimension(:,:,:), allocatable, target :: roughnessXZ
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYY
-    !    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYZ
-    !    doubleprecision, dimension(:,:,:), allocatable, target :: roughnessZZ
+    !    real*4, dimension(:,:,:), pointer :: curvature
+    !    real*4, dimension(:,:,:), pointer :: roughness
+    !    real*4, dimension(:), pointer :: roughness11Array
+    !    real*4, dimension(:), pointer :: roughness22Array
+    !    real*4, dimension(:,:,:), allocatable, target ::   curvatureX
+    !    real*4, dimension(:,:,:), allocatable, target ::   curvatureY
+    !    real*4, dimension(:,:,:), allocatable, target ::   curvatureZ
+    !    real*4, dimension(:,:,:), allocatable, target ::  curvatureXX
+    !    real*4, dimension(:,:,:), allocatable, target ::  curvatureXY
+    !    real*4, dimension(:,:,:), allocatable, target ::  curvatureXZ
+    !    real*4, dimension(:,:,:), allocatable, target ::  curvatureYY
+    !    real*4, dimension(:,:,:), allocatable, target ::  curvatureYZ
+    !    real*4, dimension(:,:,:), allocatable, target ::  curvatureZZ
+    !    real*4, dimension(:,:,:), allocatable, target ::  roughnessXX
+    !    real*4, dimension(:,:,:), allocatable, target ::  roughnessXY
+    !    real*4, dimension(:,:,:), allocatable, target :: roughnessXZ
+    !    real*4, dimension(:,:,:), allocatable, target ::  roughnessYY
+    !    real*4, dimension(:,:,:), allocatable, target ::  roughnessYZ
+    !    real*4, dimension(:,:,:), allocatable, target :: roughnessZZ
     !    integer :: n, nd, nr  
     !    integer :: iX, iY, iZ 
     !    integer :: currentDim

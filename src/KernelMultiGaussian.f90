@@ -7,9 +7,9 @@ module KernelMultiGaussianModule
 
 
     ! Parameters
-    doubleprecision, parameter :: pi      = 4.d0*atan(1.d0)
-    doubleprecision, parameter :: sqrtPi  = sqrt(4.d0*atan(1.d0))
-    doubleprecision, parameter :: sqrtTwo = sqrt(2d0)
+    real*4, parameter :: pi      = 4.d0*atan(1.d0)
+    real*4, parameter :: sqrtPi  = sqrt(4.d0*atan(1.d0))
+    real*4, parameter :: sqrtTwo = sqrt(2d0)
     integer                    :: nDim    = 3
 
     integer, parameter :: defaultKernelRange   = 3
@@ -23,11 +23,11 @@ module KernelMultiGaussianModule
     type, public, abstract :: KernelType
         
         ! Properties
-        doubleprecision, dimension(3) :: binSize     = 0d0
-        doubleprecision, dimension(3) :: bandwidth   = 0d0
+        real*4, dimension(3) :: binSize     = 0d0
+        real*4, dimension(3) :: bandwidth   = 0d0
         integer                       :: matrixRange 
         integer, dimension(3)         :: matrixPositiveShape = 0 
-        doubleprecision, dimension(:,:,:), allocatable :: matrix
+        real*4, dimension(:,:,:), allocatable :: matrix
 
     contains 
         
@@ -108,8 +108,8 @@ module KernelMultiGaussianModule
             import :: KernelType
             class( KernelType ) :: this 
             integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
-            doubleprecision, dimension(:)    , allocatable :: hLambda
-            doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+            real*4, dimension(:)    , allocatable :: hLambda
+            real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
             integer :: nx, ny, nz
             !------------------------------------------------------------------------------
         end subroutine ComputeKernelMatrix
@@ -130,7 +130,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( KernelType ) :: this 
-        doubleprecision, dimension(:)  :: binSize
+        real*4, dimension(:)  :: binSize
         integer, intent(in), optional  :: matrixRange
         !------------------------------------------------------------------------------
 
@@ -292,8 +292,8 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( KernelType ) :: this
-        doubleprecision, dimension(:,:,:), intent(in)    :: sourceZeroPositive
-        doubleprecision, dimension(:,:,:), intent(inout) :: targetMatrix
+        real*4, dimension(:,:,:), intent(in)    :: sourceZeroPositive
+        real*4, dimension(:,:,:), intent(inout) :: targetMatrix
         ! local
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------
@@ -329,7 +329,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( KernelType ) :: this 
-        doubleprecision, dimension(3), intent(in) :: bandwidth
+        real*4, dimension(3), intent(in) :: bandwidth
         ! local
         integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
         !------------------------------------------------------------------------------
@@ -374,8 +374,8 @@ contains
         class( KernelMultiGaussianType ) :: this 
         integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
         ! local 
-        doubleprecision, dimension(3)                  :: hLambda
-        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        real*4, dimension(3)                  :: hLambda
+        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------
 
@@ -427,11 +427,11 @@ contains
         class( KernelSecondDerivativeXType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        doubleprecision, dimension(3) :: hLambda
-        !doubleprecision, dimension(:), allocatable     :: hLambda
-        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        real*4, dimension(3) :: hLambda
+        !real*4, dimension(:), allocatable     :: hLambda
+        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
-        doubleprecision :: aDenom, aNum, aCoeff
+        real*4 :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
 
@@ -498,11 +498,11 @@ contains
         class( KernelSecondDerivativeYType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        doubleprecision, dimension(3) :: hLambda
-        !doubleprecision, dimension(:), allocatable     :: hLambda
-        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        real*4, dimension(3) :: hLambda
+        !real*4, dimension(:), allocatable     :: hLambda
+        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
-        doubleprecision :: aDenom, aNum, aCoeff
+        real*4 :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
 
@@ -569,11 +569,11 @@ contains
         class( KernelSecondDerivativeZType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        doubleprecision, dimension(3) :: hLambda
-        !doubleprecision, dimension(:), allocatable     :: hLambda
-        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        real*4, dimension(3) :: hLambda
+        !real*4, dimension(:), allocatable     :: hLambda
+        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
-        doubleprecision :: aDenom, aNum, aCoeff
+        real*4 :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
 

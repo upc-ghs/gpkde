@@ -13,11 +13,6 @@ module GridCellModule
         logical               :: convergence = .false.
 
         ! Kernel pointers
-        !type( KernelMultiGaussianType )    , pointer :: kernel      => null()
-        !type( KernelMultiGaussianType )    , pointer :: kernelSigma => null()
-        !type( KernelSecondDerivativeXType ), pointer :: kernelSDX   => null()
-        !type( KernelSecondDerivativeYType ), pointer :: kernelSDY   => null()
-        !type( KernelSecondDerivativeZType ), pointer :: kernelSDZ   => null()
         class( KernelType ), pointer :: kernel      => null()
         class( KernelType ), pointer :: kernelSigma => null()
         class( KernelType ), pointer :: kernelSDX   => null()
@@ -29,7 +24,7 @@ module GridCellModule
         class( KernelType ), pointer :: kernelSD3   => null()
 
         ! Kernel Sigma Matrix
-        doubleprecision, dimension(:,:,:), allocatable :: kernelSigmaMatrix
+        real*4, dimension(:,:,:), allocatable :: kernelSigmaMatrix
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0
