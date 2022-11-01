@@ -13,12 +13,23 @@ module GridCellModule
         logical               :: convergence = .false.
 
         ! Kernel pointers
-        type( KernelMultiGaussianType )    , pointer :: kernel      => null()
-        type( KernelMultiGaussianType )    , pointer :: kernelSigma => null()
-        type( KernelSecondDerivativeXType ), pointer :: kernelSDX   => null()
-        type( KernelSecondDerivativeYType ), pointer :: kernelSDY   => null()
-        type( KernelSecondDerivativeZType ), pointer :: kernelSDZ   => null()
-        class( KernelType )                , pointer :: kernelSD    => null()
+        !type( KernelMultiGaussianType )    , pointer :: kernel      => null()
+        !type( KernelMultiGaussianType )    , pointer :: kernelSigma => null()
+        !type( KernelSecondDerivativeXType ), pointer :: kernelSDX   => null()
+        !type( KernelSecondDerivativeYType ), pointer :: kernelSDY   => null()
+        !type( KernelSecondDerivativeZType ), pointer :: kernelSDZ   => null()
+        class( KernelType ), pointer :: kernel      => null()
+        class( KernelType ), pointer :: kernelSigma => null()
+        class( KernelType ), pointer :: kernelSDX   => null()
+        class( KernelType ), pointer :: kernelSDY   => null()
+        class( KernelType ), pointer :: kernelSDZ   => null()
+        class( KernelType ), pointer :: kernelSD    => null()
+        class( KernelType ), pointer :: kernelSD1   => null()
+        class( KernelType ), pointer :: kernelSD2   => null()
+        class( KernelType ), pointer :: kernelSD3   => null()
+
+        ! Kernel Sigma Matrix
+        doubleprecision, dimension(:,:,:), allocatable :: kernelSigmaMatrix
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0
@@ -57,6 +68,27 @@ module GridCellModule
         integer, dimension(2) :: kernelSDXMSpan = 0
         integer, dimension(2) :: kernelSDYMSpan = 0
         integer, dimension(2) :: kernelSDZMSpan = 0
+
+        integer, dimension(2) :: kernelSD1XGSpan = 0
+        integer, dimension(2) :: kernelSD1YGSpan = 0
+        integer, dimension(2) :: kernelSD1ZGSpan = 0
+        integer, dimension(2) :: kernelSD1XMSpan = 0
+        integer, dimension(2) :: kernelSD1YMSpan = 0
+        integer, dimension(2) :: kernelSD1ZMSpan = 0
+
+        integer, dimension(2) :: kernelSD2XGSpan = 0
+        integer, dimension(2) :: kernelSD2YGSpan = 0
+        integer, dimension(2) :: kernelSD2ZGSpan = 0
+        integer, dimension(2) :: kernelSD2XMSpan = 0
+        integer, dimension(2) :: kernelSD2YMSpan = 0
+        integer, dimension(2) :: kernelSD2ZMSpan = 0
+
+        integer, dimension(2) :: kernelSD3XGSpan = 0
+        integer, dimension(2) :: kernelSD3YGSpan = 0
+        integer, dimension(2) :: kernelSD3ZGSpan = 0
+        integer, dimension(2) :: kernelSD3XMSpan = 0
+        integer, dimension(2) :: kernelSD3YMSpan = 0
+        integer, dimension(2) :: kernelSD3ZMSpan = 0
 
     contains
 
@@ -138,6 +170,9 @@ contains
         this%kernelSDZMSpan = 0
 
     end subroutine
+
+
+
 
 
 end module GridCellModule

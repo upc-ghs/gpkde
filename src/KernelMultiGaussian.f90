@@ -34,6 +34,7 @@ module KernelMultiGaussianModule
         ! Procedures
         procedure, non_overridable :: Initialize                => prInitialize ! Consider deferring
         procedure, non_overridable :: Reset                     => prReset      ! Consider deferring
+        procedure, non_overridable :: ResetMatrix               => prResetMatrix! Consider deferring
         procedure, non_overridable :: ComputeGridSpans          => prComputeGridSpans
         procedure, non_overridable :: ComputeGridSpansTranspose => prComputeGridSpansTranspose
         procedure, non_overridable :: GenerateZeroPositiveGrid  => prGenerateZeroPositiveGrid
@@ -166,6 +167,21 @@ contains
 
     end subroutine prReset
 
+
+    subroutine prResetMatrix( this )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( KernelType ) :: this 
+        !------------------------------------------------------------------------------
+
+        if ( allocated( this%matrix ) ) deallocate( this%matrix )
+
+    end subroutine prResetMatrix
 
 
     subroutine prComputeGridSpans( this, gridIndexes, gridShape, &
