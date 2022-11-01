@@ -28,6 +28,12 @@ module KernelMultiGaussianModule
         integer                       :: matrixRange 
         integer, dimension(3)         :: matrixPositiveShape = 0 
         real*4, dimension(:,:,:), allocatable :: matrix
+        real*4, dimension(:,:,:), allocatable :: bmatrix
+        !doubleprecision, dimension(:,:,:), allocatable :: matrix
+        !doubleprecision, dimension(:,:,:), allocatable :: bmatrix
+
+        !integer        , dimension(3)   :: dimensionMask
+
 
     contains 
         
@@ -143,6 +149,7 @@ contains
             this%matrixRange = defaultKernelRange 
         end if
 
+
     end subroutine prInitialize
 
 
@@ -164,6 +171,7 @@ contains
         this%matrixRange = defaultKernelRange ! Set to zero ?
 
         if ( allocated( this%matrix ) ) deallocate( this%matrix )
+        if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
 
     end subroutine prReset
 
@@ -184,9 +192,10 @@ contains
     end subroutine prResetMatrix
 
 
-    subroutine prComputeGridSpans( this, gridIndexes, gridShape, &
-                                xGridSpan, yGridSpan, zGridSpan, &
-                           xKernelSpan, yKernelSpan, zKernelSpan )
+    subroutine prComputeGridSpans( this, gridIndexes, gridShape,  &
+                                xGridSpan, yGridSpan, zGridSpan,  &
+                           xKernelSpan, yKernelSpan, zKernelSpan, &
+                                                    dimensionMask )
         !------------------------------------------------------------------------------
         !  
         !------------------------------------------------------------------------------
@@ -198,9 +207,21 @@ contains
         integer, dimension(3), intent(in) :: gridIndexes
         integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
         integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
+
+
+
+        integer :: boundLocX, boundLocY, boundLocZ
+        logical :: isBoundaryX    
+        logical :: isBoundaryY
+        logical :: isBoundaryZ
+        integer :: boundDirX    
+        integer :: boundDirY
+        integer :: boundDirZ
+
+        integer, dimension(3), intent(in) :: dimensionMask
         !------------------------------------------------------------------------------
 
-        ! Spans in grid 
+        ! Spans in grid (ORIGINAL) 
         xGridSpan(1) = max( gridIndexes(1) - this%matrixPositiveShape(1), 1)
         xGridSpan(2) = min( gridIndexes(1) + this%matrixPositiveShape(1), gridShape(1) )
         yGridSpan(1) = max( gridIndexes(2) - this%matrixPositiveShape(2), 1)
@@ -214,7 +235,281 @@ contains
         zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
 
 
+        ! IDENTIFY BOUNDARIES AND DEFINE GRID SPANS 
+        isBoundaryX = .false.
+        isBoundaryY = .false.
+        isBoundaryZ = .false.
+        
+        boundLocX = 0
+        boundLocY = 0
+        boundLocZ = 0
+
+        ! X
+        if ( dimensionMask(1) .eq. 1 ) then 
+            if ( ( gridIndexes(1) - this%matrixPositiveShape(1) ) .lt. 1 ) then 
+                isBoundaryX  = .true.
+                boundLocX    = 1 - gridIndexes(1) + this%matrixPositiveShape(1)
+                boundDirX    = 1
+            else if ( ( gridIndexes(1) + this%matrixPositiveShape(1) ) .gt. gridShape(1) ) then 
+                isBoundaryX  = .true.
+                boundLocX    = 2*this%matrixPositiveShape(1) + 1 &
+                    - ( gridIndexes(1) + this%matrixPositiveShape(1) - gridShape(1) )
+                boundDirX    = 2
+            end if 
+        end if 
+
+        ! Y
+        if ( dimensionMask(2) .eq. 1 ) then 
+            if ( ( gridIndexes(2) - this%matrixPositiveShape(2) ) .lt. 1 ) then 
+                isBoundaryY  = .true.
+                boundLocY    = 1 - gridIndexes(2) + this%matrixPositiveShape(2)
+                boundDirY    = 1
+            else if ( ( gridIndexes(2) + this%matrixPositiveShape(2) ) .gt. gridShape(2) ) then 
+                isBoundaryY  = .true.
+                boundLocY    = 2*this%matrixPositiveShape(2) + 1 &
+                    - ( gridIndexes(2) + this%matrixPositiveShape(2) - gridShape(2) )
+                boundDirY    = 2
+            end if 
+        end if 
+
+        ! Z
+        if ( dimensionMask(3) .eq. 1 ) then 
+            if ( ( gridIndexes(3) - this%matrixPositiveShape(3) ) .lt. 1 ) then 
+                isBoundaryZ  = .true.
+                boundLocZ    = 1 - gridIndexes(3) + this%matrixPositiveShape(3)
+                boundDirZ    = 1
+
+            else if ( ( gridIndexes(3) + this%matrixPositiveShape(3) ) .gt. gridShape(3) ) then 
+                isBoundaryZ  = .true.
+                boundLocZ    = 2*this%matrixPositiveShape(3) + 1 &
+                    - ( gridIndexes(3) + this%matrixPositiveShape(3) - gridShape(3) )
+                boundDirZ    = 2
+            end if 
+        end if 
+
+
+        ! For fast propagation integrate 
+        ! boundary correction here
+
+        ! Writes corrected kernel matrix in 
+        ! this%bmatrix in order to avoid rewriting
+        ! matrix at databases
+
+        ! bmatrix is used only if boundary
+
+        ! Think how to centralize into single matrix
+
+        call prVerifyBoundary( this, gridIndexes, gridShape, &
+                            xGridSpan, yGridSpan, zGridSpan, &
+                      xKernelSpan, yKernelSpan, zKernelSpan, &
+                            boundLocX, boundLocY, boundLocZ, &
+                      isBoundaryX, isBoundaryY, isBoundaryZ, & 
+                            boundDirX, boundDirY, boundDirZ, &
+                               dimensionMask = dimensionMask )
+        
+
+
+
     end subroutine prComputeGridSpans
+
+
+    subroutine prVerifyBoundary( this, gridIndexes, gridShape,    &
+                                xGridSpan, yGridSpan, zGridSpan,  &
+                           xKernelSpan, yKernelSpan, zKernelSpan, & 
+                                 boundLocX, boundLocY, boundLocZ, &
+                           isBoundaryX, isBoundaryY, isBoundaryZ, & 
+                                 boundDirX, boundDirY, boundDirZ, & 
+                                                    dimensionMask )
+        !------------------------------------------------------------------------------
+        !  
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( KernelType ) :: this
+        integer, dimension(3), intent(in) :: gridShape
+        integer, dimension(3), intent(in) :: gridIndexes
+        integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
+        integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
+        integer :: lenbx, lenby, lenbz
+        integer, intent(in) :: boundLocX, boundLocY, boundLocZ
+        logical, intent(in) :: isBoundaryX    
+        logical, intent(in) :: isBoundaryY
+        logical, intent(in) :: isBoundaryZ
+        integer, intent(in) :: boundDirX    
+        integer, intent(in) :: boundDirY
+        integer, intent(in) :: boundDirZ
+        !integer :: boundLocX, boundLocY, boundLocZ
+        !logical :: isBoundaryX    
+        !logical :: isBoundaryY
+        !logical :: isBoundaryZ
+        !integer :: boundDirX    
+        !integer :: boundDirY
+        !integer :: boundDirZ
+        integer, dimension(:), allocatable :: kernelShape
+        integer, dimension(:), allocatable :: nBins
+        integer :: nx, ny, nz
+        integer, dimension(3), intent(in) :: dimensionMask
+        !------------------------------------------------------------------------------
+
+        !print *, 'DEFINE BOUNDARY MATRIX '
+
+        ! Initialize zeroPositiveMatrix
+        !nx = this%matrixPositiveShape(1)
+        !ny = this%matrixPositiveShape(2)
+        !nz = this%matrixPositiveShape(3)
+
+        !print *, nx, ny, nz
+
+        ! Kerne%matrix allocation ( consider doing this only if grid size changed )
+        !if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
+        !allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
+        
+        ! If no boundary, leave       
+        this%bmatrix = this%matrix
+        if ( .not. ( isBoundaryX .or. isBoundaryY .or. isBoundaryZ ) ) return
+
+
+        ! If boundary
+        !this%bmatrix = this%matrix
+        kernelShape  = shape(this%matrix)
+
+
+        if ( dimensionMask(1) .eq. 1 ) then 
+
+            ! SO UP TO THIS POINT, PROCEDURE IDENTIFIES BOUNDARY MATRIX
+            ! NOW APPLY CORRECTION TO KERNEL
+            if ( isBoundaryX ) then 
+                ! Do the process 
+                !print *, '*******************************************'
+                !print *, '  Detected X boundary, correcting kernel...'
+                !print *, '*******************************************'
+
+                !this%bmatrix = this%matrix
+                !boundCorrectedKernelMatrix = kernel%matrix
+            
+                select case( boundDirX ) 
+                    case(1)
+                        ! WEST
+                        lenbx = boundLocX
+                        this%bmatrix( :boundLocX, :, :) = 0
+                        this%bmatrix( boundLocX + 1: boundLocX + lenbx, :, :) = &
+                        this%bmatrix( boundLocX + 1: boundLocX + lenbx, :, :) + &
+                        this%matrix( boundLocX:1:-1, :, :)
+                    case(2)
+                        ! EAST 
+                        lenbx = kernelShape(1) - boundLocX + 1 ! also includes the found cell itself
+                        this%bmatrix( boundLocX:, :, :) = 0
+                        this%bmatrix( boundLocX - lenbx: boundLocX - 1, :, :) = &
+                        this%bmatrix( boundLocX - lenbx: boundLocX - 1, :, :) + &
+                        this%matrix( kernelShape(1): boundLocX :-1, :, :)
+                end select    
+
+
+                ! Leave
+                return
+
+
+            end if 
+        end if 
+
+        if( dimensionMask(2) .eq. 1 ) then 
+            if ( isBoundaryY ) then 
+                ! Do the process 
+                !print *, '*******************************************'
+                !print *, '  Detected Y boundary, correcting kernel...'
+                !print *, '*******************************************'
+
+                !this%bmatrix = this%matrix
+                !boundCorrectedKernelMatrix = kernel%matrix
+            
+                select case( boundDirY ) 
+                    case(1)
+                        ! SOUTH
+                        lenbx = boundLocY
+                        this%bmatrix( :, :boundLocY, :) = 0
+                        this%bmatrix( :, boundLocY + 1: boundLocY + lenbx, :) = &
+                        this%bmatrix( :, boundLocY + 1: boundLocY + lenbx, :) + &
+                        this%matrix( :, boundLocY:1:-1, :)
+                    case(2)
+                        ! NORTH
+                        lenbx = kernelShape(2) - boundLocY + 1 ! also includes the found cell itself
+                        this%bmatrix( :, boundLocY:, :) = 0
+                        this%bmatrix( :, boundLocY - lenbx: boundLocY - 1, :) = &
+                        this%bmatrix( :, boundLocY - lenbx: boundLocY - 1, :) + &
+                        this%matrix( :, kernelShape(2): boundLocY :-1, :)
+                end select    
+
+                ! Leave
+                return
+
+            end if
+
+        end if 
+
+
+        !print *, '*****************************************'
+        !print *, '  PRINTING BOUNDARY MATRIX...'
+        !print *, '*****************************************'
+        !do m= 1, 2*this%matrixPositiveShape(3)+1
+        !    print *, '::',m, '------------------------------'
+        !    do n= 2*this%matrixPositiveShape(2)+1,1,-1
+        !        print *, boundaryMatrix(:,n,m)
+        !    end do
+        !end do
+        !print *, '*****************************************'
+
+        if ( dimensionMask(3) .eq. 1 ) then 
+
+            if ( isBoundaryZ ) then 
+                ! Do the process 
+                !print *, '*******************************************'
+                !print *, '  Detected Z boundary, correcting kernel...'
+                !print *, '*******************************************'
+
+                !print *, 'BOUND LOC Z: ', boundLocZ
+                !print *, 'SHAPE BMATRIX: ', shape( this%bmatrix ) 
+                !print *, 'GRID SHAPE ', gridShape
+                !print *, 'GRID INDEXES ', gridIndexes
+                !print *, 'KERNEL SHAPe  ', kernelShape
+
+
+                !this%bmatrix = this%matrix
+                !boundCorrectedKernelMatrix = kernel%matrix
+            
+                select case( boundDirZ ) 
+                    case(1)
+                        ! BOTTOM
+                        lenbx = boundLocZ
+                        !print *, 'CASE 1 LENB ', lenbx
+                        this%bmatrix( :, :, :boundLocZ) = 0
+                        this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenbx) = &
+                        this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenbx) + &
+                        this%matrix( :, :, boundLocZ:1:-1)
+                    case(2)
+                        ! TOP
+                        lenbx = kernelShape(3) - boundLocZ + 1 ! also includes the found cell itself
+                        !print *, 'CASE 2 LENB ', lenbx
+                        this%bmatrix( :, :, boundLocZ:) = 0
+                        this%bmatrix( :, :, boundLocZ - lenbx: boundLocZ - 1) = &
+                        this%bmatrix( :, :, boundLocZ - lenbx: boundLocZ - 1) + &
+                        this%matrix( :, :, kernelShape(3): boundLocZ :-1)
+                end select
+
+
+                ! Leave
+                return
+
+
+            end if 
+
+        end if 
+
+
+
+    end subroutine prVerifyBoundary 
+
 
 
 
@@ -391,6 +686,9 @@ contains
         if ( allocated( this%matrix ) ) deallocate( this%matrix )
         allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
+        if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
+        allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+
 
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize
@@ -445,6 +743,8 @@ contains
         ! Kernel%matrix allocation ( consider doing this only if grid size changed )
         if ( allocated( this%matrix ) ) deallocate( this%matrix )
         allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+        if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
+        allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
 
         ! Compute normalized smoothing bandwidth/lambda
@@ -516,6 +816,8 @@ contains
         ! Kernel%matrix allocation ( consider doing this only if grid size changed )
         if ( allocated( this%matrix ) ) deallocate( this%matrix )
         allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
+        if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
+        allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
 
         ! Compute normalized smoothing bandwidth/lambda
@@ -588,6 +890,8 @@ contains
         if ( allocated( this%matrix ) ) deallocate( this%matrix )
         allocate( this%matrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
+        if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
+        allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize

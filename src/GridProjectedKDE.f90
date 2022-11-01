@@ -1014,7 +1014,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                     gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
                     gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
                 ) + this%histogram%counts(                             &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD%matrix(&
+                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD%bmatrix(&
+                    !gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD%matrix(&
                             gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
                             gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
                             gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
@@ -1027,6 +1028,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Product curvatures, roughness
         curvature11 = curvature1*curvature1
         roughness11 = 0d0
+
+
+        ! kernelSigma was already computed ? 
+
 
         ! 11
         !$omp parallel do schedule( dynamic, 1 ) &
@@ -1254,6 +1259,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         roughness11 = 0d0
         roughness22 = 0d0
         roughness12 = 0d0
+
+
+        ! kernelSigma was already computed ? 
+
 
         ! 11
         !$omp parallel do schedule( dynamic, 1 ) &
@@ -1814,7 +1823,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 do m = 1, min( n, nDelta )
                    dbi = n*( n - 1 )/2 + m
                    inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
-                   call this%kernelDatabaseFlat( dbi, o )%Initialize( this%binSize, matrixRange=localKernelRange )
+                   call this%kernelDatabaseFlat( dbi, o )%Initialize( & 
+                       this%binSize, matrixRange=localKernelRange )
                    call this%kernelDatabaseFlat( dbi, o )%SetupMatrix( inputSmoothing*this%binSize )
                    kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( dbi, o )%matrix )/1d6
                    kernelDBMemory    = kernelDBMemory + kernelMatrixMemory
@@ -1843,21 +1853,24 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
 
             ! X 
-            call this%kernelSDXDatabase( n )%Initialize( this%binSize, matrixRange=localKernelSDRange )
+            call this%kernelSDXDatabase( n )%Initialize(& 
+                this%binSize, matrixRange=localKernelSDRange )
             call this%kernelSDXDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
 
             kernelMatrixMemory = sizeof( this%kernelSDXDatabase( n )%matrix )/1d6
             kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
 
             ! Y
-            call this%kernelSDYDatabase( n )%Initialize( this%binSize, matrixRange=localKernelSDRange )
+            call this%kernelSDYDatabase( n )%Initialize(& 
+                this%binSize, matrixRange=localKernelSDRange )
             call this%kernelSDYDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
 
             kernelMatrixMemory = sizeof( this%kernelSDYDatabase( n )%matrix )/1d6
             kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
 
             ! Z
-            call this%kernelSDZDatabase( n )%Initialize( this%binSize, matrixRange=localKernelSDRange )
+            call this%kernelSDZDatabase( n )%Initialize(& 
+                this%binSize, matrixRange=localKernelSDRange )
             call this%kernelSDZDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
 
             kernelMatrixMemory = sizeof( this%kernelSDZDatabase( n )%matrix )/1d6
@@ -2010,7 +2023,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 call filterKernel%ComputeGridSpans(&
                     this%histogram%boundingBoxBinIds( :, n ), this%nBins, &
                                          xGridSpan, yGridSpan, zGridSpan, & 
-                                   xKernelSpan, yKernelSpan, zKernelSpan  ) 
+                                   xKernelSpan, yKernelSpan, zKernelSpan, &
+                                   this%dimensionMask  ) 
 
                 if ( any( this%histogram%counts(    &
                         xGridSpan(1):xGridSpan(2),  &
@@ -2245,6 +2259,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             ! Set kernel 
             call this%SetKernel( gc, kernel, kernelSmoothing( :, n ) )
+
 
             ! Compute estimate
             densityEstimateGrid(                           &
@@ -2897,8 +2912,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             ! Determine spans
             call gridCell%kernel%ComputeGridSpans( gridCell%id, this%nBins, &
                 gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-                gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan  )
+                gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, & 
+                                                                 this%dimensionMask  )
         end if 
+
+
+        ! For boundaries 
+        gridCell%kernel%matrix = gridCell%kernel%bmatrix
 
 
         ! Done
@@ -2929,7 +2949,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSigma%ComputeGridSpans( gridCell%id, this%nBins, &
             gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
-            gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan  ) 
+            gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan, & 
+                                                                             this%dimensionMask  ) 
 
         if (allocated( gridCell%kernelSigmaMatrix )) deallocate( gridCell%kernelSigmaMatrix )
         shapeMatrix = shape( gridCell%kernelSigma%matrix )
@@ -2960,7 +2981,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
-                   gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan  ) 
+                   gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, &
+                                                                          this%dimensionMask  ) 
+
+        ! For boundaries
+        gridCell%kernelSD%matrix = gridCell%kernelSD%bmatrix
 
         ! Done
         return
@@ -2987,7 +3012,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  )
+                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
+                                                                             this%dimensionMask  ) 
 
         ! Assign pointer
         gridCell%kernelSD2 => this%kernelSDDatabase2( gridCell%kernelSDDBIndexes(this%idDim2) )
@@ -2995,7 +3021,12 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  ) 
+                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
+                                                                             this%dimensionMask  ) 
+
+        ! For boundaries
+        gridCell%kernelSD1%matrix = gridCell%kernelSD1%bmatrix
+        gridCell%kernelSD2%matrix = gridCell%kernelSD2%bmatrix
 
         ! Done
         return
@@ -3023,7 +3054,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  )
+                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
+                                                                             this%dimensionMask  ) 
 
         ! Assign pointer
         gridCell%kernelSD2 => this%kernelSDYDatabase( gridCell%kernelSDDBIndexes(2) )
@@ -3031,7 +3063,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  )
+                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
+                                                                             this%dimensionMask  ) 
 
         ! Assign pointer
         gridCell%kernelSD3 => this%kernelSDZDatabase( gridCell%kernelSDDBIndexes(3) )
@@ -3039,7 +3072,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD3%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-                   gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan  ) 
+                   gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, &
+                   this%dimensionMask  )
+
+        ! For boundaries
+        gridCell%kernelSD1%matrix = gridCell%kernelSD1%bmatrix
+        gridCell%kernelSD2%matrix = gridCell%kernelSD2%bmatrix
+        gridCell%kernelSD3%matrix = gridCell%kernelSD3%bmatrix
 
         ! Done
         return
@@ -4447,19 +4486,5 @@ end module GridProjectedKDEModule
 
 
     !end subroutine prComputeNetRoughness3DKDB
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
