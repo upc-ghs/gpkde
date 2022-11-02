@@ -21,8 +21,8 @@ FC = gfortran
 #FFLAGS = -O2 -g -pg -fbacktrace -fopenmp -Wall -Wextra -fbounds-check -fcheck=bounds -fcheck=all
 #FFLAGS =  -g -pg -fbacktrace -fopenmp
 #FFLAGS = -O2 -g -pg -fbacktrace -fopenmp
-FFLAGS = -g -pg -fbacktrace -fopenmp -Wall -Wextra -fcheck=all -ffpe-trap=invalid,zero,overflow,underflow
-#FFLAGS = -O2 -fbacktrace -fopenmp
+#FFLAGS = -g -pg -fbacktrace -fopenmp -Wall -Wextra -fcheck=all -ffpe-trap=invalid,zero,overflow,underflow
+FFLAGS = -g -O2 -fbacktrace -fopenmp
 
 # Define the C compile flags
 CC = gcc
@@ -36,7 +36,8 @@ $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridCell.o \
 $(OBJDIR)/GridProjectedKDE.o \
-$(OBJDIR)/testorigin.o
+$(OBJDIR)/testbounded.o
+#$(OBJDIR)/testorigin.o
 #$(OBJDIR)/testboundarymatrix.o
 #$(OBJDIR)/testbbox.o
 #$(OBJDIR)/testwithparameters.o
