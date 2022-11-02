@@ -545,7 +545,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             this%maxHOverLambda = maxHOverLambda
         else 
             this%maxHOverLambda = defaultMaxHOverLambda
-        end if 
+        end if
         if ( present( minHOverLambda ) ) then 
             this%minHOverLambda = minHOverLambda
         else 
@@ -631,11 +631,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             if ( this%flatKernelDatabase ) then 
 
                 print *, '## GPKDE: initialize flat kernel database'
-                !call this%InitializeKernelDatabaseFlat( this%minHOverLambda, &
-                !                                        this%maxHOverLambda, &
-                !                                      this%deltaHOverLambda, &
-                !                                     this%logKernelDatabase  )
-                !print *, '## GPKDE: initialize flat kernel database'
                 call this%InitializeKernelDatabaseFlat( this%minHOverLambda(1), &
                                                         this%maxHOverLambda(1), &
                                                       this%deltaHOverLambda(1), &
@@ -672,6 +667,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
         allocate(            nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
+
+
+        !! SOON !
         ! DO IT ACCORDING TO DIMS
         allocate(          curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
         allocate(          curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
@@ -760,7 +758,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ) :: this 
         integer, intent(inout)        :: nDim
         integer, dimension(3), intent(inout) :: dimensionMask
-        integer :: n
+        integer :: n, nd, currentDim
         !------------------------------------------------------------------------------
 
         print *, 'INITIALIZING MODULE DIMENSIONS' 
@@ -776,6 +774,47 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         this%dimensionMask = dimensionMask
 
         print *, 'DIMENSION MASK ', this%dimensionMask
+
+
+        if ( nDim .eq. 1 ) then 
+            ! Relate x,y,z dimensions to 1 dimensions
+            do nd = 1,3
+                if ( this%dimensionMask( nd ) .eq. 0 ) cycle
+                select case(nd) 
+                    case (1)
+                        this%idDim1 = nd
+                    case (2)
+                        this%idDim1 = nd
+                    case (3)
+                        this%idDim1 = nd
+                end select   
+                ! Use the first found
+                exit
+            end do
+        end if
+
+
+        if ( nDim .eq. 2 ) then
+            ! Relate x,y,z dimensions to 1,2 dimensions
+            do nd = 1,3
+                if ( this%dimensionMask( nd ) .eq. 0 ) cycle
+                currentDim = sum( this%dimensionMask(1:nd) )
+                select case(nd) 
+                    case (1)
+                        this%idDim1 = nd
+                    case (2)
+                        if ( currentDim .eq. 1 ) then 
+                            this%idDim1 = nd
+                        else if ( currentDim .eq. 2 ) then
+                            this%idDim2 = nd
+                        end if
+                    case (3)
+                        this%idDim2 = nd
+                end select   
+            end do
+        end if
+
+
 
         return
 
@@ -1727,7 +1766,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! local
         real*4, dimension(3) :: inputSmoothing
         real*4, dimension(:), allocatable :: hOverLambda
-        integer :: nDelta
+        integer :: nDelta, idDim
         integer :: i, n, m, o, dbi
         logical :: localLogDatabase
         integer :: localKernelRange
@@ -1800,83 +1839,155 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! each axis
         this%nDeltaHOverLambda   = nDelta
 
-        ! LOGGER 
-        print *, '## GPKDE: flat kernel db sizes:', nDelta, nDelta*nDelta*( nDelta + 1 )/2
 
-        ! Allocate kernel databases
-        allocate( this%kernelDatabaseFlat( nDelta*( nDelta + 1 )/2, nDelta ) )
-        allocate( this%kernelSDXDatabase( nDelta ) )
-        allocate( this%kernelSDYDatabase( nDelta ) )
-        allocate( this%kernelSDZDatabase( nDelta ) )
+        ! Depending on the number of dimensions
+        ! is the required kernel database.
 
-        ! TIC
-        call system_clock(clockCountStart, clockCountRate, clockCountMax)
-        print *, '## GPKDE: Computing W kernels database'
-        ! Kernel database
-        !$omp parallel do schedule( dynamic, 1 )  &
-        !$omp private( n, m, dbi )    &
-        !$omp reduction( +:kernelDBMemory)  &
-        !$omp private( kernelMatrixMemory ) &
-        !$omp private( inputSmoothing )
-        do o = 1, nDelta
-            do n = 1, nDelta
-                do m = 1, min( n, nDelta )
-                   dbi = n*( n - 1 )/2 + m
-                   inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
-                   call this%kernelDatabaseFlat( dbi, o )%Initialize( & 
-                       this%binSize, matrixRange=localKernelRange )
-                   call this%kernelDatabaseFlat( dbi, o )%SetupMatrix( inputSmoothing*this%binSize )
-                   kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( dbi, o )%matrix )/1d6
-                   kernelDBMemory    = kernelDBMemory + kernelMatrixMemory
-                end do
-            end do
-        end do
-        !$omp end parallel do
+        ! 1D
+        if ( nDim .eq. 1 ) then 
 
-        ! TOC
-        call system_clock(clockCountStop, clockCountRate, clockCountMax)
-        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-        print *, '## GPKDE Computing W kernel database took ', elapsedTime, ' seconds'
-        print *, '## GPKDE W Kernel database size GB', kernelDBMemory/1d3
-        
+          ! Allocate kernel databases
+          allocate( this%kernelDatabaseFlat( nDelta, 1 ) )
+          allocate( this%kernelSDXDatabase( nDelta )  )    ! AS A PROXY FOR ANY DIM, NOT
 
-        kernelMatrixMemory = 0d0
-        ! TIC
-        call system_clock(clockCountStart, clockCountRate, clockCountMax)
-        print *, '## GPKDE: Computing SD kernels database'
-        ! Second derivatives
-        !$omp parallel do schedule( dynamic, 1 ) &
-        !$omp reduction( +:kernelSDDBMemory)     &
-        !$omp private( kernelMatrixMemory )      &
-        !$omp private( inputSmoothing )
-        do n = 1, nDelta
-            inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
+          ! TIC
+          call system_clock(clockCountStart, clockCountRate, clockCountMax)
+          print *, '## GPKDE: Computing W kernels database'
+          ! Kernel database
+          !$omp parallel do schedule( dynamic, 1 )  &
+          !$omp private( n )                        &
+          !$omp reduction( +:kernelDBMemory)        &
+          !$omp private( kernelMatrixMemory )       &
+          !$omp private( inputSmoothing )
+          do n = 1, nDelta
+              inputSmoothing = 0
+              inputSmoothing( this%idDim1 ) = hOverLambda(n)
+              call this%kernelDatabaseFlat( n, 1 )%Initialize( &
+                      this%binSize, matrixRange=localKernelRange, dimensionMask=this%dimensionMask )
+              call this%kernelDatabaseFlat( n, 1 )%SetupMatrix( inputSmoothing*this%binSize )
+              kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( n, 1 )%matrix )/1d6
+              kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
+          end do
+          !$omp end parallel do
 
+          ! TOC
+          call system_clock(clockCountStop, clockCountRate, clockCountMax)
+          elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+          print *, '## GPKDE Computing W kernel database took ', elapsedTime, ' seconds'
+          print *, '## GPKDE W Kernel database size GB', kernelDBMemory/1d3
+          
+
+          kernelMatrixMemory = 0d0
+          ! TIC
+          call system_clock(clockCountStart, clockCountRate, clockCountMax)
+          print *, '## GPKDE: Computing SD kernels database'
+          ! Second derivatives
+          !$omp parallel do schedule( dynamic, 1 ) &
+          !$omp reduction( +:kernelSDDBMemory)     &
+          !$omp private( kernelMatrixMemory )      &
+          !$omp private( inputSmoothing )
+          do n = 1, nDelta
+            inputSmoothing(:) = 0
+            inputSmoothing( this%idDim1 ) = hOverLambda(n)
             ! X 
             call this%kernelSDXDatabase( n )%Initialize(& 
-                this%binSize, matrixRange=localKernelSDRange )
+                this%binSize, matrixRange=localKernelSDRange, dimensionMask=this%dimensionMask )
             call this%kernelSDXDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
-
             kernelMatrixMemory = sizeof( this%kernelSDXDatabase( n )%matrix )/1d6
             kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
+          end do
+          !$omp end parallel do
 
-            ! Y
-            call this%kernelSDYDatabase( n )%Initialize(& 
-                this%binSize, matrixRange=localKernelSDRange )
-            call this%kernelSDYDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+        end if 
 
-            kernelMatrixMemory = sizeof( this%kernelSDYDatabase( n )%matrix )/1d6
-            kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
 
-            ! Z
-            call this%kernelSDZDatabase( n )%Initialize(& 
-                this%binSize, matrixRange=localKernelSDRange )
-            call this%kernelSDZDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+        ! 2D or 3D (temporary)
+        if ( (nDim .eq. 2 ) .or. ( nDim .eq. 3 ) )  then 
 
-            kernelMatrixMemory = sizeof( this%kernelSDZDatabase( n )%matrix )/1d6
-            kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
-        end do
-        !$omp end parallel do
+                print *, ' KERNEL DATABASE FOR NDIM: ', nDim
+                print *, ' DIMENSION MASK          : ', this%dimensionMask
+
+                ! LOGGER 
+                print *, '## GPKDE: flat kernel db sizes:', nDelta, nDelta*nDelta*( nDelta + 1 )/2
+
+
+                ! Allocate kernel databases
+                allocate( this%kernelDatabaseFlat( nDelta*( nDelta + 1 )/2, nDelta ) )
+                allocate( this%kernelSDXDatabase( nDelta ) )
+                allocate( this%kernelSDYDatabase( nDelta ) )
+                allocate( this%kernelSDZDatabase( nDelta ) )
+
+                ! TIC
+                call system_clock(clockCountStart, clockCountRate, clockCountMax)
+                print *, '## GPKDE: Computing W kernels database'
+                ! Kernel database
+                !$omp parallel do schedule( dynamic, 1 )  &
+                !$omp private( n, m, dbi )    &
+                !$omp reduction( +:kernelDBMemory)  &
+                !$omp private( kernelMatrixMemory ) &
+                !$omp private( inputSmoothing )
+                do o = 1, nDelta
+                    do n = 1, nDelta
+                        do m = 1, min( n, nDelta )
+                           dbi = n*( n - 1 )/2 + m
+                           inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
+                           call this%kernelDatabaseFlat( dbi, o )%Initialize( & 
+                               this%binSize, matrixRange=localKernelRange )
+                           call this%kernelDatabaseFlat( dbi, o )%SetupMatrix( inputSmoothing*this%binSize )
+                           kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( dbi, o )%matrix )/1d6
+                           kernelDBMemory    = kernelDBMemory + kernelMatrixMemory
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+
+                ! TOC
+                call system_clock(clockCountStop, clockCountRate, clockCountMax)
+                elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+                print *, '## GPKDE Computing W kernel database took ', elapsedTime, ' seconds'
+                print *, '## GPKDE W Kernel database size GB', kernelDBMemory/1d3
+                
+
+                kernelMatrixMemory = 0d0
+                ! TIC
+                call system_clock(clockCountStart, clockCountRate, clockCountMax)
+                print *, '## GPKDE: Computing SD kernels database'
+                ! Second derivatives
+                !$omp parallel do schedule( dynamic, 1 ) &
+                !$omp reduction( +:kernelSDDBMemory)     &
+                !$omp private( kernelMatrixMemory )      &
+                !$omp private( inputSmoothing )
+                do n = 1, nDelta
+                    inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
+
+                    ! X 
+                    call this%kernelSDXDatabase( n )%Initialize(& 
+                        this%binSize, matrixRange=localKernelSDRange )
+                    call this%kernelSDXDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+
+                    kernelMatrixMemory = sizeof( this%kernelSDXDatabase( n )%matrix )/1d6
+                    kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
+
+                    ! Y
+                    call this%kernelSDYDatabase( n )%Initialize(& 
+                        this%binSize, matrixRange=localKernelSDRange )
+                    call this%kernelSDYDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+
+                    kernelMatrixMemory = sizeof( this%kernelSDYDatabase( n )%matrix )/1d6
+                    kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
+
+                    ! Z
+                    call this%kernelSDZDatabase( n )%Initialize(& 
+                        this%binSize, matrixRange=localKernelSDRange )
+                    call this%kernelSDZDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+
+                    kernelMatrixMemory = sizeof( this%kernelSDZDatabase( n )%matrix )/1d6
+                    kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
+                end do
+                !$omp end parallel do
+
+        end if 
+
 
         ! TOC
         call system_clock(clockCountStop, clockCountRate, clockCountMax)
@@ -1884,6 +1995,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         print *, '## GPKDE Computing SD kernel database took ', elapsedTime, ' seconds'
         print *, '## GPKDE SD Kernel database size GB', kernelSDDBMemory/1d3
 
+        ! Done
         return
 
 
@@ -1959,6 +2071,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
         real*4 :: elapsedTime
         !------------------------------------------------------------------------------
+
+
+        print *, 'WILL COMPUTE DENSITY WITH GPKDE'
 
 
         ! Define nOptimizationLoops
@@ -2076,6 +2191,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Density optimization 
         if ( this%databaseOptimization ) then
+
             ! Initialize database if not allocated
             if ( .not. allocated( this%kernelDatabaseFlat ) ) then 
                 call this%InitializeKernelDatabaseFlat( this%minHOverLambda(1), &
@@ -2084,13 +2200,16 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                                                         this%logKernelDatabase  )
             end if
 
+            ! Compute density
             call this%ComputeDensityFromDatabaseFlat(      &
                                  this%densityEstimateGrid, &
                 nOptimizationLoops=localNOptimizationLoops )
 
+            ! Drop database ?
             if ( .not. persistKDB ) then
                 call this%DropKernelDatabase()
             end if
+
         else
 
             ! Brute force optimization
@@ -2237,6 +2356,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 where ( kernelSmoothingScale .gt. 0d0 )
                     kernelSmoothingShape(nd,:) = kernelSmoothing(nd,:)/kernelSmoothingScale
                 end where
+            else
+                ! No smoothing in compressed dimension 
+                kernelSmoothing(nd,:)      = 0
+                kernelSmoothingShape(nd,:) = 0
+                kernelSigmaSupport(nd,:)   = 0
             end if 
         end do
 
@@ -2259,7 +2383,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             ! Set kernel 
             call this%SetKernel( gc, kernel, kernelSmoothing( :, n ) )
-
 
             ! Compute estimate
             densityEstimateGrid(                           &
@@ -2327,8 +2450,17 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             ! Update kernelSigmaSupport 
             call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                                nEstimateArray, kernelSigmaSupportScale )
+
             ! Spread it, isotropic 
+            ! And deactivate compressed dimension
             kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, 3 )
+            do nd =1, 3
+                if ( this%dimensionMask(nd) .eq. 0 ) then 
+                    ! No smoothing in compressed dimension 
+                    kernelSigmaSupport(nd,:)   = 0
+                end if 
+            end do
+
 
             ! Update nEstimate
             nEstimateGrid  = 0d0
@@ -2347,7 +2479,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 ! Assign gc pointer 
                 gc => activeGridCells(n)
 
-                if (  any( kernelSigmaSupport( :, n ) .le. 0d0 ) ) then 
+                if (  any( kernelSigmaSupport( :, n ) .lt. 0d0 ) ) then 
                     gc%skipKernelSigma = .true.
                     cycle
                 end if
@@ -2388,6 +2520,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                                     roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                               kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
+
 
             ! Update density
             densityEstimateGrid = 0d0
@@ -2437,6 +2570,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             !$omp end parallel do
 
 
+            ! THINK OF A WAY TO COMPARE AGAINST PREVIOUS STATE
+            !relativeDensityChange = 0d0
+            !zeroDensityCount      = count( this%densityEstimate .le. 0d0 )
+            !where ( densityEstimateArray .gt. 0d0 ) 
+            !    relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
+            !end where
+
             !if ( exportOptimizationVariables ) then
             !    write( unit=loopId, fmt=* )m
             !    write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
@@ -2484,12 +2624,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         do nd = 1, 3
             if ( this%dimensionMask(nd) .eq. 1 ) then 
                 kernelSmoothingScale = kernelSmoothingScale*kernelSmoothing(nd,:) 
+
             end if 
         end do
         kernelSmoothingScale    = ( kernelSmoothingScale )**( 1d0/nDim )
        
+        ! Done
         return
-
 
     end subroutine prComputeKernelSmoothingScale
 
@@ -2525,12 +2666,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Limit the maximum value
         do nd =1, 3
             if ( this%dimensionMask(nd) .eq. 1 ) then 
-                where ( kernelSigmaSupportScale/this%binSize(nd) .gt. defaultMaxHOverLambda )
-                    kernelSigmaSupportScale = this%binSize(nd)*defaultMaxHOverLambda 
+                where ( kernelSigmaSupportScale/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
+                    kernelSigmaSupportScale = this%binSize(nd)*this%maxHOverLambda(nd) 
                 end where
             end if 
         end do
-
 
 
         ! Done
@@ -2611,6 +2751,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
                 curvatureBandwidth( nd, : ) = &
                     this%alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( nd, : )*kernelSmoothingScale
+
+                ! Limit the maximum value
+                where ( curvatureBandwidth( nd, : )/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
+                    curvatureBandwidth( nd, : ) = this%binSize(nd)*this%maxHOverLambda(nd) 
+                end where
 
             end if
 
@@ -2696,6 +2841,12 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                         end where
                 end select
                 kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
+
+                ! Limit the maximum value
+                where ( kernelSmoothing( nd, : )/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
+                    kernelSmoothing( nd, : ) = this%binSize(nd)*this%maxHOverLambda(nd) 
+                end where
+
             end if
         end do
        
@@ -2810,7 +2961,16 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 ), &
             this%nDeltaHOverLambda(nd)  )
         end do 
-        
+       
+
+        ! 1D
+        if ( nDim .eq. 1 ) then 
+                flatDBIndexes(1) = maxval(indexes)
+                flatDBIndexes(2) = 1 
+                ! Done 
+                return
+        end if 
+
         ! Will work properly as long nDeltaHOverLambda
         ! has the same value for each axis. 
         ! This is linked to database initialization function.
@@ -2863,7 +3023,18 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 ), &
             this%nDeltaHOverLambda(nd)  )
         end do 
-        
+       
+
+        ! 1D
+        if ( nDim .eq. 1 ) then 
+                flatDBIndexes(1) = maxval(indexes)
+                flatDBIndexes(2) = 1 
+                ! Done 
+                return
+        end if 
+
+
+        ! 2D/3D 
         ! Will work properly as long nDeltaHOverLambda
         ! has the same value for each axis. 
         ! This is linked to database initialization function.
@@ -3091,8 +3262,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target          :: this
         type( GridCellType ), intent(inout)            :: gridCell
         class( KernelType ), target, intent(inout)     :: kernel
-        real*4, dimension(3), intent(in)      :: smoothing
-        real*4, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
+        real*4, dimension(3), intent(in)               :: smoothing
+        real*4, dimension(:,:,:), allocatable, target  :: transposedKernelMatrix
+        real*4, dimension(3)                           :: inputSmoothing
         !-----------------------------------------------------------
 
         ! Point to kernel object
@@ -3104,7 +3276,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernel%ComputeGridSpans( gridCell%id, this%nBins   , &
             gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-            gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan  )
+            gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, &
+                                                             this%dimensionMask  )
+
+        ! For boundaries 
+        gridCell%kernel%matrix = gridCell%kernel%bmatrix
 
         ! Done 
         return
@@ -3131,7 +3307,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSigma%ComputeGridSpans( gridCell%id, this%nBins, &
             gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
-            gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan  )
+            gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan, &
+                                                                            this%dimensionMask  )
 
         if (allocated( gridCell%kernelSigmaMatrix )) deallocate( gridCell%kernelSigmaMatrix )
         shapeMatrix = shape( gridCell%kernelSigma%matrix )
@@ -3152,7 +3329,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         class( GridProjectedKDEType ), target      :: this
         type( GridCellType ),  intent(inout)       :: gridCell
         class( KernelType ), target, intent(inout) :: kernel
-        real*4, dimension(3), intent(in)  :: smoothing
+        real*4, dimension(3), intent(in)           :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
@@ -3162,12 +3339,15 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Compute matrix
         call gridCell%kernelSD%SetupMatrix( & 
                 (/smoothing(this%idDim1),smoothing(this%idDim1),smoothing(this%idDim1)/) ) 
-        !call gridCell%kernelSD%SetupMatrix( smoothing ) 
 
         ! Determine spans
         call gridCell%kernelSD%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
-                   gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan  ) 
+                   gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, & 
+                                                                            this%dimensionMask )
+
+        ! For boundaries
+        gridCell%kernelSD%matrix = gridCell%kernelSD%bmatrix
 
         ! Done
         return
@@ -3195,7 +3375,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  )
+                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
+                                                                              this%dimensionMask )
 
         ! Assign kernelSD2 pointer 
         gridCell%kernelSD2 => kernel2
@@ -3207,7 +3388,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  ) 
+                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
+                                                                              this%dimensionMask )
 
         ! Done
         return
@@ -3235,8 +3417,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  )
-
+                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
+                                                                              this%dimensionMask )
         ! Assign kernelSD2 pointer 
         gridCell%kernelSD2 => kernel2
 
@@ -3246,7 +3428,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  ) 
+                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
+                                                                              this%dimensionMask )
 
         ! Assign kernelSD3 pointer 
         gridCell%kernelSD3 => kernel3
@@ -3257,7 +3440,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Determine spans
         call gridCell%kernelSD3%ComputeGridSpans( gridCell%id, this%nBins, &
                    gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-                   gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan  ) 
+                   gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, & 
+                                                                              this%dimensionMask )
         ! Done
         return
 
@@ -3275,8 +3459,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         implicit none 
         class(GridProjectedKDEType) :: this
         character(len=*), intent(in) :: outputFileName
-        !character(len=300), intent(in) :: outputFileName
-        !integer :: nExportPoints
         integer :: ix, iy, iz, n
         integer :: outputUnit = 555
         !------------------------------------------------------------------------------
@@ -3285,24 +3467,14 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Add some default
         open( outputUnit, file=outputFileName, status='replace' )
 
-        ! OLD
-        !do n = 1, this%nComputeBins
-        !    ix = this%computeBinIds( 1, n )
-        !    iy = this%computeBinIds( 2, n )
-        !    iz = this%computeBinIds( 3, n )
-        !    ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-        !    write(outputUnit,"(I6,I6,I6,F16.8)") ix, iy, iz, this%densityEstimate( n )
-        !end do
-
-        !nExportPoints = count( this%densityEstimateGrid/=0 )
-
         ! Following column-major nesting
         do iz = 1, this%nBins(3)
             do iy = 1, this%nBins(2)
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
                     ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-                    write(outputUnit,"(I6,I6,I6,F16.8)") ix, iy, iz, this%densityEstimateGrid( ix, iy, iz )
+                    write(outputUnit,"(I6,I6,I6,F16.8,I6)") ix, iy, iz, & 
+                      this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
                 end do
             end do
         end do

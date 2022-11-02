@@ -10,7 +10,7 @@ module KernelMultiGaussianModule
     real*4, parameter :: pi      = 4.d0*atan(1.d0)
     real*4, parameter :: sqrtPi  = sqrt(4.d0*atan(1.d0))
     real*4, parameter :: sqrtTwo = sqrt(2d0)
-    integer                    :: nDim    = 3
+    integer           :: nDim    = 3
 
     integer, parameter :: defaultKernelRange   = 3
     integer, parameter :: defaultKernelSDRange = 4
@@ -32,7 +32,8 @@ module KernelMultiGaussianModule
         !doubleprecision, dimension(:,:,:), allocatable :: matrix
         !doubleprecision, dimension(:,:,:), allocatable :: bmatrix
 
-        !integer        , dimension(3)   :: dimensionMask
+        integer, dimension(3) :: dimensionMask
+        integer               :: idDim1, idDim2
 
 
     contains 
@@ -127,7 +128,7 @@ contains
 
 
     ! Common methods
-    subroutine prInitialize( this, binSize, matrixRange )
+    subroutine prInitialize( this, binSize, matrixRange, dimensionMask )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -138,6 +139,8 @@ contains
         class( KernelType ) :: this 
         real*4, dimension(:)  :: binSize
         integer, intent(in), optional  :: matrixRange
+        integer, dimension(:), intent(in), optional  :: dimensionMask
+        integer :: n
         !------------------------------------------------------------------------------
 
         ! Assign binSize 
@@ -148,6 +151,39 @@ contains
         else
             this%matrixRange = defaultKernelRange 
         end if
+
+
+        if ( present( dimensionMask ) ) then 
+
+            this%dimensionMask = dimensionMask
+            nDim = sum( this%dimensionMask )
+
+            if ( nDim .eq. 1 ) then 
+              do n=1,3
+                if ( this%dimensionMask(n) .eq. 1 ) then 
+                  this%idDim1 = n 
+                  exit
+                end if 
+              end do
+            end if 
+
+            if ( nDim .eq. 2 ) then
+              this%idDim1 = 0
+              this%idDim2 = 0 
+              do n=1,3
+                if ( (this%dimensionMask(n) .eq. 1) .and. (this%idDim1.eq.0) ) then 
+                  this%idDim1 = n
+                elseif ( this%dimensionMask(n) .eq. 1 ) then 
+                  this%idDim2 = n
+                  exit
+                end if 
+              end do
+            end if 
+
+        else
+            this%dimensionMask = (/1,1,1/)
+        end if
+        
 
 
     end subroutine prInitialize
@@ -235,7 +271,7 @@ contains
         zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
 
 
-        ! IDENTIFY BOUNDARIES AND DEFINE GRID SPANS 
+        ! Identify boundary faces
         isBoundaryX = .false.
         isBoundaryY = .false.
         isBoundaryZ = .false.
@@ -288,17 +324,10 @@ contains
         end if 
 
 
-        ! For fast propagation integrate 
-        ! boundary correction here
-
-        ! Writes corrected kernel matrix in 
-        ! this%bmatrix in order to avoid rewriting
-        ! matrix at databases
-
-        ! bmatrix is used only if boundary
-
-        ! Think how to centralize into single matrix
-
+        !! Writes corrected kernel matrix in 
+        !! this%bmatrix in order to avoid rewriting
+        !! matrix at databases
+        this%bmatrix = this%matrix
         call prVerifyBoundary( this, gridIndexes, gridShape, &
                             xGridSpan, yGridSpan, zGridSpan, &
                       xKernelSpan, yKernelSpan, zKernelSpan, &
@@ -307,7 +336,13 @@ contains
                             boundDirX, boundDirY, boundDirZ, &
                                dimensionMask = dimensionMask )
         
-
+        !print *, sum(this%matrix), sum(this%bmatrix)
+        !if ( abs( sum(this%bmatrix) - 1 ) .gt. 0.1 ) then 
+        !        print *, 'PANIC'
+        !        print *, 'KERNEL SHAPE BMATRIX', shape(this%bmatrix)
+        !        print *, 'KERNEL SHAPE MATRIX', shape(this%matrix)
+        !        call exit(0)
+        !end if
 
 
     end subroutine prComputeGridSpans
@@ -339,13 +374,6 @@ contains
         integer, intent(in) :: boundDirX    
         integer, intent(in) :: boundDirY
         integer, intent(in) :: boundDirZ
-        !integer :: boundLocX, boundLocY, boundLocZ
-        !logical :: isBoundaryX    
-        !logical :: isBoundaryY
-        !logical :: isBoundaryZ
-        !integer :: boundDirX    
-        !integer :: boundDirY
-        !integer :: boundDirZ
         integer, dimension(:), allocatable :: kernelShape
         integer, dimension(:), allocatable :: nBins
         integer :: nx, ny, nz
@@ -374,7 +402,6 @@ contains
         ! If boundary
         !this%bmatrix = this%matrix
         kernelShape  = shape(this%matrix)
-
 
         if ( dimensionMask(1) .eq. 1 ) then 
 
@@ -406,10 +433,8 @@ contains
                         this%matrix( kernelShape(1): boundLocX :-1, :, :)
                 end select    
 
-
                 ! Leave
                 return
-
 
             end if 
         end if 
@@ -636,7 +661,6 @@ contains
         ! dimension should be zero
 
         ! This means that matrixPositiveShape will have a zero in the compressed dimension
-
         this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
 
         allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
@@ -672,6 +696,7 @@ contains
         real*4, dimension(3)                  :: hLambda
         real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
+        integer :: nd
         !------------------------------------------------------------------------------
 
 
@@ -694,11 +719,29 @@ contains
         hLambda = this%bandwidth/this%binSize
 
         ! Compute kernel
-        zeroPositiveMatrix = (0.5**nDim)*( &
-            ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
-            ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
+        !zeroPositiveMatrix = (0.5**nDim)*( &
+        !    ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
+        !    ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
+        !    ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
 
+        zeroPositiveMatrix(:,:,:) = (0.5**nDim)
+        do nd=1,3
+            if ( hLambda(nd) .le. 0d0 ) cycle
+            select case(nd)
+            case(1)
+                zeroPositiveMatrix = zeroPositiveMatrix*(         &
+                  erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) & 
+                - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )
+            case(2)
+                zeroPositiveMatrix = zeroPositiveMatrix*(         &
+                  erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) & 
+                - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+            case(3)
+                zeroPositiveMatrix = zeroPositiveMatrix*(         &
+                  erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) & 
+                - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+            end select
+        end do 
 
         ! Unfold
         call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
@@ -729,6 +772,7 @@ contains
         !real*4, dimension(:), allocatable     :: hLambda
         real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
+        integer :: nd
         real*4 :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
@@ -750,15 +794,33 @@ contains
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize
 
-
         ! Compute kernel
-        zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
-            ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) - &
-            ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) )*&
-            ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
-              erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
-            ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
-              erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+        zeroPositiveMatrix(:,:,:) = 1
+        do nd=1,3
+            if ( hLambda(nd) .le. 0d0 ) cycle
+            select case(nd)
+            case(1)
+                zeroPositiveMatrix = zeroPositiveMatrix*( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
+                                 ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) - &
+                                 ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) )
+            case(2)
+                zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - & 
+                                                            erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+            case(3)
+                zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
+                                                            erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+            end select
+        end do 
+
+
+        !! Compute kernel
+        !zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
+        !    ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) - &
+        !    ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) )*&
+        !    ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
+        !      erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
+        !    ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
+        !      erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
 
 
         ! Unfold
@@ -775,10 +837,22 @@ contains
             this%matrix = aCoeff*this%matrix
         end where
 
+        ! Correct kernel
+        !this%matrix = this%matrix*sqrt( &
+        !        3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(1)**5 )*sum( this%matrix**2 ) ) &
+        !    )/sqrt( hLambda(2) )/sqrt( hLambda(3) )
 
-        this%matrix = this%matrix*sqrt( &
-                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(1)**5 )*sum( this%matrix**2 ) ) &
-            )/sqrt( hLambda(2) )/sqrt( hLambda(3) )
+        do nd=1,3
+            if ( hLambda(nd) .le. 0d0 ) cycle
+            select case(nd)
+            case(1)
+                this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(1)**5)*sum( this%matrix**2 ) ) )
+            case(2)
+                this%matrix = this%matrix/sqrt( hLambda(2) )
+            case(3)
+                this%matrix = this%matrix/sqrt( hLambda(3) )
+            end select
+        end do 
 
 
         return
