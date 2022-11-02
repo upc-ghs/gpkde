@@ -3473,7 +3473,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
                     ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-                    write(outputUnit,"(I6,I6,I6,F16.8,I6)") ix, iy, iz, & 
+                    write(outputUnit,"(I8,I8,I8,F16.4,I8)") ix, iy, iz, & 
                       this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
                 end do
             end do
