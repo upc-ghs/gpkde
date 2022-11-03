@@ -8,13 +8,13 @@ program testkernel
     type( GridProjectedKDEType ), allocatable:: gpkde
     type( KernelMultiGaussianType ):: kernel
     
-    real*4, dimension(3)             :: domainSize         = [ 4.0   , 0.01 , 0.01 ] 
-    real*4, dimension(3)             :: binSize            = [ 0.005 , 0.01 , 0.01 ]
-    real*4, dimension(3)             :: domainOrigin       = [ 0.015 , 0.0  , 0.0  ]
+    doubleprecision, dimension(3)             :: domainSize         = [ 3.0   , 0.01 , 0.01 ] 
+    doubleprecision, dimension(3)             :: binSize            = [ 0.005 , 0.01 , 0.01 ]
+    doubleprecision, dimension(3)             :: domainOrigin       = [ 0.015 , 0.0  , 0.0  ]
 
-    real*4 :: maxHOverLambda 
-    real*4 :: minHOverLambda
-    real*4 :: deltaHOverLambda
+    doubleprecision :: maxHOverLambda 
+    doubleprecision :: minHOverLambda
+    doubleprecision :: deltaHOverLambda
 
     integer :: nx, ny, nz
     integer :: n, m, o, p, i
@@ -24,12 +24,18 @@ program testkernel
     real, dimension(:), allocatable :: yarray
     real, dimension(:), allocatable :: zarray
     integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-    real*4 :: elapsedTime
+    doubleprecision :: elapsedTime
     integer :: res
     integer :: line_no, ix
 
-    character(len=200) :: particlesFileName = 'particles_parker_8.csv'
-    integer            :: nlines = 345538
+    character(len=200) :: particlesFileName = 'particles_parker_3.csv'
+    integer            :: nlines = 1600000
+    !character(len=200) :: particlesFileName = 'particles_parker_2.csv'
+    !integer            :: nlines = 1599988
+    !character(len=200) :: particlesFileName = 'particles_parker_1.csv'
+    !integer            :: nlines = 1599616
+    !character(len=200) :: particlesFileName = 'particles_parker_0.csv'
+    !integer            :: nlines = 819000
     !character(len=200) :: particlesFileName = 'particles_parker_7.csv'
     !integer            :: nlines = 230347
     !character(len=200) :: particlesFileName = 'particles_parker_6.csv'
@@ -42,7 +48,7 @@ program testkernel
     !integer            :: nlines = 12799
     !character(len=200) :: particlesFileName = 'particles_parker_2.csv'
     !integer            :: nlines = 409600
-    real*4, dimension(:,:), allocatable :: dataArray
+    doubleprecision, dimension(:,:), allocatable :: dataArray
     integer :: nOptimizationLoops
     !-------------------------------------------------------------
 
