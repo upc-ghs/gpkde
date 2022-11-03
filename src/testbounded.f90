@@ -28,8 +28,10 @@ program testkernel
     integer :: res
     integer :: line_no, ix
 
-    character(len=200) :: particlesFileName = 'particles_parker_5.csv'
-    integer            :: nlines = 819001
+    character(len=200) :: particlesFileName = 'particles_parker_6.csv'
+    integer            :: nlines = 819025
+    !character(len=200) :: particlesFileName = 'particles_parker_5.csv'
+    !integer            :: nlines = 819001
     !character(len=200) :: particlesFileName = 'particles_parker_4.csv'
     !integer            :: nlines = 819009
     !character(len=200) :: particlesFileName = 'particles_parker_3.csv'
