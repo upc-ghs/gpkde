@@ -24,7 +24,7 @@ module GridCellModule
         class( KernelType ), pointer :: kernelSD3   => null()
 
         ! Kernel Sigma Matrix
-        real*4, dimension(:,:,:), allocatable :: kernelSigmaMatrix
+        doubleprecision, dimension(:,:,:), allocatable :: kernelSigmaMatrix
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0

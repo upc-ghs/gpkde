@@ -7,9 +7,9 @@ module KernelMultiGaussianModule
 
 
     ! Parameters
-    real*4, parameter :: pi      = 4.d0*atan(1.d0)
-    real*4, parameter :: sqrtPi  = sqrt(4.d0*atan(1.d0))
-    real*4, parameter :: sqrtTwo = sqrt(2d0)
+    doubleprecision, parameter :: pi      = 4.d0*atan(1.d0)
+    doubleprecision, parameter :: sqrtPi  = sqrt(4.d0*atan(1.d0))
+    doubleprecision, parameter :: sqrtTwo = sqrt(2d0)
     integer           :: nDim    = 3
 
     integer, parameter :: defaultKernelRange   = 3
@@ -23,12 +23,12 @@ module KernelMultiGaussianModule
     type, public, abstract :: KernelType
         
         ! Properties
-        real*4, dimension(3) :: binSize     = 0d0
-        real*4, dimension(3) :: bandwidth   = 0d0
+        doubleprecision, dimension(3) :: binSize     = 0d0
+        doubleprecision, dimension(3) :: bandwidth   = 0d0
         integer                       :: matrixRange 
         integer, dimension(3)         :: matrixPositiveShape = 0 
-        real*4, dimension(:,:,:), allocatable :: matrix
-        real*4, dimension(:,:,:), allocatable :: bmatrix
+        doubleprecision, dimension(:,:,:), allocatable :: matrix
+        doubleprecision, dimension(:,:,:), allocatable :: bmatrix
         !doubleprecision, dimension(:,:,:), allocatable :: matrix
         !doubleprecision, dimension(:,:,:), allocatable :: bmatrix
 
@@ -115,8 +115,8 @@ module KernelMultiGaussianModule
             import :: KernelType
             class( KernelType ) :: this 
             integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
-            real*4, dimension(:)    , allocatable :: hLambda
-            real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+            doubleprecision, dimension(:)    , allocatable :: hLambda
+            doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
             integer :: nx, ny, nz
             !------------------------------------------------------------------------------
         end subroutine ComputeKernelMatrix
@@ -137,7 +137,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( KernelType ) :: this 
-        real*4, dimension(:)  :: binSize
+        doubleprecision, dimension(:)  :: binSize
         integer, intent(in), optional  :: matrixRange
         integer, dimension(:), intent(in), optional  :: dimensionMask
         integer :: n
@@ -612,8 +612,8 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( KernelType ) :: this
-        real*4, dimension(:,:,:), intent(in)    :: sourceZeroPositive
-        real*4, dimension(:,:,:), intent(inout) :: targetMatrix
+        doubleprecision, dimension(:,:,:), intent(in)    :: sourceZeroPositive
+        doubleprecision, dimension(:,:,:), intent(inout) :: targetMatrix
         ! local
         integer :: nx, ny, nz
         !------------------------------------------------------------------------------
@@ -649,7 +649,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none
         class( KernelType ) :: this 
-        real*4, dimension(3), intent(in) :: bandwidth
+        doubleprecision, dimension(3), intent(in) :: bandwidth
         ! local
         integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
         !------------------------------------------------------------------------------
@@ -693,8 +693,8 @@ contains
         class( KernelMultiGaussianType ) :: this 
         integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
         ! local 
-        real*4, dimension(3)                  :: hLambda
-        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        doubleprecision, dimension(3)                  :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         integer :: nd
         !------------------------------------------------------------------------------
@@ -768,12 +768,12 @@ contains
         class( KernelSecondDerivativeXType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        real*4, dimension(3) :: hLambda
-        !real*4, dimension(:), allocatable     :: hLambda
-        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        doubleprecision, dimension(3) :: hLambda
+        !doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         integer :: nd
-        real*4 :: aDenom, aNum, aCoeff
+        doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
 
@@ -872,11 +872,11 @@ contains
         class( KernelSecondDerivativeYType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        real*4, dimension(3) :: hLambda
-        !real*4, dimension(:), allocatable     :: hLambda
-        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        doubleprecision, dimension(3) :: hLambda
+        !doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
-        real*4 :: aDenom, aNum, aCoeff
+        doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
 
@@ -945,11 +945,11 @@ contains
         class( KernelSecondDerivativeZType ) :: this 
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
-        real*4, dimension(3) :: hLambda
-        !real*4, dimension(:), allocatable     :: hLambda
-        real*4, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+        doubleprecision, dimension(3) :: hLambda
+        !doubleprecision, dimension(:), allocatable     :: hLambda
+        doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
-        real*4 :: aDenom, aNum, aCoeff
+        doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
 

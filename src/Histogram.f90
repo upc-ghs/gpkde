@@ -14,14 +14,14 @@ module HistogramModule
         ! Properties
         integer, dimension(:,:,:), allocatable     :: counts 
         integer, dimension(:), allocatable         :: nBins
-        real*4, dimension(:), allocatable :: binSize
-        real*4                            :: binVolume
+        doubleprecision, dimension(:), allocatable :: binSize
+        doubleprecision                            :: binVolume
         integer, dimension(:,:), allocatable       :: activeBinIds
         integer                                    :: nActiveBins
         integer, dimension(:,:), allocatable       :: boundingBoxBinIds
         integer                                    :: nBBoxBins 
-        real*4, dimension(:), allocatable :: domainOrigin ! of the reconstruction grid 
-        !real*4, dimension(3)              :: domainOrigin ! of the reconstruction grid 
+        doubleprecision, dimension(:), allocatable :: domainOrigin ! of the reconstruction grid 
+        !doubleprecision, dimension(3)              :: domainOrigin ! of the reconstruction grid 
 
     contains
 
@@ -50,11 +50,11 @@ contains
         implicit none 
         class(HistogramType)            :: this
         integer, dimension(:)           :: nBins
-        real*4, dimension(:)   :: binSize
+        doubleprecision, dimension(:)   :: binSize
         integer                         :: nBinsShape
         integer, dimension(3), optional :: dimensionMask
         integer, dimension(3)           :: locDimensionMask
-        real*4, dimension(:), optional :: domainOrigin
+        doubleprecision, dimension(:), optional :: domainOrigin
         !------------------------------------------------------------------------------
 
         nBinsShape = size( nBins ) 
@@ -122,7 +122,7 @@ contains
         !------------------------------------------------------------------------------
         implicit none 
         class(HistogramType) :: this
-        real*4, dimension(:,:), intent(in) :: dataPoints
+        doubleprecision, dimension(:,:), intent(in) :: dataPoints
         integer, dimension(2)              :: nPointsShape
         integer                            :: np, ix, iy, iz, nd
         integer, dimension(3)              :: gridIndexes
