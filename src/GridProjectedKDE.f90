@@ -2630,13 +2630,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             squareDensityDiff = (densityEstimateArray - rawDensity)**2
             errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
 
-            
-            !print *, 'ERROR RMSE | NET ROUGHNESS ' , errorRMSE, sum(netRoughnessArray)/this%nComputeBins
-            !zeroDensityCount      = count( this%densityEstimate .le. 0d0 )
-            !where ( densityEstimateArray .gt. 0d0 ) 
-            !    relativeDensityChange = abs( ( densityEstimateArray - this%densityEstimate )/this%densityEstimate )
-            !end where
-
             if ( exportOptimizationVariables ) then
                 write( unit=loopId, fmt=* )m
                 write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
@@ -2644,7 +2637,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                     densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
                     curvatureBandwidth, nEstimateArray, netRoughnessArray )
             end if 
-
             
             ! If for some reason error start increasing, return
             if ( errorRMSE .ge. errorRMSEOld ) then
