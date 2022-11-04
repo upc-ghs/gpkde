@@ -8,9 +8,12 @@ program testkernel
     type( GridProjectedKDEType ), allocatable:: gpkde
     type( KernelMultiGaussianType ):: kernel
     
-    doubleprecision, dimension(3)             :: domainSize         = [ 3.0   , 0.01 , 0.01 ] 
-    doubleprecision, dimension(3)             :: binSize            = [ 0.005 , 0.01 , 0.01 ]
-    doubleprecision, dimension(3)             :: domainOrigin       = [ 0.015 , 0.0  , 0.0  ]
+    !doubleprecision, dimension(3)             :: domainSize         = [ 4.0   , 0.01 , 0.01 ] 
+    !doubleprecision, dimension(3)             :: binSize            = [ 0.005       , 0.01 , 0.01 ]
+    !doubleprecision, dimension(3)             :: domainOrigin       = [ 0.015       , 0.0  , 0.0  ]
+    doubleprecision, dimension(3)             :: domainSize         = [ 4000.0   , 0.01 , 0.01 ] 
+    doubleprecision, dimension(3)             :: binSize            = [ 5.0       , 0.01 , 0.01 ]
+    doubleprecision, dimension(3)             :: domainOrigin       = [ 15.0       , 0.0  , 0.0  ]
 
     doubleprecision :: maxHOverLambda 
     doubleprecision :: minHOverLambda
@@ -28,8 +31,24 @@ program testkernel
     integer :: res
     integer :: line_no, ix
 
-    character(len=200) :: particlesFileName = 'particles_parker_7.csv'
-    integer            :: nlines = 819200
+    character(len=200) :: particlesFileName = 'particles_parker_14.csv'
+    integer            :: nlines = 102400
+    !character(len=200) :: particlesFileName = 'particles_parker_13.csv'
+    !integer            :: nlines = 43200
+    !character(len=200) :: particlesFileName = 'particles_parker_12.csv'
+    !integer            :: nlines = 12800
+    !character(len=200) :: particlesFileName = 'particles_parker_12.csv'
+    !integer            :: nlines = 102400
+    !character(len=200) :: particlesFileName = 'particles_parker_11.csv'
+    !integer            :: nlines = 819200
+    !character(len=200) :: particlesFileName = 'particles_parker_10.csv'
+    !integer            :: nlines = 1600000
+    !character(len=200) :: particlesFileName = 'particles_parker_9.csv'
+    !integer            :: nlines = 160000
+    !character(len=200) :: particlesFileName = 'particles_parker_8.csv'
+    !integer            :: nlines = 819200
+    !character(len=200) :: particlesFileName = 'particles_parker_7.csv'
+    !integer            :: nlines = 819200
     !character(len=200) :: particlesFileName = 'particles_parker_6.csv'
     !integer            :: nlines = 819025
     !character(len=200) :: particlesFileName = 'particles_parker_5.csv'
@@ -63,9 +82,9 @@ program testkernel
     allocate( dataArray( nlines, 3 ) )
 
     ! KDB LOG
-    maxHOverLambda     = 5.0
-    minHOverLambda     = 0.0001
-    deltaHOverLambda   = 0.0001
+    maxHOverLambda     = 30.0
+    minHOverLambda     = 3
+    deltaHOverLambda   = 0.00001
     nOptimizationLoops = 10
 
 
@@ -75,6 +94,8 @@ program testkernel
     open(10, file=particlesFileName,access='sequential',form="formatted",iostat=res)
     do ix = 1, nlines
         read(10,*) dataArray( ix, : )
+        dataArray( ix, : ) = dataArray(ix,:)*1000.0
+        !dataArray( ix, : ) = dataArray(ix,:)
     end do
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)

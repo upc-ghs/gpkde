@@ -29,8 +29,6 @@ module KernelMultiGaussianModule
         integer, dimension(3)         :: matrixPositiveShape = 0 
         doubleprecision, dimension(:,:,:), allocatable :: matrix
         doubleprecision, dimension(:,:,:), allocatable :: bmatrix
-        !doubleprecision, dimension(:,:,:), allocatable :: matrix
-        !doubleprecision, dimension(:,:,:), allocatable :: bmatrix
 
         integer, dimension(3) :: dimensionMask
         integer               :: idDim1, idDim2
@@ -224,6 +222,7 @@ contains
         !------------------------------------------------------------------------------
 
         if ( allocated( this%matrix ) ) deallocate( this%matrix )
+        if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
 
     end subroutine prResetMatrix
 
@@ -623,7 +622,6 @@ contains
         ny = this%matrixPositiveShape(2)
         nz = this%matrixPositiveShape(3)
 
-
         targetMatrix( nx+1:2*nx+1 , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive                                   ! Octant III
         targetMatrix( 1:nx        , ny+1:2*ny+1 , nz+1:2*nz+1 ) = sourceZeroPositive(nx+1:2:-1, :         , :        ) ! Octant OII
         targetMatrix( nx+1:2*nx+1 , 1:ny        , nz+1:2*nz+1 ) = sourceZeroPositive(:        , ny+1:2:-1 , :        ) ! Octant IOI
@@ -697,6 +695,7 @@ contains
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         integer :: nd
+        doubleprecision :: summatrix
         !------------------------------------------------------------------------------
 
 
@@ -748,7 +747,10 @@ contains
 
 
         ! Normalization correction
-        this%matrix = this%matrix/sum( this%matrix )
+        !this%matrix = this%matrix/sum( this%matrix )
+        ! JUSTOINCASE
+        summatrix = sum( this%matrix )
+        if ( summatrix .ne. 0d0 ) this%matrix = this%matrix/summatrix
 
 
         return
@@ -769,11 +771,11 @@ contains
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
         doubleprecision, dimension(3) :: hLambda
-        !doubleprecision, dimension(:), allocatable     :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
         integer :: nd
         doubleprecision :: aDenom, aNum, aCoeff
+        integer :: o,p,q
         !------------------------------------------------------------------------------
 
 
@@ -795,11 +797,12 @@ contains
         hLambda = this%bandwidth/this%binSize
 
         ! Compute kernel
-        zeroPositiveMatrix(:,:,:) = 1
+        zeroPositiveMatrix(:,:,:) = 1d0
         do nd=1,3
             if ( hLambda(nd) .le. 0d0 ) cycle
             select case(nd)
             case(1)
+                !if ( hLambda(1) .lt. 1d-4 ) ! REMEMBER TOLERANCE/OVERFLOW/UNDERFLOW EXP
                 zeroPositiveMatrix = zeroPositiveMatrix*( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
                                  ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) - &
                                  ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) )
@@ -830,8 +833,8 @@ contains
         ! Kernel corrections
         aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
         aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
-        aCoeff = -1*aNum/aDenom
-   
+        aCoeff = 1d0
+        if ( aDenom .ne. 0d0 ) aCoeff = -1*aNum/aDenom
 
         where ( this%matrix > 0 )
             this%matrix = aCoeff*this%matrix
@@ -915,7 +918,8 @@ contains
         ! Kernel corrections
         aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
         aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
-        aCoeff = -1*aNum/aDenom
+        aCoeff = 1d0
+        if ( aDenom .gt. 0d0 ) aCoeff = -1*aNum/aDenom
    
 
         where ( this%matrix > 0 )
@@ -988,7 +992,8 @@ contains
         ! Kernel corrections
         aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
         aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
-        aCoeff = -1*aNum/aDenom
+        aCoeff = 1d0
+        if ( aDenom .gt. 0d0 ) aCoeff = -1*aNum/aDenom
    
 
         where ( this%matrix > 0 )
