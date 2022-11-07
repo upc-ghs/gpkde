@@ -31,8 +31,14 @@ program testkernel
     integer :: res
     integer :: line_no, ix
 
-    character(len=200) :: particlesFileName = 'particles_parker_14.csv'
-    integer            :: nlines = 102400
+    character(len=200) :: particlesFileName = 'particles_parker_17.csv'
+    integer            :: nlines = 1600000
+    !character(len=200) :: particlesFileName = 'particles_parker_16.csv'
+    !integer            :: nlines = 819200
+    !character(len=200) :: particlesFileName = 'particles_parker_15.csv'
+    !integer            :: nlines = 200000
+    !character(len=200) :: particlesFileName = 'particles_parker_14.csv'
+    !integer            :: nlines = 102400
     !character(len=200) :: particlesFileName = 'particles_parker_13.csv'
     !integer            :: nlines = 43200
     !character(len=200) :: particlesFileName = 'particles_parker_12.csv'
@@ -83,7 +89,7 @@ program testkernel
 
     ! KDB LOG
     maxHOverLambda     = 30.0
-    minHOverLambda     = 3
+    minHOverLambda     = 5
     deltaHOverLambda   = 0.00001
     nOptimizationLoops = 10
 

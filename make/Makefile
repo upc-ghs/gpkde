@@ -20,9 +20,10 @@ ${SOURCEDIR1}
 FC = gfortran
 #FFLAGS = -O2 -g -pg -fbacktrace -fopenmp -Wall -Wextra -fbounds-check -fcheck=bounds -fcheck=all
 #FFLAGS =  -g -pg -fbacktrace -fopenmp
-#FFLAGS = -O2 -g -pg -fbacktrace -fopenmp
-#FFLAGS = -g -pg -fbacktrace -fopenmp -Wall -Wextra -fcheck=all -ffpe-trap=invalid,zero,overflow,underflow
-FFLAGS = -g -O2 -fbacktrace -fopenmp
+#FFLAGS = -g -O2 -fbacktrace -fopenmp
+#FFLAGS = -g -pg -fbacktrace -fopenmp -Wall -Wextra -fcheck=all
+#FFLAGS = -g -fbacktrace -fopenmp -Wall -Wextra -fcheck=all 
+FFLAGS = -g -O2 -fbacktrace -fopenmp -fcheck=all -ffpe-trap=invalid,zero,overflow,underflow
 
 # Define the C compile flags
 CC = gcc

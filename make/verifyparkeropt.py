@@ -29,7 +29,12 @@ delr   = 1000*deltax
 
 vol    = 9.750000000000002e-08
 #vol    = 1000*9.750000000000002e-08
-mass   = 9.545001312800406e-11
+facmas = 1.0005794666076087
+mass  = 6.10880084019226e-12 #17
+mass  = mass*facmas
+#mass = 1.1931251641000507e-11           # 16
+#mass = 4.887040672153808e-11           # 15
+#mass   = 9.545001312800406e-11
 #mass   = 2.2625188297008372e-10
 #mass   = 7.636001050240325e-10
 #mass   = 9.545001312800406e-11
@@ -90,7 +95,7 @@ zerodf = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_' ),
 ax.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[3].to_numpy()*mass*delr/vol, zorder=1, linewidth=1, color='r' )
 ax.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[4].to_numpy()*mass/vol, color='k', zorder=2, linewidth=0.8, alpha=0.5 )
 
-loopids = [0,1,2,3,4,5,6]
+loopids = [0,1]
 for li in loopids:
     # LOAD FILE
     df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_'+str(li) ),
@@ -107,7 +112,7 @@ for li in loopids:
 
 hlambda = 5 
 h       = deltax*hlambda/(v*TFIN)
-xo      = 0.75/(v*TFIN)
+xo      = 0.71/(v*TFIN)
 print( xo )
 ax.axvline(xo    , linewidth=0.75, zorder=0, color='k', linestyle='--')
 ax.axvline(xo+h  , linewidth=0.75, zorder=0, color='k', linestyle='--')
@@ -118,8 +123,8 @@ ax.axvline(xo-3*h, linewidth=0.75, zorder=0, color='k', linestyle='--')
 
 
 #ax.set_yscale('log')
-ax.set_ylim([0.9,1])
-ax.set_xlim([0.5,1])
+ax.set_ylim([0.25,1])
+#ax.set_xlim([0.5,1])
 fig.legend()
 plt.savefig( 'figureopt.png' )
 

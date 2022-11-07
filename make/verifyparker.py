@@ -28,7 +28,13 @@ delr   = deltax
 #vol    = 1.9500000000000004e-07
 
 vol    = 9.750000000000002e-08
-mass   = 1.1931251641000507e-11
+mass   = 9.545001312800406e-11
+#mass   = 2.2625188297008372e-10
+#mass   = 7.636001050240325e-10
+#mass   = 9.545001312800406e-11
+#mass   = 1.1931251641000507e-11
+#mass   = 6.10880084019226e-12
+#mass   = 1.1931251641000507e-11
 #mass   = 1.190185546875e-11
 #mass   = 6.09375e-12
 #mass   = 6.09375e-12  
@@ -69,7 +75,7 @@ ax  = fig.add_subplot(111)
 
 
 # ANALYTICAL
-ax.plot(x/(v*TFIN),function(x,v,TFIN,D) - function(x,v,TFIN-TEND,D))
+ax.plot(x/(v*TFIN),function(x,v,TFIN,D) - function(x,v,TFIN-TEND,D), zorder=11, linewidth=0.5)
 
 
 # LOAD FILE
@@ -80,6 +86,7 @@ df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_' ),
                      index_col=None
                  )
 ax.plot( x[ df[0]-4 ]/(1.0*v*TFIN), 1.0*df[3].to_numpy()*mass*delr/vol, color='r', zorder=10 )
+#ax.plot( x[ df[0]-4 ]/(1.0*v*TFIN), 1.0*df[3].to_numpy()*mass*delr*1000/vol, color='r', zorder=10 )
 ax.plot( x[ df[0]-4 ]/(1.0*v*TFIN), 1.0*df[4].to_numpy()*mass/vol )
 
 print( 'BLUFFMASS', 1.02*mass )
