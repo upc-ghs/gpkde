@@ -224,6 +224,9 @@ contains
         if ( allocated( this%matrix ) ) deallocate( this%matrix )
         if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
 
+        this%bandwidth = 0d0
+        this%matrixPositiveShape = 0
+
     end subroutine prResetMatrix
 
 

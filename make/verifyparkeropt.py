@@ -28,10 +28,11 @@ delr   = 1000*deltax
 #vol    = 1.9500000000000004e-07
 
 vol    = 9.750000000000002e-08
+mass   = 9.545001312800406e-11
 #vol    = 1000*9.750000000000002e-08
-facmas = 1.0005794666076087
-mass  = 6.10880084019226e-12 #17
-mass  = mass*facmas
+#facmas = 1.0005794666076087
+#mass  = 6.10880084019226e-12 #17
+#mass  = mass*facmas
 #mass = 1.1931251641000507e-11           # 16
 #mass = 4.887040672153808e-11           # 15
 #mass   = 9.545001312800406e-11
@@ -86,7 +87,7 @@ ax.plot(x/(v*TFIN),function(x,v,TFIN,D) - function(x,v,TFIN-TEND,D), zorder=0, l
 
 # LOAD FILE
 # STATE ZERO
-zerodf = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_' ),
+zerodf = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_particles_dev.csv' ),
                      header=None,
                      delim_whitespace=True,
                      skiprows=0,
@@ -95,18 +96,18 @@ zerodf = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_' ),
 ax.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[3].to_numpy()*mass*delr/vol, zorder=1, linewidth=1, color='r' )
 ax.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[4].to_numpy()*mass/vol, color='k', zorder=2, linewidth=0.8, alpha=0.5 )
 
-loopids = [0,1]
-for li in loopids:
-    # LOAD FILE
-    df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_'+str(li) ),
-                         header=None,
-                         delim_whitespace=True,
-                         skiprows=0,
-                         index_col=None
-                     )
-    print( np.mean(df[3].to_numpy()*mass*delr/vol ) )
-
-    ax.plot( x[ df[0]-4 ]/(1.0*v*TFIN), 1.0*df[3].to_numpy()*mass*delr/vol , linewidth=0.7, zorder=10-li, label=str(li) )
+#loopids = [0,1]
+#for li in loopids:
+#    # LOAD FILE
+#    df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_'+str(li) ),
+#                         header=None,
+#                         delim_whitespace=True,
+#                         skiprows=0,
+#                         index_col=None
+#                     )
+#    print( np.mean(df[3].to_numpy()*mass*delr/vol ) )
+#
+#    ax.plot( x[ df[0]-4 ]/(1.0*v*TFIN), 1.0*df[3].to_numpy()*mass*delr/vol , linewidth=0.7, zorder=10-li, label=str(li) )
 
 
 

@@ -47,22 +47,22 @@ module GridProjectedKDEModule
 
 
     ! Grids
-    doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureX
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureY
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXX 
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXY
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYY
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXX 
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXY
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYY
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYZ
-    doubleprecision, dimension(:,:,:), allocatable,target :: roughnessZZ
+    !doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureX
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureY
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZ
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXX 
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXY
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXZ
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYY
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYZ
+    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZZ
+    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXX 
+    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXY
+    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXZ
+    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYY
+    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYZ
+    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessZZ
 
     !doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
     !doubleprecision, dimension(:,:,:), allocatable, target :: curvature2
@@ -129,6 +129,7 @@ module GridProjectedKDEModule
         ! Variables 
         doubleprecision, dimension(:)    , allocatable :: densityEstimate
         doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
+        doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
         doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
         doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
         doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
@@ -668,55 +669,10 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Allocate matrixes for density
         allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
-        allocate(            nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
-
-
-
-        !! SOON !
-        ! DO IT ACCORDING TO DIMS
-        allocate(          curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(          curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(          curvatureZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-
-        !allocate( curvature1( this%nBins(1), this%nBins(2), this%nBins(3)  )) 
-        !allocate( curvature2( this%nBins(1), this%nBins(2), this%nBins(3)  )) 
-        !allocate( curvature11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        !allocate( curvature22( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        !allocate( curvature12( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        !allocate( roughness11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        !allocate( roughness22( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        !allocate( roughness12( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-    
-        !doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
-        !doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
-        !doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
-        !doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
-        !doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
-        !doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
-        !doubleprecision, dimension(:,:)  , allocatable :: relativeSmoothingChange
-        !doubleprecision, dimension(:)    , allocatable :: relativeDensityChange
-        !doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
-        !doubleprecision, dimension(:)    , allocatable :: densityEstimateArray 
-        !doubleprecision, dimension(:)    , allocatable :: nEstimateArray
-        !doubleprecision, dimension(:)    , allocatable :: roughnessXXArray
-        !doubleprecision, dimension(:)    , allocatable :: roughnessYYArray
-        !doubleprecision, dimension(:)    , allocatable :: roughnessZZArray
-        !doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
+        allocate(       this%nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+        !allocate(            nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
         print *, ' END OF GPKDE MODULE INITIALIZATION ' 
-
 
     end subroutine prInitialize
 
@@ -2248,6 +2204,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         integer :: bcount = 1
         logical, dimension(:), allocatable :: computeThisBin
         character(len=*), optional :: outputFileName
+        doubleprecision, dimension(:,:,:), allocatable :: densityGrid
        
         ! For integration with modpath 
         integer, intent(in), optional :: outputFileUnit
@@ -2285,24 +2242,14 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         call this%histogram%ComputeCounts( dataPoints )
 
         
+        print *, 'HISTOGRAM !!!', sum(this%histogram%counts)
+
+        
         ! Bounding box or active bins
         if ( useBoundingBox ) then 
 
-            !! TIC
-            !call system_clock(clockCountStart, clockCountRate, clockCountMax)
-
             ! Compute bounding box
             call this%histogram%ComputeBoundingBox()
-            !print *, '## GPKDE: histogram with nBBoxBins', &
-            !              this%histogram%nBBoxBins
-
-            ! At this stage should be a filtering of 
-            ! the total active cells
-
-            ! For all cells in boundingBoxBinIds
-            ! compute spans for some kernel and 
-            ! verify if any cell within that 
-            ! domain has non zero particle count.
         
             ! Initialize filterKernel
             call filterKernel%Initialize(  this%binSize, matrixRange=defaultKernelRange )
@@ -2342,11 +2289,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             end do
             !$omp end parallel do 
 
-
             ! Count how many and allocate
             this%nComputeBins = count( computeThisBin )
             allocate( this%computeBinIds( nDim, this%nComputeBins ) )
-
 
             ! Fill computeBinIds
             do n = 1, this%histogram%nBBoxBins
@@ -2356,19 +2301,9 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 end if 
             end do 
 
-            !print *, '## GPKDE: after filtering there are nComputeBins', this%nComputeBins
             deallocate( computeThisBin )
-   
-
-            !! TOC
-            !call system_clock(clockCountStop, clockCountRate, clockCountMax)
-            !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-            !print *, '## GPKDE detecting nComputeBins ', elapsedTime, ' seconds'
-
 
         else
-            !print *, 'GPKDE: WILL COMPUTE ACTIVE BIN IDS'
-
             ! Active bins: Only cells with particles
             call this%histogram%ComputeActiveBinIds()
 
@@ -2390,8 +2325,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             end if
 
             ! Compute density
+            this%densityEstimateGrid = 0d0
+            if (allocated(densityGrid)) deallocate(densityGrid)
+            allocate( densityGrid( this%nBins(1), this%nBins(2), this%nBins(3) ) )
             call this%ComputeDensityFromDatabaseFlat(      &
-                                 this%densityEstimateGrid, &
+                                              densityGrid, &
                 nOptimizationLoops=localNOptimizationLoops )
 
             ! Drop database ?
@@ -2446,6 +2384,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         implicit none
         class( GridProjectedKDEType ), target:: this
         doubleprecision, dimension(:,:,:), intent(inout) :: densityEstimateGrid
+        doubleprecision, dimension(:,:,:), pointer :: nEstimateGrid
 
         ! kernels
         type( KernelMultiGaussianType )     :: kernel
@@ -2453,9 +2392,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         type( KernelSecondDerivativeXType ) :: kernelSDX
         type( KernelSecondDerivativeYType ) :: kernelSDY
         type( KernelSecondDerivativeZType ) :: kernelSDZ
-        !class( KernelType ), pointer :: kernelSD1
-        !class( KernelType ), pointer :: kernelSD2
-
 
         ! Optimization loops
         integer, intent(in), optional :: nOptimizationLoops
@@ -2482,7 +2418,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         character(len=200) :: densityOutputFileName
         character(len=500) :: varsOutputFileName
         character(len=20)  :: loopId
-        logical            :: exportOptimizationVariables  = .true.
+        logical            :: exportOptimizationVariables  = .false.
         doubleprecision :: errorRMSE
         doubleprecision :: errorRMSEOld
         doubleprecision, dimension(:), allocatable :: squareDensityDiff
@@ -2504,7 +2440,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
         ! Reset grid values
         densityEstimateGrid = 0d0
-        nEstimateGrid       = 0d0
+        nEstimateGrid => this%nEstimateGrid
+        nEstimateGrid = 0d0
+
+        print *, 'DENSITY ESTIMATE GRID', sum(densityEstimateGrid)
+        print *, 'N ESTIMATE GRID', sum(nEstimateGrid)
 
         ! Allocate arrays according to nComputebins
         call prAllocateArrays( this%nComputeBins,      &
@@ -2521,6 +2461,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                                roughnessZZArray,       &
                                netRoughnessArray,      &
                                activeGridCellsMod)
+        if ( allocated(rawDensity) ) deallocate(rawDensity) 
         allocate( rawDensity(this%nComputeBins) )
 
         ! Define nOptLoops
@@ -2540,15 +2481,19 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             rawDensity(n) = this%histogram%counts(gc%id(1),gc%id(2),gc%id(3))/this%histogram%binVolume
         end do
         !$omp end parallel do
-        activeGridCells => activeGridCellsMod
+        !activeGridCells => activeGridCellsMod
+    
+        print *, 'GPKDE: RAW DENSITY', sum(rawDensity)/size(rawDensity)
+        print *, 'GPKDE BIN SIZE', this%binSize
+        print *, 'GPKDEHISTOGRAM', this%nComputeBins, this%histogram%binVolume
 
 
         ! Initialize kernels
-        call kernel%Initialize( this%binSize,      matrixRange=defaultKernelRange   )
+        call kernel%Initialize(      this%binSize,      matrixRange=defaultKernelRange   )
         call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange   )
-        call kernelSDX%Initialize( this%binSize, matrixRange=defaultKernelRange   )
-        call kernelSDY%Initialize( this%binSize, matrixRange=defaultKernelRange   )
-        call kernelSDZ%Initialize( this%binSize, matrixRange=defaultKernelRange   )
+        call kernelSDX%Initialize(   this%binSize, matrixRange=defaultKernelRange   )
+        call kernelSDY%Initialize(   this%binSize, matrixRange=defaultKernelRange   )
+        call kernelSDZ%Initialize(   this%binSize, matrixRange=defaultKernelRange   )
 
         print *, 'HOVERLAMBDA ', this%initialSmoothing/this%binSize
 
@@ -2573,24 +2518,34 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         end do
 
 
+
+        print *, 'GPKDE KERNEL SMOOTHING SCALE ',sum(kernelSmoothingScale)/size(kernelSmoothingScale)
+
+
+        print *, 'DOMAINSIZE ', this%domainSize
+        print *, 'DOMAINORIGIN ', this%domainOrigin
+        print *, 'DIMENSIONMASK ', this%dimensionMask
+
+        densityEstimateArray = 0d0
+        print *, 'SUM DENSITY ESTIMATE ARRAY ' , sum(densityEstimateArray)
+
+
         ! Initialize density grid
-        !$omp parallel do schedule( dynamic, 1 )         &
-        !$omp default( none )                            &
-        !$omp shared( this )                             &
-        !$omp shared( activeGridCells, kernelSmoothing ) & 
-        !$omp shared( densityEstimateArray )             &
-        !$omp reduction( +: densityEstimateGrid )        & 
-        !$omp firstprivate( kernel )                     &  
+        !$omp parallel do schedule( dynamic, 1 )            &
+        !$omp default( none )                               &
+        !$omp shared( activeGridCellsMod, kernelSmoothing ) & 
+        !$omp reduction( +: densityEstimateGrid )           & 
+        !$omp firstprivate( kernel )                        &  
         !$omp private( gc ) 
         do n = 1, this%nComputeBins
             
             ! Assign gc pointer 
-            gc => activeGridCells(n)
+            gc => activeGridCellsMod(n)
 
             if ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) cycle
 
             ! Set kernel 
-            call this%SetKernel( gc, kernel, kernelSmoothing( :, n ) )
+            !call this%SetKernel( gc, kernel, kernelSmoothing( :, n ) )
 
             ! Compute estimate
             densityEstimateGrid(                           &
@@ -2618,10 +2573,14 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Transfer grid density to array
         do n = 1, this%nComputeBins
             ! Assign gc pointer 
-            gc => activeGridCells(n)
+            gc => activeGridCellsMod(n)
             densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
 
+        print *, 'GPKDE AVG INIT DENSITY:', sum(densityEstimateArray)/this%nComputeBins
+
+
+        
         ! Error
         squareDensityDiff = (densityEstimateArray - rawDensity)**2
         errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
@@ -2633,11 +2592,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         ! Optimization loop
         do m = 1, nOptLoops
 
+            exit
+
             ! nEstimate 
             !$omp parallel do schedule( dynamic, 1 )                    &
             !$omp default( none )                                       &
             !$omp shared( this )                                        &
-            !$omp shared( activeGridCells )                             &
+            !$omp shared( activeGridCellsMod )                             &
             !$omp shared( densityEstimateGrid )                         &
             !$omp shared( nEstimateGrid, nEstimateArray )               &
             !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
@@ -2646,7 +2607,7 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
             do n = 1, this%nComputeBins
 
                 ! Assign gc pointer
-                gc => activeGridCells( n )
+                gc => activeGridCellsMod( n )
 
                 if (  kernelSigmaSupportScale( n ) .lt. 0d0 ) cycle ! yes ?
 
@@ -2669,6 +2630,13 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
 
             end do
             !$omp end parallel do
+
+            print *, 'NESTIMATE LOOP ', sum(nEstimateArray)/this%nComputeBins, m
+            !print *, 'NESTIMATE LOOP ', sum(nEstimateArray)/size(nEstimateArray), m
+
+
+            exit
+
 
 
             if ( (exportOptimizationVariables) .and. (m.eq.1) ) then
@@ -2714,7 +2682,6 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                 gc => activeGridCells(n)
 
                 if (  any( kernelSigmaSupport( :, n ) .lt. 0d0 ) ) then
-                   print *, ' skip ', n 
                     gc%skipKernelSigma = .true.
                     cycle
                 end if
@@ -2848,6 +2815,11 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         end do
         ! End optimization loop  
 
+        call kernel%Reset()
+        call kernelSigma%Reset()
+        call kernelSDX%Reset()
+        call kernelSDY%Reset()
+        call kernelSDZ%Reset()
 
         ! Deallocate stuff
         kernelMatrix    => null()
@@ -3334,6 +3306,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
         !-----------------------------------------------------------
 
+        call kernel%ResetMatrix()
+
         ! Compute indexes on kernel database
         call this%ComputeKernelDatabaseFlatIndexes( smoothing,   &
           gridCell%kernelDBFlatIndexes, gridCell%transposeKernel )
@@ -3377,6 +3351,8 @@ subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
         doubleprecision, dimension(3), intent(in)    :: smoothing
         integer, dimension(:), allocatable           :: shapeMatrix
         !-----------------------------------------------------------
+
+        call kernel%ResetMatrix()
 
         ! Compute indexes on kernel database
         ! transposeKernelSigma will always be false as this kernel is isotropic
