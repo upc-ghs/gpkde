@@ -2721,20 +2721,11 @@ module GridProjectedKDEModule
             end do
             !$omp end parallel do 
 
-            print *, 'NESTIMATE LOOP ', sum(nEstimateArray)/this%nComputeBins, m
-            print *, 'NESTIMATE LOOP*biVolume ',& 
-                sum(nEstimateArray)/this%nComputeBins*this%histogram%binVolume
 
             ! Curvature bandwidths
             call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
                                 kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, & 
                                                  kernelSigmaSupportScale, curvatureBandwidth )
-
-            print *, 'CURVATURE BANDWIDTH ', &
-            sum(curvatureBandwidth)/this%nComputeBins
-            print *, 'CURVATURE BANDWIDTH LAMBDA', &
-            sum(curvatureBandwidth)/this%nComputeBins/this%histogram%binVolume
-
 
             ! Net roughness
             call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
@@ -2742,33 +2733,10 @@ module GridProjectedKDEModule
                                                 netRoughnessArray, kernelSigmaSupport, &
                                                        kernelSDX, kernelSDY, kernelSDZ )
             
-            print *, 'NET ROUGHESS ', sum(netRoughnessArray)/this%nComputeBins, m
-            print *, 'NET ROUGHESS*VOLUME**2 ', &
-            sum(netRoughnessArray)/this%nComputeBins*this%histogram%binVolume*this%histogram%binVolume
-
-            print *, 'ROUGHESSXX', sum(roughnessXXArray)/this%nComputeBins, m
-            print *, 'ROUGHESSXX*VOLUME**2 ', &
-            sum(roughnessXXArray)/this%nComputeBins*this%histogram%binVolume*this%histogram%binVolume
-
             ! Optimal smoothing
             call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                                     roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                               kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
-
-
-            print *, 'NEW SMOOTHING SCALE ', &
-            sum(kernelSmoothingScale)/this%nComputeBins
-            print *, 'NEW SMOOTHINGSACELE LAMBDA  ', &
-            sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binVolume
-            print *, 'NEW SMOOTHINGSACELE LAMBDA*VOLUME  ', &
-            sum(kernelSmoothingScale)/this%nComputeBins*this%histogram%binVolume
-
-            print *, 'NEW SMOOTHING  ', &
-            sum(kernelSmoothing)/this%nComputeBins
-            print *, 'NEW SMOOTHING LAMBDA  ', &
-            sum(kernelSmoothing)/this%nComputeBins/this%histogram%binVolume
-
-            !call exit(0)
 
 
             ! Update density
@@ -2827,10 +2795,6 @@ module GridProjectedKDEModule
                 densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
             end do
            
-            print *, 'GPKDE DENSITY:', sum(densityEstimateArray)/this%nComputeBins
-            print *, 'GPKDE DENSITY*VOLUME',&
-                sum(densityEstimateArray)/this%nComputeBins*this%histogram%binVolume
-
             ! Error
             squareDensityDiff = (densityEstimateArray - rawDensity)**2
             errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
