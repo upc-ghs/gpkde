@@ -228,6 +228,7 @@ contains
         this%bandwidth = 0d0
         this%matrixPositiveShape = 0
 
+
     end subroutine prResetMatrix
 
 
@@ -249,8 +250,8 @@ contains
         this%matrixRange         = source%matrixRange
         this%matrix              = source%matrix
 
-    end subroutine prCopyFrom
 
+    end subroutine prCopyFrom
 
 
     subroutine prComputeGridSpans( this, gridIndexes, gridShape,  &
@@ -553,8 +554,6 @@ contains
     end subroutine prVerifyBoundary 
 
 
-
-
     subroutine prComputeGridSpansTranspose( this, gridIndexes, gridShape, &
                                          xGridSpan, yGridSpan, zGridSpan, &
                                     xKernelSpan, yKernelSpan, zKernelSpan )
@@ -588,7 +587,6 @@ contains
     end subroutine prComputeGridSpansTranspose
 
 
-
     subroutine prGenerateZeroPositiveGrid( this, zPXGrid, zPYGrid, zPZGrid  )
         !------------------------------------------------------------------------------
         !
@@ -613,12 +611,10 @@ contains
         zPZGrid = reshape( spread( [(i, i=0, nz)], 1, (nx + 1)*( ny + 1 ) ), &
                                                   [ nx + 1, ny + 1, nz + 1 ] )
 
-
         return
 
 
     end subroutine prGenerateZeroPositiveGrid
-
 
 
     subroutine prUnfoldZeroPositiveMatrix( this, sourceZeroPositive, targetMatrix )
@@ -656,7 +652,6 @@ contains
     end subroutine prUnfoldZeroPositiveMatrix
 
 
-
     subroutine prSetupMatrix( this, bandwidth )
         !------------------------------------------------------------------------------
         !
@@ -673,8 +668,8 @@ contains
         ! Assign kernel properties
         this%bandwidth = bandwidth
 
-        ! It should be expected that for less than 3D, bandwith of compressed 
-        ! dimension should be zero
+        ! It is expected that for less than 3D, bandwidth of compressed 
+        ! dimension is zero
 
         ! This means that matrixPositiveShape will have a zero in the compressed dimension
         this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
@@ -736,11 +731,6 @@ contains
         hLambda = this%bandwidth/this%binSize
 
         ! Compute kernel
-        !zeroPositiveMatrix = (0.5**nDim)*( &
-        !    ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
-        !    ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
-        !    ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) ) )
-
         zeroPositiveMatrix(:,:,:) = (0.5**nDim)
         do nd=1,3
             if ( hLambda(nd) .le. 0d0 ) cycle
@@ -765,8 +755,6 @@ contains
 
 
         ! Normalization correction
-        !this%matrix = this%matrix/sum( this%matrix )
-        ! JUSTOINCASE
         summatrix = sum( this%matrix )
         if ( summatrix .ne. 0d0 ) this%matrix = this%matrix/summatrix
 
@@ -793,7 +781,6 @@ contains
         integer :: nx, ny, nz
         integer :: nd
         doubleprecision :: aDenom, aNum, aCoeff
-        integer :: o,p,q
         !------------------------------------------------------------------------------
 
 
@@ -814,34 +801,24 @@ contains
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize
 
+
         ! Compute kernel
         zeroPositiveMatrix(:,:,:) = 1d0
         do nd=1,3
             if ( hLambda(nd) .le. 0d0 ) cycle
             select case(nd)
             case(1)
-                !if ( hLambda(1) .lt. 1d-4 ) ! REMEMBER TOLERANCE/OVERFLOW/UNDERFLOW EXP
                 zeroPositiveMatrix = zeroPositiveMatrix*( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
                                  ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) - &
                                  ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) )
             case(2)
                 zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - & 
-                                                            erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+                                                          erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
             case(3)
                 zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
-                                                            erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+                                                          erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
             end select
         end do 
-
-
-        !! Compute kernel
-        !zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
-        !    ( zPXGrid + 0.5 )*exp( -1*( ( zPXGrid + 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) - &
-        !    ( zPXGrid - 0.5 )*exp( -1*( ( zPXGrid - 0.5 )**2 )/( 2*( hLambda(1)**2 ) ) ) )*&
-        !    ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
-        !      erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )*&
-        !    ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
-        !      erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
 
 
         ! Unfold
@@ -859,10 +836,6 @@ contains
         end where
 
         ! Correct kernel
-        !this%matrix = this%matrix*sqrt( &
-        !        3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(1)**5 )*sum( this%matrix**2 ) ) &
-        !    )/sqrt( hLambda(2) )/sqrt( hLambda(3) )
-
         do nd=1,3
             if ( hLambda(nd) .le. 0d0 ) cycle
             select case(nd)
@@ -894,9 +867,9 @@ contains
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
         doubleprecision, dimension(3) :: hLambda
-        !doubleprecision, dimension(:), allocatable     :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
+        integer :: nd
         doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
@@ -920,13 +893,22 @@ contains
 
 
         ! Compute kernel
-        zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(2)**3 ) ) )*(&
-            ( zPYGrid + 0.5 )*exp( -1*( ( zPYGrid + 0.5 )**2 )/( 2*( hLambda(2)**2 ) ) ) - &
-            ( zPYGrid - 0.5 )*exp( -1*( ( zPYGrid - 0.5 )**2 )/( 2*( hLambda(2)**2 ) ) ) )*&
-            ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - &
-              erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
-              erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+        zeroPositiveMatrix(:,:,:) = 1d0
+        do nd=1,3
+            if ( hLambda(nd) .le. 0d0 ) cycle
+            select case(nd)
+            case(1)
+                zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - & 
+                                                          erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )
+            case(2)
+                zeroPositiveMatrix = zeroPositiveMatrix*( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(2)**3 ) ) )*(&
+                                 ( zPYGrid + 0.5 )*exp( -1*( ( zPYGrid + 0.5 )**2 )/( 2*( hLambda(2)**2 ) ) ) - &
+                                 ( zPYGrid - 0.5 )*exp( -1*( ( zPYGrid - 0.5 )**2 )/( 2*( hLambda(2)**2 ) ) ) )
+            case(3)
+                zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
+                                                          erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+            end select
+        end do 
 
 
         ! Unfold
@@ -939,15 +921,22 @@ contains
         aCoeff = 1d0
         if ( aDenom .gt. 0d0 ) aCoeff = -1*aNum/aDenom
    
-
         where ( this%matrix > 0 )
             this%matrix = aCoeff*this%matrix
         end where
 
-
-        this%matrix = this%matrix*sqrt( &
-                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(2)**5 )*sum( this%matrix**2 ) ) &
-            )/sqrt( hLambda(1) )/sqrt( hLambda(3) )
+        ! Correct kernel
+        do nd=1,3
+            if ( hLambda(nd) .le. 0d0 ) cycle
+            select case(nd)
+            case(1)
+                this%matrix = this%matrix/sqrt( hLambda(1) )
+            case(2)
+                this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(2)**5)*sum( this%matrix**2 ) ) )
+            case(3)
+                this%matrix = this%matrix/sqrt( hLambda(3) )
+            end select
+        end do 
 
 
         return
@@ -968,9 +957,9 @@ contains
         integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
         ! local
         doubleprecision, dimension(3) :: hLambda
-        !doubleprecision, dimension(:), allocatable     :: hLambda
         doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
         integer :: nx, ny, nz
+        integer :: nd
         doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
@@ -994,13 +983,22 @@ contains
 
 
         ! Compute kernel
-        zeroPositiveMatrix = ( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(3)**3 ) ) )*(&
-            ( zPZGrid + 0.5 )*exp( -1*( ( zPZGrid + 0.5 )**2 )/( 2*( hLambda(3)**2 ) ) ) - &
-            ( zPZGrid - 0.5 )*exp( -1*( ( zPZGrid - 0.5 )**2 )/( 2*( hLambda(3)**2 ) ) ) )*&
-            ( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - &
-              erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )*&
-            ( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
-              erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+        zeroPositiveMatrix(:,:,:) = 1d0
+        do nd=1,3
+            if ( hLambda(nd) .le. 0d0 ) cycle
+            select case(nd)
+            case(1)
+                zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - & 
+                                                          erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )
+            case(2)
+                zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
+                                                          erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+            case(3)
+                zeroPositiveMatrix = zeroPositiveMatrix*( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(3)**3 ) ) )*(&
+                                 ( zPZGrid + 0.5 )*exp( -1*( ( zPZGrid + 0.5 )**2 )/( 2*( hLambda(3)**2 ) ) ) - &
+                                 ( zPZGrid - 0.5 )*exp( -1*( ( zPZGrid - 0.5 )**2 )/( 2*( hLambda(3)**2 ) ) ) )
+            end select
+        end do 
 
 
         ! Unfold
@@ -1013,15 +1011,22 @@ contains
         aCoeff = 1d0
         if ( aDenom .gt. 0d0 ) aCoeff = -1*aNum/aDenom
    
-
         where ( this%matrix > 0 )
             this%matrix = aCoeff*this%matrix
         end where
 
-
-        this%matrix = this%matrix*sqrt( &
-                3/( ( 2**( nDim + 2 ) )*( pi**( 0.5*nDim ) )*( hLambda(3)**5 )*sum( this%matrix**2 ) ) &
-            )/sqrt( hLambda(1) )/sqrt( hLambda(2) )
+        ! Correct kernel
+        do nd=1,3
+            if ( hLambda(nd) .le. 0d0 ) cycle
+            select case(nd)
+            case(1)
+                this%matrix = this%matrix/sqrt( hLambda(1) )
+            case(2)
+                this%matrix = this%matrix/sqrt( hLambda(2) )
+            case(3)
+                this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(3)**5)*sum( this%matrix**2 ) ) )
+            end select
+        end do 
 
 
         return
