@@ -131,7 +131,7 @@ program testkernel
             minHOverLambda          = minHOverLambda,     & 
             maxHOverLambda          = maxHOverLambda,     & 
             deltaHOverLambda        = deltaHOverLambda,   &
-            databaseOptimization    = .true.,            & 
+            databaseOptimization    = .false.,            & 
             bruteOptimization       = .false.,            & 
             anisotropicSigmaSupport = .false.,            &
             nOptimizationLoops      = nOptimizationLoops, & 

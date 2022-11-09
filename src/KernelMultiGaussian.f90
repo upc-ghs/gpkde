@@ -39,12 +39,13 @@ module KernelMultiGaussianModule
         ! Procedures
         procedure, non_overridable :: Initialize                => prInitialize ! Consider deferring
         procedure, non_overridable :: Reset                     => prReset      ! Consider deferring
-        procedure, non_overridable :: ResetMatrix               => prResetMatrix! Consider deferring
+        procedure, non_overridable :: ResetMatrix               => prResetMatrix
         procedure, non_overridable :: ComputeGridSpans          => prComputeGridSpans
         procedure, non_overridable :: ComputeGridSpansTranspose => prComputeGridSpansTranspose
         procedure, non_overridable :: GenerateZeroPositiveGrid  => prGenerateZeroPositiveGrid
         procedure, non_overridable :: UnfoldZeroPositiveMatrix  => prUnfoldZeroPositiveMatrix
         procedure, non_overridable :: SetupMatrix               => prSetupMatrix
+        procedure, non_overridable :: CopyFrom                  => prCopyFrom
         procedure( ComputeKernelMatrix ), deferred  :: ComputeMatrix 
 
     end type
@@ -230,6 +231,28 @@ contains
     end subroutine prResetMatrix
 
 
+    subroutine prCopyFrom( this, source )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( KernelType ), intent(inout) :: this 
+        class( KernelType ), intent(in)   :: source 
+        !------------------------------------------------------------------------------
+
+        this%bandwidth           = source%bandwidth
+        this%binSize             = source%binSize
+        this%matrixPositiveShape = source%matrixPositiveShape
+        this%matrixRange         = source%matrixRange
+        this%matrix              = source%matrix
+
+    end subroutine prCopyFrom
+
+
+
     subroutine prComputeGridSpans( this, gridIndexes, gridShape,  &
                                 xGridSpan, yGridSpan, zGridSpan,  &
                            xKernelSpan, yKernelSpan, zKernelSpan, &
@@ -338,14 +361,6 @@ contains
                             boundDirX, boundDirY, boundDirZ, &
                                dimensionMask = dimensionMask )
         
-        !print *, sum(this%matrix), sum(this%bmatrix)
-        !if ( abs( sum(this%bmatrix) - 1 ) .gt. 0.1 ) then 
-        !        print *, 'PANIC'
-        !        print *, 'KERNEL SHAPE BMATRIX', shape(this%bmatrix)
-        !        print *, 'KERNEL SHAPE MATRIX', shape(this%matrix)
-        !        call exit(0)
-        !end if
-
 
     end subroutine prComputeGridSpans
 
@@ -397,7 +412,7 @@ contains
 
         
         ! If no boundary, leave       
-        this%bmatrix = this%matrix
+        !this%bmatrix = this%matrix
         if ( .not. ( isBoundaryX .or. isBoundaryY .or. isBoundaryZ ) ) return
 
 

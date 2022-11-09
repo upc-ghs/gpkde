@@ -25,6 +25,7 @@ module GridCellModule
 
         ! Kernel Sigma Matrix
         doubleprecision, dimension(:,:,:), allocatable :: kernelSigmaMatrix
+        doubleprecision, dimension(:,:,:), allocatable :: kernelMatrix
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0
