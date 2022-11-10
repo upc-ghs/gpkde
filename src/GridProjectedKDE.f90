@@ -47,42 +47,9 @@ module GridProjectedKDEModule
 
 
     ! Grids
-    doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureX
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureY
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZ
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXX 
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXY
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureXZ
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYY
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureYZ
-    !doubleprecision, dimension(:,:,:), allocatable,target :: curvatureZZ
-    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXX 
-    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXY
-    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessXZ
-    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYY
-    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessYZ
-    !doubleprecision, dimension(:,:,:), allocatable,target :: roughnessZZ
+    doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid ! MOVE IT?
 
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature2
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature11
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature22
-    !doubleprecision, dimension(:,:,:), allocatable, target :: curvature12
-    !doubleprecision, dimension(:,:,:), allocatable, target :: roughness11
-    !doubleprecision, dimension(:,:,:), allocatable, target :: roughness22
-    !doubleprecision, dimension(:,:,:), allocatable, target :: roughness12
-    !doubleprecision, dimension(:), pointer :: roughness11Array
-    !doubleprecision, dimension(:), pointer :: roughness22Array
-
-    !class( KernelType ), dimension(:), pointer :: kernelSDDatabase
-
-    ! For 2d-3d mapping
-    !integer :: idDim1, idDim2
-    !class( KernelType ), dimension(:), pointer :: kernelSDDatabase1
-    !class( KernelType ), dimension(:), pointer :: kernelSDDatabase2
-
-
+    ! Arrays (MOVE THEM?)
     doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
     doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
     doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
@@ -152,378 +119,379 @@ module GridProjectedKDEModule
     
         ! Module constants
         doubleprecision :: supportDimensionConstant
-                doubleprecision :: alphaDimensionConstant
-                doubleprecision :: betaDimensionConstant
+        doubleprecision :: alphaDimensionConstant
+        doubleprecision :: betaDimensionConstant
+        
+        ! Bins to compute
+        integer, dimension(:,:), pointer :: computeBinIds
+        integer                          :: nComputeBins = 0
+        character( len=300 )             :: outputFileName 
+        
+        ! Interface
+        procedure( ComputeIndexes )    , pass, pointer  :: ComputeKernelDatabaseIndexes      => null()
+        procedure( ComputeFlatIndexes ), pass, pointer  :: ComputeKernelDatabaseFlatIndexes  => null()
+        procedure( ComputeNetRoughness ), pass, pointer :: ComputeNetRoughnessEstimate       => null()
+        procedure( SetKernelInterface )  , pass, pointer  :: SetKernel => null()
+        procedure( SetKernelInterface )  , pass, pointer  :: SetKernelSigma => null()
+        procedure( SetKernelInterface )  , pass, pointer  :: SetKernelSD    => null()
+        procedure( SetKernelInterface2D ), pass, pointer  :: SetKernelSD2D  => null()
+        procedure( SetKernelInterface3D ), pass, pointer  :: SetKernelSD3D  => null()
             
-                ! Bins to compute
-                integer, dimension(:,:), pointer :: computeBinIds
-                integer                          :: nComputeBins = 0
-                character( len=300 )             :: outputFileName 
-            
-                ! Interface
-                procedure( ComputeIndexes )    , pass, pointer  :: ComputeKernelDatabaseIndexes      => null()
-                procedure( ComputeFlatIndexes ), pass, pointer  :: ComputeKernelDatabaseFlatIndexes  => null()
-                procedure( ComputeNetRoughness ), pass, pointer :: ComputeNetRoughnessEstimate       => null()
-                procedure( SetKernelInterface )  , pass, pointer  :: SetKernel => null()
-                procedure( SetKernelInterface )  , pass, pointer  :: SetKernelSigma => null()
-                procedure( SetKernelInterface )  , pass, pointer  :: SetKernelSD    => null()
-                procedure( SetKernelInterface2D ), pass, pointer  :: SetKernelSD2D  => null()
-                procedure( SetKernelInterface3D ), pass, pointer  :: SetKernelSD3D  => null()
-            
-            contains
-            
-                ! Procedures
-                procedure :: Initialize                      => prInitialize 
-                procedure :: Reset                           => prReset 
-                procedure :: InitializeModuleConstants       => prInitializeModuleConstants
-                procedure :: InitializeNetRoughnessFunction  => prInitializeNetRoughnessFunction
-                procedure :: InitializeKernelDatabaseFlat    => prInitializeKernelDatabaseFlat
-                procedure :: DropKernelDatabase              => prDropKernelDatabase
-                procedure :: ComputeDensity                  => prComputeDensity
-                procedure :: ComputeDensityFromDatabaseFlat  => prComputeDensityFromDatabaseFlat
-                procedure :: ComputeSupportScale             => prComputeSupportScale
-                procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
-                procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
-                procedure :: ExportDensity                   => prExportDensity
-                procedure :: ExportDensityUnit               => prExportDensityUnit
-                procedure :: GenerateLogSpaceData            => prGenerateLogSpaceData
-                procedure :: ComputeXYTranspose              => prComputeXYTranspose
-            
-            end type GridProjectedKDEType
-            
-            
-            ! Interfaces
-            abstract interface
-            
-                ! ComputeIndexes
-                function ComputeIndexes( this, smoothing ) result(indexes)
-                    import GridProjectedKDEType
-                    implicit none
-                    class( GridProjectedKDEType )             :: this
-                    doubleprecision, dimension(3), intent(in) :: smoothing
-                    integer, dimension(3) :: indexes 
-                    integer :: nd 
-                end function ComputeIndexes
+    contains
+    
+        ! Procedures
+        procedure :: Initialize                      => prInitialize 
+        procedure :: Reset                           => prReset 
+        procedure :: InitializeModuleConstants       => prInitializeModuleConstants
+        procedure :: InitializeNetRoughnessFunction  => prInitializeNetRoughnessFunction
+        procedure :: InitializeKernelDatabaseFlat    => prInitializeKernelDatabaseFlat
+        procedure :: DropKernelDatabase              => prDropKernelDatabase
+        procedure :: ComputeDensity                  => prComputeDensity
+        procedure :: ComputeDensityFromDatabaseFlat  => prComputeDensityFromDatabaseFlat
+        procedure :: ComputeSupportScale             => prComputeSupportScale
+        procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
+        procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
+        procedure :: ExportDensity                   => prExportDensity
+        procedure :: ExportDensityUnit               => prExportDensityUnit
+        procedure :: GenerateLogSpaceData            => prGenerateLogSpaceData
+        procedure :: ComputeXYTranspose              => prComputeXYTranspose
+    
+    end type GridProjectedKDEType
             
             
-                ! ComputeFlatIndexes
-                subroutine ComputeFlatIndexes( this, smoothing, flatDBIndexes, transposeKernel )
-                    import GridProjectedKDEType
-                    implicit none
-                    class( GridProjectedKDEType )             :: this
-                    doubleprecision, dimension(3), intent(in) :: smoothing
-                    integer, dimension(2), intent(inout)      :: flatDBIndexes
-                    logical, intent(inout)                    :: transposeKernel
-                    integer, dimension(3) :: indexes 
-                    integer :: nd
-                end subroutine ComputeFlatIndexes
-            
-            
-                ! NetRoughness
-                subroutine ComputeNetRoughness( this, activeGridCells, curvatureBandwidth, &
-                                     roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                                    netRoughnessArray, kernelSigmaSupport, &
-                                                           kernelSDX, kernelSDY, kernelSDZ ) 
-                    import GridProjectedKDEType
-                    import GridCellType
-                    import KernelSecondDerivativeXType
-                    import KernelSecondDerivativeYType
-                    import KernelSecondDerivativeZType
-                    implicit none 
-                    class( GridProjectedKDEType ), target :: this
-                    type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
-                    doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
-                    doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
-                    doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
-                    doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
-                    doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
-                    doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
-                    type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
-                    type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
-                    type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
-                end subroutine ComputeNetRoughness
-           
-
-                ! SetKernelInterface
-                subroutine SetKernelInterface( this, gridCell, kernel, smoothing )
-                    import GridProjectedKDEType
-                    import GridCellType
-                    import KernelType
-                    implicit none 
-                    class( GridProjectedKDEType ), target                  :: this
-                    type( GridCellType ), intent(inout)                    :: gridCell
-                    class( KernelType ), target, intent(inout)             :: kernel
-                    doubleprecision, dimension(3), intent(in)              :: smoothing
-                end subroutine SetKernelInterface
-
-
-                ! SetKernelInterface2D
-                subroutine SetKernelInterface2D( this, gridCell, kernel1, kernel2, smoothing )
-                    import GridProjectedKDEType
-                    import GridCellType
-                    import KernelType
-                    implicit none 
-                    class( GridProjectedKDEType ), target                  :: this
-                    type( GridCellType ), intent(inout)                    :: gridCell
-                    class( KernelType ), target, intent(in)                :: kernel1
-                    class( KernelType ), target, intent(in)                :: kernel2
-                    doubleprecision, dimension(3), intent(in)              :: smoothing
-                end subroutine SetKernelInterface2D
-            
-
-                ! SetKernelInterface3D
-                subroutine SetKernelInterface3D( this, gridCell, kernel1, kernel2, kernel3, smoothing )
-                    import GridProjectedKDEType
-                    import GridCellType
-                    import KernelType
-                    implicit none 
-                    class( GridProjectedKDEType ), target                  :: this
-                    type( GridCellType ), intent(inout)                    :: gridCell
-                    class( KernelType ), target, intent(in)                :: kernel1
-                    class( KernelType ), target, intent(in)                :: kernel2
-                    class( KernelType ), target, intent(in)                :: kernel3
-                    doubleprecision, dimension(3), intent(in)              :: smoothing
-                end subroutine SetKernelInterface3D
-
-            end interface
-
-
-        contains
-
-        subroutine prInitializeGridCell( this, id )
-            !------------------------------------------------------------------------------
-            ! 
-            !
-            !------------------------------------------------------------------------------
-            ! Specifications 
-            !------------------------------------------------------------------------------
+    ! Interfaces
+    abstract interface
+    
+        ! ComputeIndexes
+        function ComputeIndexes( this, smoothing ) result(indexes)
+            import GridProjectedKDEType
             implicit none
-            class( GridCellType ) :: this
-            integer, dimension(3), intent(in) :: id
-            !type( KernelMultiGaussianType )     :: ikernel      
-            !type( KernelMultiGaussianType )     :: ikernelSigma 
-            !type( KernelSecondDerivativeXType ) :: ikernelSDX   
-            !type( KernelSecondDerivativeYType ) :: ikernelSDY   
-            !type( KernelSecondDerivativeZType ) :: ikernelSDZ   
-            !------------------------------------------------------------------------------
-
-            this%id = id
-            !allocate(this%kernel     , source=ikernel     ) 
-            !allocate(this%kernelSigma, source=ikernelSigma) 
-            !allocate(this%kernelSDX  , source=ikernelSDX  ) 
-            !allocate(this%kernelSDY  , source=ikernelSDY  ) 
-            !allocate(this%kernelSDZ  , source=ikernelSDZ  ) 
-            
-
-
-        end subroutine prInitializeGridCell
-
-
-        subroutine prResetGridCell( this )
-            !------------------------------------------------------------------------------
-            ! 
-            !
-            !------------------------------------------------------------------------------
-            ! Specifications 
-            !------------------------------------------------------------------------------
+            class( GridProjectedKDEType )             :: this
+            doubleprecision, dimension(3), intent(in) :: smoothing
+            integer, dimension(3) :: indexes 
+            integer :: nd 
+        end function ComputeIndexes
+    
+    
+        ! ComputeFlatIndexes
+        subroutine ComputeFlatIndexes( this, smoothing, flatDBIndexes, transposeKernel )
+            import GridProjectedKDEType
             implicit none
-            class( GridCellType ) :: this
-            !------------------------------------------------------------------------------
+            class( GridProjectedKDEType )             :: this
+            doubleprecision, dimension(3), intent(in) :: smoothing
+            integer, dimension(2), intent(inout)      :: flatDBIndexes
+            logical, intent(inout)                    :: transposeKernel
+            integer, dimension(3) :: indexes 
+            integer :: nd
+        end subroutine ComputeFlatIndexes
+    
+    
+        ! NetRoughness
+        subroutine ComputeNetRoughness( this, activeGridCells, curvatureBandwidth, &
+                             roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                                            netRoughnessArray, kernelSigmaSupport, &
+                                                   kernelSDX, kernelSDY, kernelSDZ ) 
+            import GridProjectedKDEType
+            import GridCellType
+            import KernelSecondDerivativeXType
+            import KernelSecondDerivativeYType
+            import KernelSecondDerivativeZType
+            implicit none 
+            class( GridProjectedKDEType ), target :: this
+            type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
+            doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
+            doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
+            doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
+            doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
+            doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
+            doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
+            type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
+            type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
+            type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
+        end subroutine ComputeNetRoughness
+    
 
-            ! Kernel indexes
-            this%kernelDBIndexes          = 0
-            this%kernelSigmaDBIndexes     = 0
-            this%kernelSDDBIndexes        = 0
-            this%kernelDBFlatIndexes      = 0
-            this%kernelSigmaDBFlatIndexes = 0
-            this%transposeKernel          = .false.
-            this%transposeKernelSigma     = .false.
-            this%skipKernelSigma          = .false.
-            this%kernelXGSpan             = 0
-            this%kernelYGSpan             = 0
-            this%kernelZGSpan             = 0
-            this%kernelXMSpan             = 0
-            this%kernelYMSpan             = 0
-            this%kernelZMSpan             = 0
-            this%kernelSigmaXGSpan        = 0
-            this%kernelSigmaYGSpan        = 0
-            this%kernelSigmaZGSpan        = 0
-            this%kernelSigmaXMSpan        = 0
-            this%kernelSigmaYMSpan        = 0
-            this%kernelSigmaZMSpan        = 0
-            this%kernelSDXGSpan           = 0
-            this%kernelSDYGSpan           = 0
-            this%kernelSDZGSpan           = 0
-            this%kernelSDXMSpan           = 0
-            this%kernelSDYMSpan           = 0
-            this%kernelSDZMSpan           = 0
-
-
-        end subroutine prResetGridCell
-
-
-        subroutine prAllocateArrays( nComputeBins,  &
-                                    inkernelSmoothing,&
-                                    inkernelSmoothingScale,&
-                                    inkernelSmoothingShape,&
-                                    inkernelSigmaSupport,&
-                                    inkernelSigmaSupportScale,&
-                                    incurvatureBandwidth,&
-                                    indensityEstimateArray ,&
-                                    innEstimateArray,&
-                                    inroughnessXXArray,&
-                                    inroughnessYYArray,&
-                                    inroughnessZZArray,&
-                                    innetRoughnessArray,&
-                                    activeGridCellsIn   )
-            !------------------------------------------------------------------------------
-            ! 
-            !
-            !------------------------------------------------------------------------------
-            ! Specifications 
-            !------------------------------------------------------------------------------
-            implicit none
-            integer, intent(in) :: nComputeBins
-            doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothing
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSmoothingScale
-            doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothingShape
-            doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSigmaSupport
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSigmaSupportScale
-            doubleprecision, dimension(:,:), allocatable, intent(out) :: incurvatureBandwidth
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: indensityEstimateArray 
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: innEstimateArray
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessXXArray
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessYYArray
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessZZArray
-            doubleprecision, dimension(:)  , allocatable, intent(out) :: innetRoughnessArray
-            doubleprecision, dimension(:,:), allocatable :: lockernelSmoothing
-            doubleprecision, dimension(:)  , allocatable :: lockernelSmoothingScale
-            doubleprecision, dimension(:,:), allocatable :: lockernelSmoothingShape
-            doubleprecision, dimension(:,:), allocatable :: lockernelSigmaSupport
-            doubleprecision, dimension(:)  , allocatable :: lockernelSigmaSupportScale
-            doubleprecision, dimension(:,:), allocatable :: loccurvatureBandwidth
-            doubleprecision, dimension(:)  , allocatable :: locdensityEstimateArray 
-            doubleprecision, dimension(:)  , allocatable :: locnEstimateArray
-            doubleprecision, dimension(:)  , allocatable :: locroughnessXXArray
-            doubleprecision, dimension(:)  , allocatable :: locroughnessYYArray
-            doubleprecision, dimension(:)  , allocatable :: locroughnessZZArray
-            doubleprecision, dimension(:)  , allocatable :: locnetRoughnessArray
-            type( GridCellType ), dimension(:), allocatable, intent(out) :: activeGridCellsIn
-            type( GridCellType ), dimension(:), allocatable :: activeGridCellsLocal
-            !------------------------------------------------------------------------------
+        ! SetKernelInterface
+        subroutine SetKernelInterface( this, gridCell, kernel, smoothing )
+            import GridProjectedKDEType
+            import GridCellType
+            import KernelType
+            implicit none 
+            class( GridProjectedKDEType ), target                  :: this
+            type( GridCellType ), intent(inout)                    :: gridCell
+            class( KernelType ), target, intent(inout)             :: kernel
+            doubleprecision, dimension(3), intent(in)              :: smoothing
+        end subroutine SetKernelInterface
 
 
-            !! Allocate arrays
-            allocate(         lockernelSmoothing( 3, nComputeBins ) )
-            allocate(      lockernelSigmaSupport( 3, nComputeBins ) )
-            allocate(    lockernelSmoothingShape( 3, nComputeBins ) )
-            allocate(      loccurvatureBandwidth( 3, nComputeBins ) )
-            !allocate(         lockernelSmoothing( nDim, nComputeBins ) )
-            !allocate(      lockernelSigmaSupport( nDim, nComputeBins ) )
-            !allocate(    lockernelSmoothingShape( nDim, nComputeBins ) )
-            !allocate(      loccurvatureBandwidth( nDim, nComputeBins ) )
-            allocate(          lockernelSmoothingScale( nComputeBins ) )
-            allocate(       lockernelSigmaSupportScale( nComputeBins ) )
-            allocate(          locdensityEstimateArray( nComputeBins ) )
-            allocate(                locnEstimateArray( nComputeBins ) )
-            allocate(              locroughnessXXArray( nComputeBins ) )  
-            allocate(              locroughnessYYArray( nComputeBins ) )
-            allocate(              locroughnessZZArray( nComputeBins ) )
-            allocate(             locnetRoughnessArray( nComputeBins ) )
-            allocate(             activeGridCellsLocal( nComputeBins ) )
+        ! SetKernelInterface2D
+        subroutine SetKernelInterface2D( this, gridCell, kernel1, kernel2, smoothing )
+            import GridProjectedKDEType
+            import GridCellType
+            import KernelType
+            implicit none 
+            class( GridProjectedKDEType ), target                  :: this
+            type( GridCellType ), intent(inout)                    :: gridCell
+            class( KernelType ), target, intent(in)                :: kernel1
+            class( KernelType ), target, intent(in)                :: kernel2
+            doubleprecision, dimension(3), intent(in)              :: smoothing
+        end subroutine SetKernelInterface2D
+    
 
-            call move_alloc(        activeGridCellsLocal,       activeGridCellsIn  )
-            call move_alloc(          lockernelSmoothing,        inkernelSmoothing )
-            call move_alloc(       lockernelSigmaSupport,     inkernelSigmaSupport )
-            call move_alloc(     lockernelSmoothingShape,   inkernelSmoothingShape )
-            call move_alloc(       loccurvatureBandwidth,     incurvatureBandwidth )
-            call move_alloc(     lockernelSmoothingScale,   inkernelSmoothingScale )
-            call move_alloc(  lockernelSigmaSupportScale,inkernelSigmaSupportScale )
-            call move_alloc(     locdensityEstimateArray,   indensityEstimateArray )
-            call move_alloc(           locnEstimateArray,         innEstimateArray )
-            call move_alloc(         locroughnessXXArray,       inroughnessXXArray )  
-            call move_alloc(         locroughnessYYArray,       inroughnessYYArray )
-            call move_alloc(         locroughnessZZArray,       inroughnessZZArray )
-            call move_alloc(        locnetRoughnessArray,      innetRoughnessArray )
+        ! SetKernelInterface3D
+        subroutine SetKernelInterface3D( this, gridCell, kernel1, kernel2, kernel3, smoothing )
+            import GridProjectedKDEType
+            import GridCellType
+            import KernelType
+            implicit none 
+            class( GridProjectedKDEType ), target                  :: this
+            type( GridCellType ), intent(inout)                    :: gridCell
+            class( KernelType ), target, intent(in)                :: kernel1
+            class( KernelType ), target, intent(in)                :: kernel2
+            class( KernelType ), target, intent(in)                :: kernel3
+            doubleprecision, dimension(3), intent(in)              :: smoothing
+        end subroutine SetKernelInterface3D
+
+    end interface
 
 
-
-        end subroutine prAllocateArrays
-
-
+    ! Module contains
+    contains
 
 
-        subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
-                                    databaseOptimization, flatKernelDatabase, &
-                                              minHOverLambda, maxHOverLambda, &
-                                         deltaHOverLambda, logKernelDatabase, &
-                                  bruteOptimization, anisotropicSigmaSupport, &
-                                            nOptimizationLoops, domainOrigin  )
-            !------------------------------------------------------------------------------
-            !
-            !------------------------------------------------------------------------------
-            ! Specifications 
-            !------------------------------------------------------------------------------
-            implicit none
-            class( GridProjectedKDEType ) :: this
-            ! Reconstruction grid parameters
-            doubleprecision, dimension(3), intent(in) :: domainSize
-            doubleprecision, dimension(3), intent(in) :: binSize
-            doubleprecision, dimension(3), intent(in), optional :: domainOrigin
-            doubleprecision, dimension(3), intent(in), optional :: initialSmoothing
-            integer, intent(in), optional :: nOptimizationLoops 
-            ! Kernel database parameters
-            logical, intent(in), optional :: databaseOptimization, flatKernelDatabase
-            doubleprecision, intent(in), optional :: minHOverLambda, maxHOverLambda
-            doubleprecision, intent(in), optional :: deltaHOverLambda
-            logical, intent(in), optional :: logKernelDatabase
-            ! Brute optimization, no kernel database
-            logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
-            ! General use, indexes
-            integer :: n
+    ! Subroutines
+    subroutine prInitializeGridCell( this, id )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridCellType ) :: this
+        integer, dimension(3), intent(in) :: id
+        !type( KernelMultiGaussianType )     :: ikernel      
+        !type( KernelMultiGaussianType )     :: ikernelSigma 
+        !type( KernelSecondDerivativeXType ) :: ikernelSDX   
+        !type( KernelSecondDerivativeYType ) :: ikernelSDY   
+        !type( KernelSecondDerivativeZType ) :: ikernelSDZ   
+        !------------------------------------------------------------------------------
 
-            ! Time monitoring
-            integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-            doubleprecision :: elapsedTime
-            !------------------------------------------------------------------------------
+        this%id = id
+        !allocate(this%kernel     , source=ikernel     ) 
+        !allocate(this%kernelSigma, source=ikernelSigma) 
+        !allocate(this%kernelSDX  , source=ikernelSDX  ) 
+        !allocate(this%kernelSDY  , source=ikernelSDY  ) 
+        !allocate(this%kernelSDZ  , source=ikernelSDZ  ) 
+        
 
 
-                ! Initialize reconstruction grid 
-                this%binSize    = binSize
-                this%domainSize = domainSize
-                this%nBins      = ceiling( domainSize/binSize )
+    end subroutine prInitializeGridCell
 
-                ! domainOrigin
-                if ( present( domainOrigin ) ) then 
-                    this%domainOrigin = domainOrigin
-                else 
-                    this%domainOrigin = (/0,0,0/)
-                end if
 
-                print *, '#############################################################'
-                print *, '# GPKDE: INITIALIZATION '
-                print *, '# '
-                print *, '# ORIGIN     ', this%domainOrigin
-                print *, '# DOMAINSIZE ', domainSize
-                print *, '# BINSIZE    ', binSize 
-                print *, '# NBINS      ', this%nBins
+    subroutine prResetGridCell( this )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridCellType ) :: this
+        !------------------------------------------------------------------------------
 
-                
-                ! Depending on nBins, is the number of dimensions 
-                ! of the reconstruction process. If any nBins is 1, 
-                ! then that dimension is compressed. e.g. nBins = (10,1,20),
-                ! then it is a 2D reconstruction process where dimensions
-                ! x and z define the 2D plane.
+        ! Kernel indexes
+        this%kernelDBIndexes          = 0
+        this%kernelSigmaDBIndexes     = 0
+        this%kernelSDDBIndexes        = 0
+        this%kernelDBFlatIndexes      = 0
+        this%kernelSigmaDBFlatIndexes = 0
+        this%transposeKernel          = .false.
+        this%transposeKernelSigma     = .false.
+        this%skipKernelSigma          = .false.
+        this%kernelXGSpan             = 0
+        this%kernelYGSpan             = 0
+        this%kernelZGSpan             = 0
+        this%kernelXMSpan             = 0
+        this%kernelYMSpan             = 0
+        this%kernelZMSpan             = 0
+        this%kernelSigmaXGSpan        = 0
+        this%kernelSigmaYGSpan        = 0
+        this%kernelSigmaZGSpan        = 0
+        this%kernelSigmaXMSpan        = 0
+        this%kernelSigmaYMSpan        = 0
+        this%kernelSigmaZMSpan        = 0
+        this%kernelSDXGSpan           = 0
+        this%kernelSDYGSpan           = 0
+        this%kernelSDZGSpan           = 0
+        this%kernelSDXMSpan           = 0
+        this%kernelSDYMSpan           = 0
+        this%kernelSDZMSpan           = 0
 
-                ! Initialize module dimensions
-                call prInitializeModuleDimensions( this, nDim, dimensionMask ) 
-                
 
-                ! Initialize module constants, uses nDim
-                call this%InitializeModuleConstants()
+    end subroutine prResetGridCell
 
-                
-                ! Initialize histogram
+
+    subroutine prAllocateArrays( nComputeBins,  &
+                                inkernelSmoothing,&
+                                inkernelSmoothingScale,&
+                                inkernelSmoothingShape,&
+                                inkernelSigmaSupport,&
+                                inkernelSigmaSupportScale,&
+                                incurvatureBandwidth,&
+                                indensityEstimateArray ,&
+                                innEstimateArray,&
+                                inroughnessXXArray,&
+                                inroughnessYYArray,&
+                                inroughnessZZArray,&
+                                innetRoughnessArray,&
+                                activeGridCellsIn   )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        integer, intent(in) :: nComputeBins
+        doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothing
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSmoothingScale
+        doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothingShape
+        doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSigmaSupport
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSigmaSupportScale
+        doubleprecision, dimension(:,:), allocatable, intent(out) :: incurvatureBandwidth
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: indensityEstimateArray 
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: innEstimateArray
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessXXArray
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessYYArray
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: inroughnessZZArray
+        doubleprecision, dimension(:)  , allocatable, intent(out) :: innetRoughnessArray
+        doubleprecision, dimension(:,:), allocatable :: lockernelSmoothing
+        doubleprecision, dimension(:)  , allocatable :: lockernelSmoothingScale
+        doubleprecision, dimension(:,:), allocatable :: lockernelSmoothingShape
+        doubleprecision, dimension(:,:), allocatable :: lockernelSigmaSupport
+        doubleprecision, dimension(:)  , allocatable :: lockernelSigmaSupportScale
+        doubleprecision, dimension(:,:), allocatable :: loccurvatureBandwidth
+        doubleprecision, dimension(:)  , allocatable :: locdensityEstimateArray 
+        doubleprecision, dimension(:)  , allocatable :: locnEstimateArray
+        doubleprecision, dimension(:)  , allocatable :: locroughnessXXArray
+        doubleprecision, dimension(:)  , allocatable :: locroughnessYYArray
+        doubleprecision, dimension(:)  , allocatable :: locroughnessZZArray
+        doubleprecision, dimension(:)  , allocatable :: locnetRoughnessArray
+        type( GridCellType ), dimension(:), allocatable, intent(out) :: activeGridCellsIn
+        type( GridCellType ), dimension(:), allocatable :: activeGridCellsLocal
+        !------------------------------------------------------------------------------
+
+
+        !! Allocate arrays
+        allocate(         lockernelSmoothing( 3, nComputeBins ) )
+        allocate(      lockernelSigmaSupport( 3, nComputeBins ) )
+        allocate(    lockernelSmoothingShape( 3, nComputeBins ) )
+        allocate(      loccurvatureBandwidth( 3, nComputeBins ) )
+        !allocate(         lockernelSmoothing( nDim, nComputeBins ) )
+        !allocate(      lockernelSigmaSupport( nDim, nComputeBins ) )
+        !allocate(    lockernelSmoothingShape( nDim, nComputeBins ) )
+        !allocate(      loccurvatureBandwidth( nDim, nComputeBins ) )
+        allocate(          lockernelSmoothingScale( nComputeBins ) )
+        allocate(       lockernelSigmaSupportScale( nComputeBins ) )
+        allocate(          locdensityEstimateArray( nComputeBins ) )
+        allocate(                locnEstimateArray( nComputeBins ) )
+        allocate(              locroughnessXXArray( nComputeBins ) )  
+        allocate(              locroughnessYYArray( nComputeBins ) )
+        allocate(              locroughnessZZArray( nComputeBins ) )
+        allocate(             locnetRoughnessArray( nComputeBins ) )
+        allocate(             activeGridCellsLocal( nComputeBins ) )
+
+        call move_alloc(        activeGridCellsLocal,       activeGridCellsIn  )
+        call move_alloc(          lockernelSmoothing,        inkernelSmoothing )
+        call move_alloc(       lockernelSigmaSupport,     inkernelSigmaSupport )
+        call move_alloc(     lockernelSmoothingShape,   inkernelSmoothingShape )
+        call move_alloc(       loccurvatureBandwidth,     incurvatureBandwidth )
+        call move_alloc(     lockernelSmoothingScale,   inkernelSmoothingScale )
+        call move_alloc(  lockernelSigmaSupportScale,inkernelSigmaSupportScale )
+        call move_alloc(     locdensityEstimateArray,   indensityEstimateArray )
+        call move_alloc(           locnEstimateArray,         innEstimateArray )
+        call move_alloc(         locroughnessXXArray,       inroughnessXXArray )  
+        call move_alloc(         locroughnessYYArray,       inroughnessYYArray )
+        call move_alloc(         locroughnessZZArray,       inroughnessZZArray )
+        call move_alloc(        locnetRoughnessArray,      innetRoughnessArray )
+
+
+
+    end subroutine prAllocateArrays
+
+
+    subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
+                                databaseOptimization, flatKernelDatabase, &
+                                          minHOverLambda, maxHOverLambda, &
+                                     deltaHOverLambda, logKernelDatabase, &
+                              bruteOptimization, anisotropicSigmaSupport, &
+                                        nOptimizationLoops, domainOrigin  )
+        !------------------------------------------------------------------------------
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none
+        class( GridProjectedKDEType ) :: this
+        ! Reconstruction grid parameters
+        doubleprecision, dimension(3), intent(in) :: domainSize
+        doubleprecision, dimension(3), intent(in) :: binSize
+        doubleprecision, dimension(3), intent(in), optional :: domainOrigin
+        doubleprecision, dimension(3), intent(in), optional :: initialSmoothing
+        integer, intent(in), optional :: nOptimizationLoops 
+        ! Kernel database parameters
+        logical, intent(in), optional :: databaseOptimization, flatKernelDatabase
+        doubleprecision, intent(in), optional :: minHOverLambda, maxHOverLambda
+        doubleprecision, intent(in), optional :: deltaHOverLambda
+        logical, intent(in), optional :: logKernelDatabase
+        ! Brute optimization, no kernel database
+        logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
+        ! General use, indexes
+        integer :: n
+
+        ! Time monitoring
+        integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+        doubleprecision :: elapsedTime
+        !------------------------------------------------------------------------------
+
+
+        ! Initialize reconstruction grid 
+        this%binSize    = binSize
+        this%domainSize = domainSize
+        this%nBins      = ceiling( domainSize/binSize )
+
+        ! domainOrigin
+        if ( present( domainOrigin ) ) then 
+            this%domainOrigin = domainOrigin
+        else 
+            this%domainOrigin = (/0,0,0/)
+        end if
+
+        print *, '#############################################################'
+        print *, '# GPKDE: INITIALIZATION '
+        print *, '# '
+        print *, '# ORIGIN     ', this%domainOrigin
+        print *, '# DOMAINSIZE ', domainSize
+        print *, '# BINSIZE    ', binSize 
+        print *, '# NBINS      ', this%nBins
+
+        
+        ! Depending on nBins, is the number of dimensions 
+        ! of the reconstruction process. If any nBins is 1, 
+        ! then that dimension is compressed. e.g. nBins = (10,1,20),
+        ! then it is a 2D reconstruction process where dimensions
+        ! x and z define the 2D plane.
+
+        ! Initialize module dimensions
+        call prInitializeModuleDimensions( this, nDim, dimensionMask ) 
+        
+
+        ! Initialize module constants, uses nDim
+        call this%InitializeModuleConstants()
+
+        
+        ! Initialize histogram
         call this%histogram%Initialize( &
               this%nBins, this%binSize, &
            dimensionMask=dimensionMask, & 
@@ -654,7 +622,6 @@ module GridProjectedKDEModule
             call system_clock(clockCountStop, clockCountRate, clockCountMax)
             elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
             print *, '## GPKDE kernel db initialization took ', elapsedTime, ' seconds'
-
 
         else
 
@@ -2430,6 +2397,15 @@ module GridProjectedKDEModule
         doubleprecision :: errorRMSEOld
         doubleprecision, dimension(:), allocatable :: squareDensityDiff
         doubleprecision, dimension(:), allocatable :: rawDensity
+        doubleprecision, dimension(:), allocatable :: errorMetricArray
+        doubleprecision, dimension(:), allocatable :: relativeDensityChange
+        doubleprecision, dimension(:), allocatable :: relativeSmoothingChange
+        doubleprecision, dimension(:), allocatable :: kernelSmoothingScaleOld
+        doubleprecision, dimension(:), allocatable :: densityEstimateArrayOld
+
+
+        doubleprecision :: errorMetric
+        doubleprecision :: errorMetricOld
 
 
         doubleprecision :: binVolume
@@ -2458,11 +2434,7 @@ module GridProjectedKDEModule
 
         ! Reset grid values
         densityEstimateGrid = 0d0
-        !nEstimateGrid => this%nEstimateGrid
         nEstimateGrid = 0d0
-
-        print *, 'DENSITY ESTIMATE GRID', sum(densityEstimateGrid)
-        print *, 'N ESTIMATE GRID', sum(nEstimateGrid)
 
         ! Allocate arrays according to nComputebins
         call prAllocateArrays( this%nComputeBins,      &
@@ -2481,6 +2453,19 @@ module GridProjectedKDEModule
                                activeGridCellsMod)
         if ( allocated(rawDensity) ) deallocate(rawDensity) 
         allocate( rawDensity(this%nComputeBins) )
+        if ( allocated(errorMetricArray) ) deallocate(errorMetricArray) 
+        allocate( errorMetricArray(this%nComputeBins) )
+        if ( allocated(relativeDensityChange) ) deallocate(relativeDensityChange) 
+        allocate( relativeDensityChange(this%nComputeBins) )
+        if ( allocated(relativeSmoothingChange) ) deallocate(relativeSmoothingChange) 
+        allocate( relativeSmoothingChange(this%nComputeBins) )
+        if ( allocated(relativeSmoothingChange) ) deallocate(relativeSmoothingChange) 
+        allocate( relativeSmoothingChange(this%nComputeBins) )
+        if ( allocated(kernelSmoothingScaleOld) ) deallocate(kernelSmoothingScaleOld) 
+        allocate( kernelSmoothingScaleOld(this%nComputeBins) )
+        if ( allocated(densityEstimateArrayOld) ) deallocate(densityEstimateArrayOld) 
+        allocate( densityEstimateArrayOld(this%nComputeBins) )
+
 
         ! Define nOptLoops
         if ( present( nOptimizationLoops ) ) then 
@@ -2500,12 +2485,7 @@ module GridProjectedKDEModule
         end do
         !$omp end parallel do
         activeGridCells => activeGridCellsMod
-    
-        print *, 'GPKDE: RAW DENSITY', sum(rawDensity)/this%nComputeBins
-        print *, 'GPKDE: RAWDENSITY*VOLUME', sum(rawDensity)/this%nComputeBins*this%histogram%binVolume
-        print *, 'GPKDE BIN SIZE', this%binSize
-        print *, 'GPKDEHISTOGRAM', this%nComputeBins, this%histogram%binVolume
-
+   
 
         ! Initialize kernels
         call kernel%Initialize(      this%binSize, matrixRange=defaultKernelRange )
@@ -2514,7 +2494,6 @@ module GridProjectedKDEModule
         call kernelSDY%Initialize(   this%binSize, matrixRange=defaultKernelRange )
         call kernelSDZ%Initialize(   this%binSize, matrixRange=defaultKernelRange )
 
-        print *, 'HOVERLAMBDA ', this%initialSmoothing/this%binSize
 
         ! Define initial smoothing array
         ! initialSmoothing or kernelSmoothing could
@@ -2535,12 +2514,6 @@ module GridProjectedKDEModule
                 kernelSigmaSupport(nd,:)   = 0
             end if 
         end do
-
-        print *, 'GPKDE KERNEL SMOOTHING SCALE ',sum(kernelSmoothingScale)/this%nComputeBins
-
-        print *, 'DOMAINSIZE ', this%domainSize
-        print *, 'DOMAINORIGIN ', this%domainOrigin
-        print *, 'DIMENSIONMASK ', this%dimensionMask
 
 
         ! Initialize density grid
@@ -2579,13 +2552,14 @@ module GridProjectedKDEModule
                          gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
                 )
             
-            !!! CANNOT BE DONE UNTIL THE END OF THE LOOP, REDUCTION CLAUSE
-            !!! Assign into array     
-            !!densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+            !! Cannot be done here ! Reduction !
+            ! Assign into array   
+            !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
 
         end do
         !$omp end parallel do 
         densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
+
 
         ! Transfer grid density to array
         do n = 1, this%nComputeBins
@@ -2594,22 +2568,18 @@ module GridProjectedKDEModule
             densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
 
-        print *, 'GPKDE AVG INIT DENSITY:', sum(densityEstimateArray)/this%nComputeBins
-        print *, 'GPKDE AVG INIT DENSITY*VOLUME:', &
-            sum(densityEstimateArray)/this%nComputeBins*this%histogram%binVolume
-
         
-        ! Error
-        squareDensityDiff = (densityEstimateArray - rawDensity)**2
-        errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
-        errorRMSEOld      = errorRMSE
+        ! Error monitoring
+        squareDensityDiff       = (densityEstimateArray - rawDensity)**2
+        errorRMSE               = sqrt(sum( squareDensityDiff )/this%nComputeBins)
+        errorRMSEOld            = errorRMSE
+        densityEstimateArrayOld = densityEstimateArray
+        kernelSmoothingScaleOld = kernelSmoothingScale
 
-        print *, ' -- RMSE 0 : ', errorRMSE
-        print *, ' -- RMSE 0*VOLUME : ', errorRMSE*this%histogram%binVolume
-    
 
         ! Optimization loop
         do m = 1, nOptLoops
+
 
             ! nEstimate 
             !$omp parallel do schedule( dynamic, 1 )                    &
@@ -2648,9 +2618,8 @@ module GridProjectedKDEModule
             end do
             !$omp end parallel do
 
-            print *, 'NESTIMATE LOOP ', sum(nEstimateArray)/this%nComputeBins, m
 
-
+            ! Export optimization variables 
             if ( (exportOptimizationVariables) .and. (m.eq.1) ) then
                 write( unit=loopId, fmt=* )m-1
                 write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
@@ -2658,11 +2627,13 @@ module GridProjectedKDEModule
                     densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
                     curvatureBandwidth, nEstimateArray, netRoughnessArray )
             end if 
-           
+          
+
+            ! Compute support scale 
             call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                                nEstimateArray, kernelSigmaSupportScale )
 
-            ! Spread it, isotropic 
+            ! Spread the support scale as isotropic 
             ! And deactivate compressed dimension
             kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, 3 )
             do nd =1, 3
@@ -2671,11 +2642,6 @@ module GridProjectedKDEModule
                     kernelSigmaSupport(nd,:)   = 0d0
                 end if 
             end do
-
-            print *, 'KERNEL SIGMA SUPPORT', &
-            sum(kernelSigmaSupport)/this%nComputeBins
-            print *, 'KERNEL SIGMA SUPPORT LAMBDA', &
-            sum(kernelSigmaSupport)/this%nComputeBins/this%histogram%binVolume
 
 
             ! Update nEstimate
@@ -2739,6 +2705,32 @@ module GridProjectedKDEModule
                               kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape )
 
 
+
+            
+            !if ( m .eq. 1 ) then 
+            ! A proxy to error
+            errorMetricArray = 0d0
+            where ( kernelSmoothingScale .ne. 0d0 ) 
+                errorMetricArray = nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
+                    0.25*netRoughnessArray*kernelSmoothingScale**4d0
+            end where 
+            !errorMetricOld = errorMetric
+            !end if
+
+            print *, 'ERROR METRIC PROXY: ', sum(errorMetricArray)/this%nComputeBins
+
+
+            ! A proxy to error
+            relativeSmoothingChange = 0d0
+            where ( kernelSmoothingScaleOld .ne. 0d0 ) 
+                relativeSmoothingChange = abs(kernelSmoothingScale - &
+                    kernelSmoothingScaleOld)/kernelSmoothingScaleOld
+            end where
+            print *, 'ERROR METRIC AVG SMOOTHING CHANGE: ', sum(relativeSmoothingChange)/this%nComputeBins
+
+            kernelSmoothingScaleOld = kernelSmoothingScale
+
+
             ! Update density
             densityEstimateGrid = 0d0
             densityEstimateArray = 0d0
@@ -2780,7 +2772,7 @@ module GridProjectedKDEModule
                              gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
                     )
 
-                !! CANNOT BE DONE, REDUCTION CLAUSE
+                !! Cannot be done here ! Reduction !
                 ! Assign into array   
                 !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
 
@@ -2788,17 +2780,32 @@ module GridProjectedKDEModule
             !$omp end parallel do
             densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
 
+
             ! Transfer grid density to array
             do n = 1, this%nComputeBins
                 ! Assign gc pointer 
                 gc => activeGridCells(n)
                 densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
             end do
-           
+          
+
             ! Error
             squareDensityDiff = (densityEstimateArray - rawDensity)**2
             errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
 
+
+            ! A proxy to error
+            relativeDensityChange = 0d0
+            where ( densityEstimateArrayOld .ne. 0d0 ) 
+                relativeDensityChange = abs(densityEstimateArray - &
+                    densityEstimateArrayOld)/densityEstimateArrayOld
+            end where 
+            print *, 'ERROR METRIC AVG DENSITY CHANGE: ', sum(relativeDensityChange)/this%nComputeBins
+
+            densityEstimateArrayOld = densityEstimateArray
+
+
+            ! Export optimization variables
             if ( exportOptimizationVariables ) then
                 write( unit=loopId, fmt=* )m
                 write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
@@ -2806,7 +2813,8 @@ module GridProjectedKDEModule
                     densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
                     curvatureBandwidth, nEstimateArray, netRoughnessArray )
             end if 
-            
+           
+
             !! If for some reason error start increasing, return
             !if ( errorRMSE .ge. errorRMSEOld ) then
             !    exit
