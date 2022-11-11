@@ -18,6 +18,9 @@ program testkernel
     doubleprecision :: maxHOverLambda 
     doubleprecision :: minHOverLambda
     doubleprecision :: deltaHOverLambda
+    doubleprecision :: densityRelativeConvergence
+     
+
 
     integer :: nx, ny, nz
     integer :: n, m, o, p, i
@@ -104,10 +107,10 @@ program testkernel
 
     ! KDB LOG
     maxHOverLambda     = 30.0
-    minHOverLambda     = 5
-    deltaHOverLambda   = 0.001
+    minHOverLambda     = 1
+    deltaHOverLambda   = 0.0001
     nOptimizationLoops = 10
-
+    densityRelativeConvergence = 0.01
 
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
@@ -116,7 +119,7 @@ program testkernel
     do ix = 1, nlines
         read(10,*) dataArray( ix, : )
         !dataArray( ix, : ) = dataArray(ix,:)*1000.0
-        dataArray( ix, : ) = dataArray(ix,:)
+        !dataArray( ix, : ) = dataArray(ix,:)
     end do
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)
@@ -131,12 +134,13 @@ program testkernel
             minHOverLambda          = minHOverLambda,     & 
             maxHOverLambda          = maxHOverLambda,     & 
             deltaHOverLambda        = deltaHOverLambda,   &
-            databaseOptimization    = .false.,            & 
+            databaseOptimization    = .true.,            & 
             bruteOptimization       = .false.,            & 
             anisotropicSigmaSupport = .false.,            &
             nOptimizationLoops      = nOptimizationLoops, & 
-            domainOrigin            = domainOrigin        & 
-        )
+            domainOrigin            = domainOrigin,       & 
+            densityRelativeConvergence = densityRelativeConvergence & 
+            )
 
     print *, '-------------------------------------------------------'
     ! TIC
@@ -155,56 +159,56 @@ program testkernel
     elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
     print *, '## TEST: compute density done!: ', elapsedTime, ' seconds'
 
-    print *, '-------------------------------------------------------'
-    ! TIC
-    call system_clock(clockCountStart, clockCountRate, clockCountMax)
-    print *, '## TEST: compute density ' 
-    write( unit=outputFileName, fmt='(a)')&
-        'gpkde_'//trim(adjustl(particlesFileName))
-    print *, outputFileName
-    call gpkde%ComputeDensity( &
-        dataArray,                                   &
-        nOptimizationLoops=gpkde%nOptimizationLoops, &
-        outputFileName=outputFileName  &
-       )
-    ! TOC
-    call system_clock(clockCountStop, clockCountRate, clockCountMax)
-    elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-    print *, '## TEST: compute density done!: ', elapsedTime, ' seconds'
+    !print *, '-------------------------------------------------------'
+    !! TIC
+    !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+    !print *, '## TEST: compute density ' 
+    !write( unit=outputFileName, fmt='(a)')&
+    !    'gpkde_'//trim(adjustl(particlesFileName))
+    !print *, outputFileName
+    !call gpkde%ComputeDensity( &
+    !    dataArray,                                   &
+    !    nOptimizationLoops=gpkde%nOptimizationLoops, &
+    !    outputFileName=outputFileName  &
+    !   )
+    !! TOC
+    !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+    !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+    !print *, '## TEST: compute density done!: ', elapsedTime, ' seconds'
 
 
-    print *, '-------------------------------------------------------'
-    ! TIC
-    call system_clock(clockCountStart, clockCountRate, clockCountMax)
-    print *, '## TEST: compute density ' 
-    write( unit=outputFileName, fmt='(a)')&
-        'gpkde_'//trim(adjustl(particlesFileName))
-    print *, outputFileName
-    call gpkde%ComputeDensity( &
-        dataArray,                                   &
-        nOptimizationLoops=gpkde%nOptimizationLoops, &
-        outputFileName=outputFileName  &
-       )
-    ! TOC
-    call system_clock(clockCountStop, clockCountRate, clockCountMax)
-    elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-    print *, '## TEST: compute density done!: ', elapsedTime, ' seconds'
+    !print *, '-------------------------------------------------------'
+    !! TIC
+    !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+    !print *, '## TEST: compute density ' 
+    !write( unit=outputFileName, fmt='(a)')&
+    !    'gpkde_'//trim(adjustl(particlesFileName))
+    !print *, outputFileName
+    !call gpkde%ComputeDensity( &
+    !    dataArray,                                   &
+    !    nOptimizationLoops=gpkde%nOptimizationLoops, &
+    !    outputFileName=outputFileName  &
+    !   )
+    !! TOC
+    !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+    !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+    !print *, '## TEST: compute density done!: ', elapsedTime, ' seconds'
 
-    print *, '-------------------------------------------------------'
-    ! TIC
-    call system_clock(clockCountStart, clockCountRate, clockCountMax)
-    print *, '## TEST: compute density ' 
-    write( unit=outputFileName, fmt='(a)')&
-        'gpkde_'//trim(adjustl(particlesFileName))
-    print *, outputFileName
-    call gpkde%ComputeDensity( &
-        dataArray,                                   &
-        nOptimizationLoops=gpkde%nOptimizationLoops, &
-        outputFileName=outputFileName  &
-       )
-    ! TOC
-    call system_clock(clockCountStop, clockCountRate, clockCountMax)
-    elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+    !print *, '-------------------------------------------------------'
+    !! TIC
+    !call system_clock(clockCountStart, clockCountRate, clockCountMax)
+    !print *, '## TEST: compute density ' 
+    !write( unit=outputFileName, fmt='(a)')&
+    !    'gpkde_'//trim(adjustl(particlesFileName))
+    !print *, outputFileName
+    !call gpkde%ComputeDensity( &
+    !    dataArray,                                   &
+    !    nOptimizationLoops=gpkde%nOptimizationLoops, &
+    !    outputFileName=outputFileName  &
+    !   )
+    !! TOC
+    !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+    !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
 
 
     deallocate( gpkde )

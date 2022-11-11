@@ -24,9 +24,10 @@ module GridProjectedKDEModule
     logical, parameter :: defaultDatabaseOptimization = .true.
     logical, parameter :: defaultLogKernelDatabase    = .true.
 
-    doubleprecision, parameter :: defaultMaxHOverLambda   = 10
-    doubleprecision, parameter :: defaultMinHOverLambda   = 0.1
-    doubleprecision, parameter :: defaultDeltaHOverLambda = 0.1
+    doubleprecision, parameter :: defaultMaxHOverLambda   = 30
+    doubleprecision, parameter :: defaultMinHOverLambda   = 1
+    doubleprecision, parameter :: defaultDeltaHOverLambda = 0.25
+    doubleprecision, parameter :: defaultDensityRelativeConvergence = 0.01
 
     logical, parameter ::  defaultBruteOptimization       = .false. 
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
@@ -108,13 +109,12 @@ module GridProjectedKDEModule
         logical                       :: databaseOptimization 
         logical                       :: flatKernelDatabase
         
-        ! Brute optimization 
+        ! Optimization
         logical :: bruteOptimization 
         logical :: anisotropicSigmaSupport 
-    
-        ! Optimization loops
         integer :: nOptimizationLoops
-    
+        doubleprecision :: densityRelativeConvergence
+
         ! Module constants
         doubleprecision :: supportDimensionConstant
         doubleprecision :: alphaDimensionConstant
@@ -263,7 +263,8 @@ module GridProjectedKDEModule
                                           minHOverLambda, maxHOverLambda, &
                                      deltaHOverLambda, logKernelDatabase, &
                               bruteOptimization, anisotropicSigmaSupport, &
-                                        nOptimizationLoops, domainOrigin  )
+                                        nOptimizationLoops, domainOrigin, &
+                                               densityRelativeConvergence )
         !------------------------------------------------------------------------------
         !
         !------------------------------------------------------------------------------
@@ -281,6 +282,7 @@ module GridProjectedKDEModule
         logical, intent(in), optional :: databaseOptimization, flatKernelDatabase
         doubleprecision, intent(in), optional :: minHOverLambda, maxHOverLambda
         doubleprecision, intent(in), optional :: deltaHOverLambda
+        doubleprecision, intent(in), optional :: densityRelativeConvergence  
         logical, intent(in), optional :: logKernelDatabase
         ! Brute optimization, no kernel database
         logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
@@ -365,6 +367,11 @@ module GridProjectedKDEModule
             this%deltaHOverLambda = deltaHOverLambda
         else 
             this%deltaHOverLambda = defaultDeltaHOverLambda
+        end if
+        if ( present( densityRelativeConvergence ) ) then 
+            this%densityRelativeConvergence = densityRelativeConvergence
+        else 
+            this%densityRelativeConvergence = defaultDensityRelativeConvergence
         end if
         if ( present( logKernelDatabase ) ) then 
             this%logKernelDatabase = logKernelDatabase
@@ -2310,7 +2317,7 @@ module GridProjectedKDEModule
         doubleprecision, dimension(:), allocatable :: densityEstimateArrayOld
         doubleprecision :: errorMetric
         doubleprecision :: errorMetricOld
-        doubleprecision :: errorMetricConvergence = 0.01
+        doubleprecision :: errorMetricConvergence
 
 
         doubleprecision :: binVolume
@@ -2358,19 +2365,11 @@ module GridProjectedKDEModule
                                activeGridCellsMod)
         if ( allocated(rawDensity) ) deallocate(rawDensity) 
         allocate( rawDensity(this%nComputeBins) )
-        if ( allocated(errorMetricArray) ) deallocate(errorMetricArray) 
-        allocate( errorMetricArray(this%nComputeBins) )
         if ( allocated(relativeDensityChange) ) deallocate(relativeDensityChange) 
         allocate( relativeDensityChange(this%nComputeBins) )
-        if ( allocated(relativeSmoothingChange) ) deallocate(relativeSmoothingChange) 
-        allocate( relativeSmoothingChange(this%nComputeBins) )
-        if ( allocated(relativeSmoothingChange) ) deallocate(relativeSmoothingChange) 
-        allocate( relativeSmoothingChange(this%nComputeBins) )
-        if ( allocated(kernelSmoothingScaleOld) ) deallocate(kernelSmoothingScaleOld) 
-        allocate( kernelSmoothingScaleOld(this%nComputeBins) )
         if ( allocated(densityEstimateArrayOld) ) deallocate(densityEstimateArrayOld) 
         allocate( densityEstimateArrayOld(this%nComputeBins) )
-
+        errorMetricConvergence = this%densityRelativeConvergence
 
         ! Define nOptLoops
         if ( present( nOptimizationLoops ) ) then 
