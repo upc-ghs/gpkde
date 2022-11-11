@@ -12,20 +12,12 @@ module GridCellModule
         integer, dimension(3) :: id
         logical               :: convergence = .false.
 
-        ! Kernel pointers
-        class( KernelType ), pointer :: kernel      => null()
-        class( KernelType ), pointer :: kernelSigma => null()
-        class( KernelType ), pointer :: kernelSDX   => null()
-        class( KernelType ), pointer :: kernelSDY   => null()
-        class( KernelType ), pointer :: kernelSDZ   => null()
-        class( KernelType ), pointer :: kernelSD    => null()
-        class( KernelType ), pointer :: kernelSD1   => null()
-        class( KernelType ), pointer :: kernelSD2   => null()
-        class( KernelType ), pointer :: kernelSD3   => null()
-
-        ! Kernel Sigma Matrix
+        ! Kernel matrices
         doubleprecision, dimension(:,:,:), allocatable :: kernelSigmaMatrix
         doubleprecision, dimension(:,:,:), allocatable :: kernelMatrix
+        doubleprecision, dimension(:,:,:), allocatable :: kernelSD1Matrix
+        doubleprecision, dimension(:,:,:), allocatable :: kernelSD2Matrix
+        doubleprecision, dimension(:,:,:), allocatable :: kernelSD3Matrix
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0
@@ -129,13 +121,6 @@ contains
         implicit none
         class( GridCellType ) :: this
         !------------------------------------------------------------------------------
-
-        ! Kernel pointers
-        this%kernel      => null()
-        this%kernelSigma => null()
-        this%kernelSDX   => null()
-        this%kernelSDY   => null()
-        this%kernelSDZ   => null()
 
         ! Kernel indexes
         this%kernelDBIndexes          = 0

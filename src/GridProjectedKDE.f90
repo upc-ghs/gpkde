@@ -230,8 +230,8 @@ module GridProjectedKDEModule
             implicit none 
             class( GridProjectedKDEType ), target                  :: this
             type( GridCellType ), intent(inout)                    :: gridCell
-            class( KernelType ), target, intent(in)                :: kernel1
-            class( KernelType ), target, intent(in)                :: kernel2
+            class( KernelType ), target, intent(inout)             :: kernel1
+            class( KernelType ), target, intent(inout)             :: kernel2
             doubleprecision, dimension(3), intent(in)              :: smoothing
         end subroutine SetKernelInterface2D
     
@@ -244,9 +244,9 @@ module GridProjectedKDEModule
             implicit none 
             class( GridProjectedKDEType ), target                  :: this
             type( GridCellType ), intent(inout)                    :: gridCell
-            class( KernelType ), target, intent(in)                :: kernel1
-            class( KernelType ), target, intent(in)                :: kernel2
-            class( KernelType ), target, intent(in)                :: kernel3
+            class( KernelType ), target, intent(inout)             :: kernel1
+            class( KernelType ), target, intent(inout)             :: kernel2
+            class( KernelType ), target, intent(inout)             :: kernel3
             doubleprecision, dimension(3), intent(in)              :: smoothing
         end subroutine SetKernelInterface3D
 
@@ -258,8 +258,6 @@ module GridProjectedKDEModule
 
 
     ! Subroutines
-
-
     subroutine prInitialize( this, domainSize, binSize, initialSmoothing, &
                                 databaseOptimization, flatKernelDatabase, &
                                           minHOverLambda, maxHOverLambda, &
@@ -616,21 +614,18 @@ module GridProjectedKDEModule
         integer :: n, nd, currentDim
         !------------------------------------------------------------------------------
 
-        print *, 'INITIALIZING MODULE DIMENSIONS' 
 
+        ! Determine dimensions based on number of bins
         do n = 1,3
             if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
         end do 
-        
         nDim = sum(dimensionMask)
-
-        print *, 'NDIMENSIONS SETTED TO ', nDim 
-
         this%dimensionMask = dimensionMask
 
-        print *, 'DIMENSION MASK ', this%dimensionMask
 
+        ! Identify directions
 
+        ! 1D
         if ( nDim .eq. 1 ) then 
             ! Relate x,y,z dimensions to 1 dimensions
             do nd = 1,3
@@ -648,7 +643,7 @@ module GridProjectedKDEModule
             end do
         end if
 
-
+        ! 2D
         if ( nDim .eq. 2 ) then
             ! Relate x,y,z dimensions to 1,2 dimensions
             do nd = 1,3
@@ -668,7 +663,6 @@ module GridProjectedKDEModule
                 end select   
             end do
         end if
-
 
 
         return
@@ -785,7 +779,7 @@ module GridProjectedKDEModule
             end do
 
             ! Assign interface
-            !this%ComputeNetRoughnessEstimate => prComputeNetRoughness2D
+            this%ComputeNetRoughnessEstimate => prComputeNetRoughness2D
 
             if ( this%databaseOptimization ) then 
                 this%SetKernelSD2D => prSetKernelSD2DFromDatabase
@@ -800,7 +794,7 @@ module GridProjectedKDEModule
         if ( nDim .eq. 3 ) then 
 
             ! Assign interface
-            !this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
+            this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
 
             if ( this%databaseOptimization ) then 
                 this%SetKernelSD3D => prSetKernelSD3DFromDatabase
@@ -860,9 +854,11 @@ module GridProjectedKDEModule
         allocate( curvature11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
         allocate( roughness11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
         !------------------------------------------------------------------------------
-    
-        ! Curvatures, kappa
-        curvature1 = 0d0
+   
+
+        ! Initialize
+        curvature1  = 0d0
+        roughness11 = 0d0
 
         ! Assign dimension pointers
         ! For some reason while using 
@@ -901,17 +897,14 @@ module GridProjectedKDEModule
                         gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
                         gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
                     ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                         gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
                                 gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
                                 gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
                                 gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
-                            )
+                         )
 
             end do
             !$omp end parallel do
-            curvature1 = curvature1/this%histogram%binVolume
-            curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
-            
 
           case (2)
             roughness11Array => roughnessYYArray
@@ -945,16 +938,14 @@ module GridProjectedKDEModule
                         gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
                         gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
                     ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                         gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
                                 gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
                                 gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
                                 gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
-                        )
+                         )
 
             end do
             !$omp end parallel do
-            curvature1 = curvature1/this%histogram%binVolume
-            curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
 
           case (3)
             roughness11Array => roughnessZZArray
@@ -988,23 +979,22 @@ module GridProjectedKDEModule
                         gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
                         gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
                     ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                         gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
                                 gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
                                 gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
                                 gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
-                        )
+                         )
 
             end do
             !$omp end parallel do
-            curvature1 = curvature1/this%histogram%binVolume
-            curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
 
         end select
+        curvature1 = curvature1/this%histogram%binVolume
+        curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
 
 
         ! Product curvatures, roughness
         curvature11 = curvature1*curvature1
-        roughness11 = 0d0
 
 
         ! kernelSigma was already computed ? 
@@ -1109,9 +1099,9 @@ module GridProjectedKDEModule
         type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
         doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
         doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
-        type( KernelSecondDerivativeXType ), intent(in)        :: kernelSDX
-        type( KernelSecondDerivativeYType ), intent(in)        :: kernelSDY
-        type( KernelSecondDerivativeZType ), intent(in)        :: kernelSDZ
+        type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
+        type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
+        type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
         ! out
         doubleprecision, dimension(:), intent(inout), target :: roughnessXXArray
         doubleprecision, dimension(:), intent(inout), target :: roughnessYYArray
@@ -1145,10 +1135,13 @@ module GridProjectedKDEModule
         !------------------------------------------------------------------------------
 
 
-
-        ! Curvatures
+        ! Initialize 
         curvature1  = 0d0
         curvature2  = 0d0
+        roughness11 = 0d0
+        roughness22 = 0d0
+        roughness12 = 0d0
+
 
         ! Choose curvature computation
         if ( ( this%idDim1 .eq. 1 ) .and. ( this%idDim2 .eq. 2 ) ) then 
@@ -1186,12 +1179,12 @@ module GridProjectedKDEModule
                         gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
                         gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
                         gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1%matrix(&
+                    ) + this%histogram%counts(                               &
+                           gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
                                 gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
                                 gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
                                 gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
-                    )/this%histogram%binVolume
+                           )
 
                 ! Compute curvature
                 curvature2( &
@@ -1202,12 +1195,12 @@ module GridProjectedKDEModule
                         gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
                         gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
                         gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2%matrix(&
+                    ) + this%histogram%counts(                               &
+                           gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
                                 gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
                                 gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
                                 gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
-                    )/this%histogram%binVolume
+                           )
 
             end do
             !$omp end parallel do
@@ -1247,12 +1240,12 @@ module GridProjectedKDEModule
                         gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
                         gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
                         gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1%matrix(&
+                    ) + this%histogram%counts(                               &
+                           gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
                                 gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
                                 gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
                                 gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
-                    )/this%histogram%binVolume
+                           )
 
                 ! Compute curvature
                 curvature2( &
@@ -1263,12 +1256,12 @@ module GridProjectedKDEModule
                         gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
                         gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
                         gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2%matrix(&
+                    ) + this%histogram%counts(                               &
+                           gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
                                 gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
                                 gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
                                 gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
-                    )/this%histogram%binVolume
+                           )
 
             end do
             !$omp end parallel do
@@ -1307,12 +1300,12 @@ module GridProjectedKDEModule
                         gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
                         gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
                         gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1%matrix(&
+                    ) + this%histogram%counts(                               &
+                           gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
                                 gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
                                 gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
                                 gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
-                    )/this%histogram%binVolume
+                           )
 
                 ! Compute curvature
                 curvature2( &
@@ -1323,25 +1316,26 @@ module GridProjectedKDEModule
                         gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
                         gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
                         gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2%matrix(&
+                    ) + this%histogram%counts(                               &
+                           gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
                                 gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
                                 gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
                                 gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
-                    )/this%histogram%binVolume
+                           )
 
             end do
             !$omp end parallel do
         end if 
+        curvature1 = curvature1/this%histogram%binVolume
+        curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
+        curvature2 = curvature2/this%histogram%binVolume
+        curvature2 = curvature2/( this%binSize(this%idDim2)**2 )
 
         
         ! Product curvatures, roughness
         curvature11 = curvature1*curvature1
         curvature22 = curvature2*curvature2
         curvature12 = curvature1*curvature2
-        roughness11 = 0d0
-        roughness22 = 0d0
-        roughness12 = 0d0
 
 
         ! kernelSigma was already computed ? 
@@ -1509,9 +1503,9 @@ module GridProjectedKDEModule
         type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
         doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
         doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
-        type( KernelSecondDerivativeXType ), intent(in)        :: kernelSDX
-        type( KernelSecondDerivativeYType ), intent(in)        :: kernelSDY
-        type( KernelSecondDerivativeZType ), intent(in)        :: kernelSDZ
+        type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
+        type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
+        type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
         ! out
         doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
         doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
@@ -1563,25 +1557,16 @@ module GridProjectedKDEModule
         !------------------------------------------------------------------------------
 
 
-        ! Initialize kernels
-        call kernelSDX%Initialize( this%binSize, matrixRange=defaultKernelRange )
-        call kernelSDY%Initialize( this%binSize, matrixRange=defaultKernelRange )
-        call kernelSDZ%Initialize( this%binSize, matrixRange=defaultKernelRange )
-
-
-        curvatureX = 0d0
-        curvatureY = 0d0
-        curvatureZ = 0d0
+        ! Initialize 
+        curvatureX  = 0d0
+        curvatureY  = 0d0
+        curvatureZ  = 0d0
         roughnessXX = 0d0 
         roughnessYY = 0d0
         roughnessZZ = 0d0
         roughnessXY = 0d0
         roughnessXZ = 0d0
         roughnessYZ = 0d0
-        roughnessXXArray  = 0d0 
-        roughnessYYArray  = 0d0 
-        roughnessZZArray  = 0d0 
-        netRoughnessArray = 0d0
 
 
         ! Curvatures, kappa
@@ -1617,12 +1602,12 @@ module GridProjectedKDEModule
                     gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
                     gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
                     gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-                ) + this%histogram%counts(                             &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1%matrix(&
+                ) + this%histogram%counts(                               &
+                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(   &
                             gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
                             gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
                             gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
-                )/this%histogram%binVolume
+                    )
 
             ! Compute curvature
             curvatureY( &
@@ -1633,12 +1618,12 @@ module GridProjectedKDEModule
                     gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
                     gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
                     gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-                ) + this%histogram%counts(                             &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2%matrix(&
+                ) + this%histogram%counts(                               &
+                       gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
                             gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
                             gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
                             gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
-                )/this%histogram%binVolume
+                       )
             
             ! Compute curvature 
             curvatureZ( &
@@ -1650,14 +1635,20 @@ module GridProjectedKDEModule
                     gc%kernelSD3YGSpan(1):gc%kernelSD3YGSpan(2), & 
                     gc%kernelSD3ZGSpan(1):gc%kernelSD3ZGSpan(2)  & 
                 ) + this%histogram%counts(                             &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD3%matrix(&
+                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD3Matrix(&
                             gc%kernelSD3XMSpan(1):gc%kernelSD3XMSpan(2), &
                             gc%kernelSD3YMSpan(1):gc%kernelSD3YMSpan(2), & 
                             gc%kernelSD3ZMSpan(1):gc%kernelSD3ZMSpan(2)  & 
-                )/this%histogram%binVolume
+                    )
     
         end do
         !$omp end parallel do
+        curvatureX = curvatureX/this%histogram%binVolume
+        curvatureX = curvatureX/( this%binSize(1)**2 )
+        curvatureY = curvatureY/this%histogram%binVolume
+        curvatureY = curvatureY/( this%binSize(2)**2 )
+        curvatureZ = curvatureZ/this%histogram%binVolume
+        curvatureZ = curvatureZ/( this%binSize(3)**2 )
 
 
         ! Compute curvatures product
@@ -1727,6 +1718,10 @@ module GridProjectedKDEModule
 
 
         ! Net roughness
+        roughnessXXArray  = 0d0 
+        roughnessYYArray  = 0d0 
+        roughnessZZArray  = 0d0 
+        netRoughnessArray = 0d0
         !$omp parallel do schedule( dynamic, 1 ) &
         !$omp default( none )                    &
         !$omp shared( this )                     &
@@ -1766,7 +1761,6 @@ module GridProjectedKDEModule
         !$omp end parallel do
        
         ! Should deallocate ?
-        ! Move all of these operations to the module  
         deallocate(          curvatureX )
         deallocate(          curvatureY )
         deallocate(          curvatureZ )
@@ -1783,6 +1777,8 @@ module GridProjectedKDEModule
         deallocate(         roughnessYZ )
         deallocate(         roughnessZZ )
 
+
+        ! Done
         return
 
 
@@ -2120,9 +2116,6 @@ module GridProjectedKDEModule
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
         doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
-
-
-        print *, 'WILL COMPUTE DENSITY WITH GPKDE'
 
 
         ! Define nOptimizationLoops
@@ -3203,6 +3196,7 @@ module GridProjectedKDEModule
         doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
         !-----------------------------------------------------------
 
+        ! Restart kernel matrices
         call kernel%ResetMatrix()
 
         ! Compute indexes on kernel database
@@ -3250,6 +3244,7 @@ module GridProjectedKDEModule
         integer, dimension(:), allocatable           :: shapeMatrix
         !-----------------------------------------------------------
 
+        ! Restart kernel matrices
         call kernel%ResetMatrix()
 
         ! Compute indexes on kernel database
@@ -3286,6 +3281,7 @@ module GridProjectedKDEModule
         integer, dimension(:), allocatable           :: shapeMatrix
         !-----------------------------------------------------------
 
+        ! Restart kernel matrices
         call kernel%ResetMatrix()
 
         ! Compute indexes on kernel database
@@ -3301,7 +3297,7 @@ module GridProjectedKDEModule
                                                                   this%dimensionMask  ) 
 
         ! For boundaries
-        gridCell%kernelMatrix = kernel%bmatrix
+        gridCell%kernelSD1Matrix = kernel%bmatrix
 
         ! Done
         return
@@ -3314,39 +3310,44 @@ module GridProjectedKDEModule
         implicit none
         class( GridProjectedKDEType ), target      :: this
         type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(in)    :: kernel1
-        class( KernelType ), target, intent(in)    :: kernel2
+        class( KernelType ), target, intent(inout) :: kernel1
+        class( KernelType ), target, intent(inout) :: kernel2
         doubleprecision, dimension(3), intent(in)  :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
+        ! Restart kernel matrices
+        call kernel1%ResetMatrix()
+        call kernel2%ResetMatrix()
+
         ! Compute indexes on kernel database
         gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
 
-        ! Assign 
-        gridCell%kernelSD1 => this%kernelSDDatabase1( gridCell%kernelSDDBIndexes( this%idDim1  ) )
+        ! Copy kernel from database
+        call kernel1%CopyFrom( this%kernelSDDatabase1( gridCell%kernelSDDBIndexes(this%idDim1) ) )
 
         ! Determine spans
-        call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
-                                                                             this%dimensionMask  ) 
+        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
+                                                                     this%dimensionMask  ) 
 
-        ! Assign pointer
-        gridCell%kernelSD2 => this%kernelSDDatabase2( gridCell%kernelSDDBIndexes(this%idDim2) )
+        ! Copy kernel from database
+        call kernel2%CopyFrom( this%kernelSDDatabase2( gridCell%kernelSDDBIndexes(this%idDim2) ) )
 
         ! Determine spans
-        call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
-                                                                             this%dimensionMask  ) 
+        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
+                                                                     this%dimensionMask  ) 
 
         ! For boundaries
-        gridCell%kernelSD1%matrix = gridCell%kernelSD1%bmatrix
-        gridCell%kernelSD2%matrix = gridCell%kernelSD2%bmatrix
+        gridCell%kernelSD1Matrix = kernel1%bmatrix
+        gridCell%kernelSD2Matrix = kernel2%bmatrix
 
         ! Done
         return
+
 
     end subroutine prSetKernelSD2DFromDatabase
 
@@ -3355,9 +3356,9 @@ module GridProjectedKDEModule
         implicit none
         class( GridProjectedKDEType ), target      :: this
         type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(in)    :: kernel1
-        class( KernelType ), target, intent(in)    :: kernel2
-        class( KernelType ), target, intent(in)    :: kernel3
+        class( KernelType ), target, intent(inout) :: kernel1
+        class( KernelType ), target, intent(inout) :: kernel2
+        class( KernelType ), target, intent(inout) :: kernel3
         doubleprecision, dimension(3), intent(in)  :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
@@ -3365,40 +3366,41 @@ module GridProjectedKDEModule
         ! Compute indexes on kernel database
         gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
 
-        ! Assign 
-        gridCell%kernelSD1 => this%kernelSDXDatabase( gridCell%kernelSDDBIndexes(1) )
+        ! Copy kernel from database
+        call kernel1%CopyFrom( this%kernelSDXDatabase( gridCell%kernelSDDBIndexes(1) ) )
 
         ! Determine spans
-        call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
-                                                                             this%dimensionMask  ) 
+        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
+                                                                     this%dimensionMask  )
 
-        ! Assign pointer
-        gridCell%kernelSD2 => this%kernelSDYDatabase( gridCell%kernelSDDBIndexes(2) )
-
-        ! Determine spans
-        call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
-                                                                             this%dimensionMask  ) 
-
-        ! Assign pointer
-        gridCell%kernelSD3 => this%kernelSDZDatabase( gridCell%kernelSDDBIndexes(3) )
+        ! Copy kernel from database
+        call kernel2%CopyFrom( this%kernelSDYDatabase( gridCell%kernelSDDBIndexes(2) ) )
 
         ! Determine spans
-        call gridCell%kernelSD3%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-                   gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, &
-                   this%dimensionMask  )
+        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
+                                                                     this%dimensionMask  )
+
+        ! Copy kernel from database
+        call kernel3%CopyFrom( this%kernelSDZDatabase( gridCell%kernelSDDBIndexes(3) ) )
+
+        ! Determine spans
+        call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
+           gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, &
+                                                                     this%dimensionMask  )
 
         ! For boundaries
-        gridCell%kernelSD1%matrix = gridCell%kernelSD1%bmatrix
-        gridCell%kernelSD2%matrix = gridCell%kernelSD2%bmatrix
-        gridCell%kernelSD3%matrix = gridCell%kernelSD3%bmatrix
+        gridCell%kernelSD1Matrix = kernel1%bmatrix
+        gridCell%kernelSD2Matrix = kernel2%bmatrix
+        gridCell%kernelSD3Matrix = kernel3%bmatrix
 
         ! Done
         return
+
 
     end subroutine prSetKernelSD3DFromDatabase
 
@@ -3413,6 +3415,7 @@ module GridProjectedKDEModule
         doubleprecision, dimension(3)                           :: inputSmoothing
         !-----------------------------------------------------------
 
+        ! Restart kernel matrices
         call kernel%ResetMatrix()
 
         ! Setup kernel matrix
@@ -3444,9 +3447,10 @@ module GridProjectedKDEModule
         integer, dimension(:), allocatable                     :: shapeMatrix
         !-----------------------------------------------------------
 
+        ! Restart kernel matrices
         call kernel%ResetMatrix()
 
-        ! Setup kernel matrix (Do it better, only required dimensions)
+        ! Setup kernel matrix
         call kernel%SetupMatrix( smoothing )
 
         ! Determine spans
@@ -3455,9 +3459,6 @@ module GridProjectedKDEModule
             gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan, &
                                                                             this%dimensionMask  )
 
-        !if (allocated( gridCell%kernelSigmaMatrix )) deallocate( gridCell%kernelSigmaMatrix )
-        !shapeMatrix = shape( gridCell%kernelSigma%matrix )
-        !allocate( gridCell%kernelSigmaMatrix(shapeMatrix(1), shapeMatrix(2), shapeMatrix(3)) )
         gridCell%kernelSigmaMatrix = kernel%matrix
 
 
@@ -3477,6 +3478,7 @@ module GridProjectedKDEModule
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
+        ! Restart kernel matrices
         call kernel%ResetMatrix()
 
         ! Compute matrix
@@ -3486,10 +3488,10 @@ module GridProjectedKDEModule
         call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
            gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
            gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, & 
-                                                                    this%dimensionMask )
+                                                                   this%dimensionMask )
 
         ! For boundaries
-        gridCell%kernelMatrix = kernel%bmatrix
+        gridCell%kernelSD1Matrix = kernel%bmatrix
 
         ! Done
         return
@@ -3502,40 +3504,41 @@ module GridProjectedKDEModule
         implicit none
         class( GridProjectedKDEType ), target      :: this
         type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(in)    :: kernel1
-        class( KernelType ), target, intent(in)    :: kernel2
+        class( KernelType ), target, intent(inout) :: kernel1
+        class( KernelType ), target, intent(inout) :: kernel2
         doubleprecision, dimension(3), intent(in)  :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
-        ! Assign kernelSD1 pointer 
-        gridCell%kernelSD1 => kernel1 
+        ! Restart kernel matrices
+        call kernel1%ResetMatrix()
+        call kernel2%ResetMatrix()
 
         ! Compute matrix
-        call gridCell%kernelSD1%SetupMatrix(&
-                (/smoothing(this%idDim1),smoothing(this%idDim1),smoothing(this%idDim1)/) ) 
+        call kernel1%SetupMatrix( (/smoothing(this%idDim1),smoothing(this%idDim1),smoothing(this%idDim1)/) )
 
         ! Determine spans
-        call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
-                                                                              this%dimensionMask )
-
-        ! Assign kernelSD2 pointer 
-        gridCell%kernelSD2 => kernel2
+        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
+                                                                      this%dimensionMask )
 
         ! Compute matrix
-        call gridCell%kernelSD2%SetupMatrix(&
-                (/smoothing(this%idDim2),smoothing(this%idDim2),smoothing(this%idDim2)/) ) 
+        call kernel2%SetupMatrix( (/smoothing(this%idDim2),smoothing(this%idDim2),smoothing(this%idDim2)/) )
 
         ! Determine spans
-        call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
-                                                                              this%dimensionMask )
+        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
+                                                                      this%dimensionMask )
+
+        ! For boundaries
+        gridCell%kernelSD1Matrix = kernel1%bmatrix
+        gridCell%kernelSD2Matrix = kernel2%bmatrix
 
         ! Done
         return
+
 
     end subroutine prSetKernelSD2DBrute
 
@@ -3544,49 +3547,55 @@ module GridProjectedKDEModule
         implicit none
         class( GridProjectedKDEType ), target      :: this
         type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(in)    :: kernel1
-        class( KernelType ), target, intent(in)    :: kernel2
-        class( KernelType ), target, intent(in)    :: kernel3
+        class( KernelType ), target, intent(inout) :: kernel1
+        class( KernelType ), target, intent(inout) :: kernel2
+        class( KernelType ), target, intent(inout) :: kernel3
         doubleprecision, dimension(3), intent(in)  :: smoothing
         integer, dimension(:), allocatable         :: shapeMatrix
         !-----------------------------------------------------------
 
-        ! Assign kernelSD1 pointer 
-        gridCell%kernelSD1 => kernel1 
+
+        ! Restart kernel matrices
+        call kernel1%ResetMatrix()
+        call kernel2%ResetMatrix()
+        call kernel3%ResetMatrix()
 
         ! Compute matrix
-        call gridCell%kernelSD1%SetupMatrix( (/smoothing(1),smoothing(1),smoothing(1)/) ) 
+        call kernel1%SetupMatrix( (/smoothing(1),smoothing(1),smoothing(1)/) )
 
         ! Determine spans
-        call gridCell%kernelSD1%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-                   gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
-                                                                              this%dimensionMask )
-        ! Assign kernelSD2 pointer 
-        gridCell%kernelSD2 => kernel2
+        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
+                                                                      this%dimensionMask )
 
         ! Compute matrix
-        call gridCell%kernelSD2%SetupMatrix( (/smoothing(2),smoothing(2),smoothing(2)/) ) 
+        call kernel2%SetupMatrix( (/smoothing(2),smoothing(2),smoothing(2)/) )
 
         ! Determine spans
-        call gridCell%kernelSD2%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-                   gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
-                                                                              this%dimensionMask )
-
-        ! Assign kernelSD3 pointer 
-        gridCell%kernelSD3 => kernel3
+        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
+                                                                      this%dimensionMask )
 
         ! Compute matrix
-        call gridCell%kernelSD3%SetupMatrix( (/smoothing(3),smoothing(3),smoothing(3)/) ) 
+        call kernel3%SetupMatrix( (/smoothing(3),smoothing(3),smoothing(3)/) )
 
         ! Determine spans
-        call gridCell%kernelSD3%ComputeGridSpans( gridCell%id, this%nBins, &
-                   gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-                   gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, & 
-                                                                              this%dimensionMask )
+        call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
+           gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
+           gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, & 
+                                                                      this%dimensionMask )
+
+        ! For boundaries
+        gridCell%kernelSD1Matrix = kernel1%bmatrix
+        gridCell%kernelSD2Matrix = kernel2%bmatrix
+        gridCell%kernelSD3Matrix = kernel3%bmatrix
+
+
         ! Done
         return
+
 
     end subroutine prSetKernelSD3DBrute
 
