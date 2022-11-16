@@ -3,5 +3,6 @@
 *.swp
 *.swo
 make/objtemp
-make/gpkde
+make/gpkde*
 make/*.csv
+make/*output*
