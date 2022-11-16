@@ -396,6 +396,7 @@ contains
         integer, dimension(:), allocatable :: nBins
         integer :: nx, ny, nz
         integer, dimension(3), intent(in) :: dimensionMask
+        integer :: n,m 
         !------------------------------------------------------------------------------
 
         !print *, 'DEFINE BOUNDARY MATRIX '
@@ -438,21 +439,21 @@ contains
                     case(1)
                         ! WEST
                         lenbx = boundLocX
-                        this%bmatrix( :boundLocX, :, :) = 0
                         this%bmatrix( boundLocX + 1: boundLocX + lenbx, :, :) = &
                         this%bmatrix( boundLocX + 1: boundLocX + lenbx, :, :) + &
-                        this%matrix( boundLocX:1:-1, :, :)
+                        this%bmatrix( boundLocX:1:-1, :, :)
+                        this%bmatrix( :boundLocX, :, :) = 0
                     case(2)
                         ! EAST 
                         lenbx = kernelShape(1) - boundLocX + 1 ! also includes the found cell itself
-                        this%bmatrix( boundLocX:, :, :) = 0
                         this%bmatrix( boundLocX - lenbx: boundLocX - 1, :, :) = &
                         this%bmatrix( boundLocX - lenbx: boundLocX - 1, :, :) + &
-                        this%matrix( kernelShape(1): boundLocX :-1, :, :)
+                        this%bmatrix( kernelShape(1): boundLocX :-1, :, :)
+                        this%bmatrix( boundLocX:, :, :) = 0
                 end select    
 
                 ! Leave
-                return
+                !return
 
             end if 
         end if 
@@ -471,37 +472,58 @@ contains
                     case(1)
                         ! SOUTH
                         lenbx = boundLocY
-                        this%bmatrix( :, :boundLocY, :) = 0
                         this%bmatrix( :, boundLocY + 1: boundLocY + lenbx, :) = &
                         this%bmatrix( :, boundLocY + 1: boundLocY + lenbx, :) + &
-                        this%matrix( :, boundLocY:1:-1, :)
+                        this%bmatrix( :, boundLocY:1:-1, :)
+                        this%bmatrix( :, :boundLocY, :) = 0
                     case(2)
                         ! NORTH
                         lenbx = kernelShape(2) - boundLocY + 1 ! also includes the found cell itself
-                        this%bmatrix( :, boundLocY:, :) = 0
                         this%bmatrix( :, boundLocY - lenbx: boundLocY - 1, :) = &
                         this%bmatrix( :, boundLocY - lenbx: boundLocY - 1, :) + &
-                        this%matrix( :, kernelShape(2): boundLocY :-1, :)
+                        this%bmatrix( :, kernelShape(2): boundLocY :-1, :)
+                        this%bmatrix( :, boundLocY:, :) = 0
                 end select    
 
                 ! Leave
-                return
+                !return
+
+                !! ANALYSIS
+                !if ( isBoundaryX ) then 
+                !    print *, '*****************************************'
+                !    print *, '  PRINTING BOUNDARY MATRIX...'
+                !    print *, '*****************************************'
+                !    do m= 1, 2*this%matrixPositiveShape(3)+1
+                !        print *, '::',m, '------------------------------'
+                !        do n= 2*this%matrixPositiveShape(2)+1,1,-1
+                !            print *, this%bmatrix(:,n,m)
+                !        end do
+                !    end do
+                !    print *, '*****************************************'
+
+                !    print *, '*****************************************'
+                !    print *, '  PRINTING KERNEL MATRIX...'
+                !    print *, '*****************************************'
+                !    do m= 1, 2*this%matrixPositiveShape(3)+1
+                !        print *, '::',m, '------------------------------'
+                !        do n= 2*this%matrixPositiveShape(2)+1,1,-1
+                !            print *, this%matrix(:,n,m)
+                !        end do
+                !    end do
+                !    print *, '*****************************************'
+
+                !    print *, ' **  SUM BMATRIX: ', sum(this%bmatrix) 
+                !    print *, ' **  SUM MATRIX : ', sum(this%matrix) 
+
+                !    call exit(0)
+                !end if
+
 
             end if
 
         end if 
 
 
-        !print *, '*****************************************'
-        !print *, '  PRINTING BOUNDARY MATRIX...'
-        !print *, '*****************************************'
-        !do m= 1, 2*this%matrixPositiveShape(3)+1
-        !    print *, '::',m, '------------------------------'
-        !    do n= 2*this%matrixPositiveShape(2)+1,1,-1
-        !        print *, boundaryMatrix(:,n,m)
-        !    end do
-        !end do
-        !print *, '*****************************************'
 
         if ( dimensionMask(3) .eq. 1 ) then 
 
@@ -525,24 +547,18 @@ contains
                     case(1)
                         ! BOTTOM
                         lenbx = boundLocZ
-                        !print *, 'CASE 1 LENB ', lenbx
-                        this%bmatrix( :, :, :boundLocZ) = 0
                         this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenbx) = &
                         this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenbx) + &
-                        this%matrix( :, :, boundLocZ:1:-1)
+                        this%bmatrix( :, :, boundLocZ:1:-1)
+                        this%bmatrix( :, :, :boundLocZ) = 0
                     case(2)
                         ! TOP
                         lenbx = kernelShape(3) - boundLocZ + 1 ! also includes the found cell itself
-                        !print *, 'CASE 2 LENB ', lenbx
-                        this%bmatrix( :, :, boundLocZ:) = 0
                         this%bmatrix( :, :, boundLocZ - lenbx: boundLocZ - 1) = &
                         this%bmatrix( :, :, boundLocZ - lenbx: boundLocZ - 1) + &
-                        this%matrix( :, :, kernelShape(3): boundLocZ :-1)
+                        this%bmatrix( :, :, kernelShape(3): boundLocZ :-1)
+                        this%bmatrix( :, :, boundLocZ:) = 0
                 end select
-
-
-                ! Leave
-                return
 
 
             end if 
