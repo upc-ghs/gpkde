@@ -33,6 +33,7 @@ module KernelMultiGaussianModule
         integer, dimension(3) :: dimensionMask
         integer               :: idDim1, idDim2
 
+        logical :: shouldIntegrateOne 
 
     contains 
         
@@ -565,6 +566,19 @@ contains
 
         end if 
 
+        if ( this%shouldIntegrateOne ) then 
+            if ( ( abs( sum(this%bmatrix) - 1d0 ) .gt. 1d-10 ) ) then  
+                print *, 'BAD KERNEL ', sum(this%bmatrix)
+                call exit(0)
+            end if
+        else
+            if ( ( abs( sum(this%bmatrix) ) .gt. 1d-10 ) ) then  
+                print *, 'BAD KERNEL V ', sum(this%bmatrix)
+                call exit(0)
+            end if
+        end if 
+
+
 
 
     end subroutine prVerifyBoundary 
@@ -727,6 +741,8 @@ contains
         doubleprecision :: summatrix
         !------------------------------------------------------------------------------
 
+        this%shouldIntegrateOne = .true.
+
 
         ! Initialize zeroPositiveMatrix
         nx = this%matrixPositiveShape(1)
@@ -742,6 +758,11 @@ contains
         if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
         allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
+        !if ( all( this%bandwidth .eq. 0d0 ) ) this%matrix = 0d0 return
+        if ( all( this%bandwidth .eq. 0d0 ) ) then 
+            this%matrix = 0d0
+            return
+        end if
 
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize
@@ -799,6 +820,7 @@ contains
         doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
+        this%shouldIntegrateOne = .false.
 
         ! Initialize zeroPositiveMatrix
         nx = this%matrixPositiveShape(1)
@@ -813,6 +835,11 @@ contains
         if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
         allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
+        !if ( all( this%bandwidth .eq. 0d0 ) ) this%matrix = 0d0 return
+        if ( all( this%bandwidth .eq. 0d0 ) ) then 
+            this%matrix = 0d0
+            return
+        end if
 
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize
@@ -889,6 +916,7 @@ contains
         doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
+        this%shouldIntegrateOne = .false.
 
         ! Initialize zeroPositiveMatrix
         nx = this%matrixPositiveShape(1)
@@ -903,6 +931,10 @@ contains
         if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
         allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
+        if ( all( this%bandwidth .eq. 0d0 ) ) then 
+            this%matrix = 0d0
+            return
+        end if
 
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize
@@ -979,6 +1011,7 @@ contains
         doubleprecision :: aDenom, aNum, aCoeff
         !------------------------------------------------------------------------------
 
+        this%shouldIntegrateOne = .false.
 
         ! Initialize zeroPositiveMatrix
         nx = this%matrixPositiveShape(1)
@@ -994,6 +1027,10 @@ contains
         if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
         allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
+        if ( all( this%bandwidth .eq. 0d0 ) ) then 
+            this%matrix = 0d0
+            return
+        end if
         ! Compute normalized smoothing bandwidth/lambda
         hLambda = this%bandwidth/this%binSize
 
