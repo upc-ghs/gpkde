@@ -32,6 +32,14 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultBruteOptimization       = .false. 
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
+    ! Optimization
+    doubleprecision :: defaultInitialSmoothingFactor = 3d0
+    doubleprecision :: defaultDensityScale = 1d0
+    doubleprecision :: defaultMinLimitRoughness = 1d-2
+    doubleprecision :: defaultMaxLimitRoughness = 1d4
+    doubleprecision :: defaultMaxSmoothingGrowth = 5d-1
+
+
     ! Numerical Parameters
     doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
@@ -116,7 +124,11 @@ module GridProjectedKDEModule
         doubleprecision :: densityRelativeConvergence
         doubleprecision :: minLimitRoughness
         doubleprecision :: maxLimitRoughness
-        doubleprecision :: maxSmoothingGrowth = 5d-1
+        doubleprecision :: maxSmoothingGrowth
+        doubleprecision :: densityScale
+
+
+
 
         ! Module constants
         doubleprecision :: supportDimensionConstant
@@ -267,7 +279,8 @@ module GridProjectedKDEModule
                                      deltaHOverLambda, logKernelDatabase, &
                               bruteOptimization, anisotropicSigmaSupport, &
                                         nOptimizationLoops, domainOrigin, &
-                                               densityRelativeConvergence )
+                                densityRelativeConvergence, densityScale, &
+                           maxRoughness, minRoughness, maxSmoothingGrowth )
         !------------------------------------------------------------------------------
         !
         !------------------------------------------------------------------------------
@@ -286,6 +299,8 @@ module GridProjectedKDEModule
         doubleprecision, intent(in), optional :: minHOverLambda, maxHOverLambda
         doubleprecision, intent(in), optional :: deltaHOverLambda
         doubleprecision, intent(in), optional :: densityRelativeConvergence  
+        doubleprecision, intent(in), optional :: densityScale, maxSmoothingGrowth
+        doubleprecision, intent(in), optional :: minRoughness, maxRoughness
         logical, intent(in), optional :: logKernelDatabase
         ! Brute optimization, no kernel database
         logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
@@ -311,14 +326,6 @@ module GridProjectedKDEModule
         else 
             this%domainOrigin = (/0,0,0/)
         end if
-
-        print *, '#############################################################'
-        print *, '# GPKDE: INITIALIZATION '
-        print *, '# '
-        print *, '# ORIGIN     ', this%domainOrigin
-        print *, '# DOMAINSIZE ', domainSize
-        print *, '# BINSIZE    ', binSize 
-        print *, '# NBINS      ', this%nBins
 
         
         ! Depending on nBins, is the number of dimensions 
@@ -378,18 +385,28 @@ module GridProjectedKDEModule
         else 
             this%densityRelativeConvergence = defaultDensityRelativeConvergence
         end if
+        if ( present( minRoughness ) ) then 
+            this%minLimitRoughness = minRoughness
+        else 
+            this%minLimitRoughness = defaultMinLimitRoughness
+        end if
+        if ( present( maxRoughness ) ) then 
+            this%maxLimitRoughness = maxRoughness
+        else 
+            this%maxLimitRoughness = defaultMaxLimitRoughness
+        end if
         if ( present( logKernelDatabase ) ) then 
             this%logKernelDatabase = logKernelDatabase
         else 
             this%logKernelDatabase = defaultLogKernelDatabase
         end if
-
-        ! bruteOptimization and anisotropicSigmaSupport
+        ! bruteOptimization, not used
         if ( present( bruteOptimization ) ) then 
             this%bruteOptimization = bruteOptimization
         else 
             this%bruteOptimization = defaultBruteOptimization       
-        end if 
+        end if
+        ! Not implemented 
         if ( present( anisotropicSigmaSupport ) ) then 
             this%anisotropicSigmaSupport = anisotropicSigmaSupport
         else 
@@ -410,71 +427,57 @@ module GridProjectedKDEModule
         if ( present( initialSmoothing ) ) then
             this%initialSmoothing = initialSmoothing
         else
-            ! The initial estimate could be improved, something with more
-            ! theoretical background
-            this%initialSmoothing = 1.0*( this%histogram%binVolume )**( 1d0/nDim )
-            !this%initialSmoothing = 3.0*( this%histogram%binVolume )**( 1d0/nDim )
-            !this%initialSmoothing = 0.5*this%minHOverLambda*this%binSize
-            !this%initialSmoothing = 3d0*this%minHOverLambda*thisbinSize
+            ! The initial estimate could be improved
+            this%initialSmoothing = defaultInitialSmoothingFactor*this%histogram%binDistance
         end if 
   
-        ! Fix proper initialization of variables to be consistent with dimensions 
+        ! Fix to be consistent with dimensions 
         do n =1,3
             if ( dimensionMask(n) .eq. 0 ) then 
                 this%initialSmoothing(n) = 0d0
-                !this%deltaHOverLambda(n) = 0d0
-                !this%minHOverLambda(n)   = 0d0
-                !this%maxHOverLambda(n)   = 0d0
             end if 
         end do
 
+        ! Smoothing growth
+        if ( present( maxSmoothingGrowth ) ) then 
+            this%maxSmoothingGrowth = maxSmoothingGrowth
+        else 
+            this%maxSmoothingGrowth = defaultMaxSmoothingGrowth
+        end if
+
+        ! Density scale
+        if ( present( densityScale ) ) then 
+            this%densityScale = densityScale
+        else 
+            this%densityScale = defaultDensityScale
+        end if
         
         ! Limit roughnesses based on limit smoothing
         ! Default, nDensityScale = 1d0
-        nDensityScale = 4d0/this%histogram%binVolume ! TEMP
+        nDensityScale = this%densityScale
         maxHRoughness = maxval( this%maxHOverLambda*this%binSize )
-        this%minLimitRoughness = nDim*nDensityScale/( ( maxHRoughness**(nDim + 4d0) )*(4d0*pi)**(0.5*nDim) ) 
+        this%minLimitRoughness = maxval( (/this%minLimitRoughness, &
+            nDim*nDensityScale/( ( maxHRoughness**(nDim + 4d0) )*(4d0*pi)**(0.5*nDim) ) /) )
         minHRoughness = minval( this%minHOverLambda*this%binSize )
-        this%maxLimitRoughness = nDim*nDensityScale/( ( minHRoughness**(nDim + 4d0) )*(4d0*pi)**(0.5*nDim) )
+        this%maxLimitRoughness = minval( (/ nDim*nDensityScale/( ( minHRoughness**(nDim + 4d0) )*(4d0*pi)**(0.5*nDim) ), &
+            this%maxLimitRoughness /) )
 
+
+        print *, '###########################################'
         print *, 'MAX H ROUGHNESS: ', maxHRoughness
         print *, 'MIN H ROUGHNESS: ', minHRoughness
         print *, 'MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
         print *, 'MIN LIMIT ROUGHNESS: ', this%minLimitRoughness
 
 
-
-
-
-
-
-        ! LOGGER
-        print *, '#############################################################'
-        print *, '## GPKDE: INIT PARAMETERS'
-        !print *, ' delta_hoverlambda'       , this%deltaHOverLambda(1)
-        !print *, ' min_hoverlambda'         , this%minHOverLambda(1)
-        !print *, ' max_hoverlambda'         , this%maxHOverLambda(1)
-        print *, ' delta_hoverlambda'       , this%deltaHOverLambda
-        print *, ' min_hoverlambda'         , this%minHOverLambda
-        print *, ' max_hoverlambda'         , this%maxHOverLambda
-        print *, ' initial_smoothing '      , this%initialSmoothing
-        print *, ' log_kerneldatabase'      , this%logKernelDatabase
-        print *, ' database_optimization'   , this%databaseOptimization 
-        print *, ' flat_kerneldatabase'     , this%flatKernelDatabase
-        print *, ' brute_optimization'      , this%bruteOptimization 
-        print *, ' anisotropic_sigmasupport', this%anisotropicSigmaSupport 
-        print *, ' n_optimization_loops'    , this%nOptimizationLoops 
-        print *, '#############################################################'
-
-
         ! Initialize kernel database 
         if ( this%databaseOptimization ) then
             ! TIC 
-            call system_clock(clockCountStart, clockCountRate, clockCountMax)
+            !call system_clock(clockCountStart, clockCountRate, clockCountMax)
 
             if ( this%flatKernelDatabase ) then 
 
-                print *, '## GPKDE: initialize flat kernel database'
+                !print *, '## GPKDE: initialize flat kernel database'
                 call this%InitializeKernelDatabaseFlat( this%minHOverLambda(1), &
                                                         this%maxHOverLambda(1), &
                                                       this%deltaHOverLambda(1), &
@@ -489,9 +492,9 @@ module GridProjectedKDEModule
 
 
             ! TOC
-            call system_clock(clockCountStop, clockCountRate, clockCountMax)
-            elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-            print *, '## GPKDE kernel db initialization took ', elapsedTime, ' seconds'
+            !call system_clock(clockCountStop, clockCountRate, clockCountMax)
+            !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+            !print *, '## GPKDE kernel db initialization took ', elapsedTime, ' seconds'
 
         else
 
@@ -511,7 +514,7 @@ module GridProjectedKDEModule
         !allocate(       this%nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
         allocate(            nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
-        print *, ' END OF GPKDE MODULE INITIALIZATION ' 
+        !print *, ' END OF GPKDE MODULE INITIALIZATION ' 
 
     end subroutine prInitialize
 
@@ -894,9 +897,6 @@ module GridProjectedKDEModule
         roughness11 = 0d0
 
         ! Assign dimension pointers
-        ! For some reason while using 
-        ! a pointer class(KernelType) omp fails
-        ! while in bruteForce
         select case( this%idDim1 ) 
           case (1)
             roughness11Array => roughnessXXArray
@@ -1023,6 +1023,7 @@ module GridProjectedKDEModule
 
         end select
         curvature1 = curvature1/this%histogram%binVolume
+        ! Matrix from curvature kernels is lambda**2*KernelVMatrix
         curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
 
 
@@ -1048,8 +1049,6 @@ module GridProjectedKDEModule
 
             ! Assign pointer 
             gc => activeGridCells(n)
-
-            if ( gc%skipKernelSigma ) cycle
 
             call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
@@ -1360,8 +1359,9 @@ module GridProjectedKDEModule
             !$omp end parallel do
         end if 
         curvature1 = curvature1/this%histogram%binVolume
-        curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
         curvature2 = curvature2/this%histogram%binVolume
+        ! Matrix from curvature kernels is lambda**2*KernelVMatrix
+        curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
         curvature2 = curvature2/( this%binSize(this%idDim2)**2 )
 
         
@@ -1371,8 +1371,8 @@ module GridProjectedKDEModule
         curvature12 = curvature1*curvature2
 
 
-        ! kernelSigma was already computed ? 
-        call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange   )
+        ! Initialize kernelSigma
+        call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
 
 
         ! 11
@@ -1390,8 +1390,7 @@ module GridProjectedKDEModule
             ! Assign pointer 
             gc => activeGridCells(n)
 
-            !if ( gc%skipKernelSigma ) cycle
-
+            ! Notice this stage: kernelSigma is used in following loops
             call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
             ! Compute roughness grid estimates
@@ -1422,8 +1421,6 @@ module GridProjectedKDEModule
             ! Assign pointer 
             gc => activeGridCells(n)
 
-            !if ( gc%skipKernelSigma ) cycle
-
             ! Compute roughness grid estimates
             roughness22( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
                 curvature22(&
@@ -1438,6 +1435,7 @@ module GridProjectedKDEModule
         end do
         !$omp end parallel do 
 
+
         ! 12
         !$omp parallel do schedule( dynamic, 1 ) &
         !$omp default( none )                    &
@@ -1450,8 +1448,6 @@ module GridProjectedKDEModule
 
             ! Assign pointer 
             gc => activeGridCells(n)
-
-            !if ( gc%skipKernelSigma ) cycle
 
             ! Compute roughness grid estimates
             roughness12( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
@@ -1488,8 +1484,6 @@ module GridProjectedKDEModule
             ! Assign pointer 
             gc => activeGridCells(n)
 
-            if ( gc%skipKernelSigma ) cycle
-
             iX = gc%id(1)
             iY = gc%id(2)
             iZ = gc%id(3)
@@ -1500,79 +1494,18 @@ module GridProjectedKDEModule
 
             ! Compute net roughness
             ! 2D
-            !if ( (roughness11(iX,iY,iZ) .gt. this%minLimitRoughness ) .and. & 
-            !     (roughness22(iX,iY,iZ) .gt. this%minLimitRoughness ) ) then
-
             ! ISOTROPIC
-            netRoughnessArray( n ) = roughness11(iX,iY,iZ) + 2*roughness12(iX,iY,iZ) + roughness22(iX,iY,iZ) 
-
+            !netRoughnessArray( n ) = roughness11(iX,iY,iZ) + 2*roughness12(iX,iY,iZ) + roughness22(iX,iY,iZ) 
             ! ANISOTROPIC
             !netRoughnessArray( n ) = 2*sqrt( roughness11(iX,iY,iZ)*roughness22(iX,iY,iZ) ) + 2*roughness12(iX,iY,iZ)
-
-
-            !netRoughnessArray( n ) = roughness11(iX,iY,iZ)
-            !else if ( (roughness11(iX,iY,iZ) .gt. this%minLimitRoughness) .or. &
-            !          (roughness22(iX,iY,iZ) .gt. this%minLimitRoughness) ) then
-            !    ! Defaults to 1D
-            !    netRoughnessArray( n ) = max(roughness11(iX,iY,iZ),roughness22(iX,iY,iZ))
-            !end if
-
-            !netRoughnessArray( n ) = max( 2*sqrt( roughness11(iX,iY,iZ)*roughness22(iX,iY,iZ) ) + 2*roughness12(iX,iY,iZ), &
-            !              max(roughness11(iX,iY,iZ),roughness22(iX,iY,iZ)) )
+            ! Combined
+            netRoughnessArray( n ) = 2*roughness12(iX,iY,iZ) + maxval( (/     &
+                    roughness11(iX,iY,iZ) + roughness22(iX,iY,iZ),           &
+                    2*sqrt( roughness11(iX,iY,iZ)*roughness22(iX,iY,iZ) ) /) )
 
         end do
         !$omp end parallel do
        
-
-        !! Really small values are zero
-        !where ( abs(netRoughnessArray) .lt. 1d-8 )
-        !    netRoughnessArray = 0d0
-        !end where
-        !where ( abs(roughness11Array) .lt. 1d-8 )
-        !    roughness11Array = 0d0
-        !end where
-        !where ( abs(roughness22Array) .lt. 1d-8 )
-        !    roughness22Array = 0d0
-        !end where
-
-        !! Limit roughnesses based on values estimated 
-        !! from limit smoothing 
-        !where ( roughness11Array .gt. this%maxLimitRoughness )
-        !    roughness11Array = this%maxLimitRoughness
-        !end where
-        !where ( roughness11Array .lt. this%minLimitRoughness )
-        !    roughness11Array = this%minLimitRoughness
-        !end where
-        !
-        !where ( netRoughnessArray .gt. this%maxLimitRoughness )
-        !    netRoughnessArray = this%maxLimitRoughness
-        !end where
-        !where ( netRoughnessArray .lt. this%minLimitRoughness )
-        !    netRoughnessArray = this%minLimitRoughness
-        !end where
-
-        ! Limit roughnesses based on values estimated 
-        ! from limit smoothing 
-        !where ( roughness11Array .gt. this%maxLimitRoughness )
-        !    roughness11Array = this%maxLimitRoughness
-        !end where
-        !where ( roughness11Array .lt. this%minLimitRoughness )
-        !    roughness11Array = 0d0 
-        !end where
-        !where ( roughness22Array .gt. this%maxLimitRoughness )
-        !    roughness22Array = this%maxLimitRoughness
-        !end where
-        !where ( roughness11Array .lt. this%minLimitRoughness )
-        !    roughness22Array = 0d0 
-        !end where
-        !where ( netRoughnessArray .gt. this%maxLimitRoughness )
-        !    netRoughnessArray = this%maxLimitRoughness
-        !end where
-        !where ( netRoughnessArray .lt. this%minLimitRoughness )
-        !    netRoughnessArray = 0d0 
-        !end where
-
-
 
         ! Deallocate
         deallocate( curvature1  ) 
@@ -1750,10 +1683,11 @@ module GridProjectedKDEModule
         end do
         !$omp end parallel do
         curvatureX = curvatureX/this%histogram%binVolume
-        curvatureX = curvatureX/( this%binSize(1)**2 )
         curvatureY = curvatureY/this%histogram%binVolume
-        curvatureY = curvatureY/( this%binSize(2)**2 )
         curvatureZ = curvatureZ/this%histogram%binVolume
+        ! Matrix from curvature kernels is lambda**2*KernelVMatrix
+        curvatureX = curvatureX/( this%binSize(1)**2 )
+        curvatureY = curvatureY/( this%binSize(2)**2 )
         curvatureZ = curvatureZ/( this%binSize(3)**2 )
 
 
@@ -1803,8 +1737,6 @@ module GridProjectedKDEModule
                 ! Assign pointer 
                 gc => activeGridCells(n)
 
-                if ( gc%skipKernelSigma ) cycle
-
                 ! Compute roughness grid estimates
                 roughness( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
                     curvature(&
@@ -1846,8 +1778,6 @@ module GridProjectedKDEModule
             ! Assign pointer 
             gc => activeGridCells(n)
 
-            if ( gc%skipKernelSigma ) cycle
-
             iX = gc%id(1)
             iY = gc%id(2)
             iZ = gc%id(3)
@@ -1859,10 +1789,15 @@ module GridProjectedKDEModule
 
             ! Compute net roughness
             ! 3D
-            netRoughnessArray( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3) + &
-                2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
-                2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6) + &
-                2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6)
+            ! ISOTROPIC
+            netRoughnessArray( n ) = roughnessXX(iX,iY,iZ) + 2*roughnessXY(iX,iY,iZ) + 2*roughnessXZ(iX,iY,iZ) + &
+                                           roughnessYY(iX,iY,iZ) + 2*roughnessYZ(iX,iY,iZ) + roughnessZZ(iX,iY,iZ)
+
+            ! ANISOTROPIC
+            !netRoughnessArray( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3d0) + &
+            !    2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
+            !    2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
+            !    2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6d0)
         end do
         !$omp end parallel do
        
@@ -1904,9 +1839,6 @@ module GridProjectedKDEModule
         implicit none
         class( GridProjectedKDEType ) :: this
         ! input
-        !doubleprecision, dimension(3), intent(in) :: minHOverLambda
-        !doubleprecision, dimension(3), intent(in) :: maxHOverLambda
-        !doubleprecision, dimension(3), intent(in) :: deltaHOverLambda
         doubleprecision,   intent(in) :: minHOverLambda
         doubleprecision,   intent(in) :: maxHOverLambda
         doubleprecision,   intent(in) :: deltaHOverLambda
@@ -2606,26 +2538,6 @@ module GridProjectedKDEModule
                          gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
                 )
 
-            if ( any( &
-                this%histogram%counts(                 &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                         gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                         gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                         gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
-                )  .lt. 0d0 ) ) then 
-                print *, 'ZERO BREAK '
-                print *, this%histogram%counts(                 &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                         gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                         gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                         gc%kernelZMSpan(1):gc%kernelZMSpan(2)  )
-                print *, sum(gc%kernelMatrix(&
-                          gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                          gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                          gc%kernelZMSpan(1):gc%kernelZMSpan(2) ) ) 
-                call exit(0)
-            end if 
-
             !! Cannot be done here ! Reduction !
             ! Assign into array   
             !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
@@ -2641,13 +2553,6 @@ module GridProjectedKDEModule
             gc => activeGridCells(n)
             densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
-
-        !    where ( kernelSmoothingScale .eq. 0d0 ) 
-        !        densityEstimateArray = rawDensity
-        !    end where
-        !where ( netRoughnessArray .lt. this%minLimitRoughness ) 
-        !    densityEstimateArray = rawDensity
-        !end where
 
         
         ! Error monitoring
@@ -2665,7 +2570,6 @@ module GridProjectedKDEModule
         print *, '  - OPTIMAL SMOOTHING MAX,MIN Z', maxval( kernelSmoothing(3,:) ) ,minval( kernelSmoothing(3,:) ) 
         print *, '----------------------------------------------------'
         print *, ' errorRMSE INITIAL :', errorRMSE
-
 
 
         ! Optimization loop
@@ -2712,9 +2616,9 @@ module GridProjectedKDEModule
             print *, '  - MAX: ', maxval( nEstimateArray ) 
             print *, '  - MIN: ', minval( nEstimateArray ) 
             if ( m.eq.1 ) then 
-            squareDensityDiff       = (nEstimateArray - rawDensity)**2
-            errorRMSE               = sqrt(sum( squareDensityDiff )/this%nComputeBins)
-            print *, ' errorRMSE INITIAL N ESTIMATE:', errorRMSE
+                squareDensityDiff       = (nEstimateArray - rawDensity)**2
+                errorRMSE               = sqrt(sum( squareDensityDiff )/this%nComputeBins)
+                print *, ' errorRMSE INITIAL N ESTIMATE:', errorRMSE
             end if
 
             ! Export optimization variables 
@@ -2775,12 +2679,6 @@ module GridProjectedKDEModule
 
                 ! Assign gc pointer 
                 gc => activeGridCells(n)
-
-                !if (  any( kernelSigmaSupport( :, n ) .lt. 0d0 ) ) then
-                !    gc%skipKernelSigma = .true.
-                !    cycle
-                !end if
-                !gc%skipKernelSigma = .false.
 
                 ! Set kernel sigma
                 call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
@@ -2910,27 +2808,6 @@ module GridProjectedKDEModule
                 ! Assign into array   
                 !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
 
-
-                if ( any( &
-                    this%histogram%counts(                 &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                             gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                             gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                             gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
-                    )  .lt. 0d0 ) ) then 
-                    print *, 'ZERO BREAK '
-                    print *, this%histogram%counts(                 &
-                        gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                             gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                             gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                             gc%kernelZMSpan(1):gc%kernelZMSpan(2)  )
-                    print *, sum(gc%kernelMatrix(&
-                              gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                              gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                              gc%kernelZMSpan(1):gc%kernelZMSpan(2) ) ) 
-                    call exit(0)
-                end if 
-
             end do
             !$omp end parallel do
             densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
@@ -2942,10 +2819,6 @@ module GridProjectedKDEModule
                 gc => activeGridCells(n)
                 densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
             end do
-          
-            !where ( kernelSmoothingScale .eq. 0d0 ) 
-            !    densityEstimateArray = rawDensity
-            !end where
 
             print *, '  POST**  MIN/MAX DENSITY ARRAY', minval(densityEstimateArray), maxval(densityEstimateArray)
             print *, '  POST**  MIN/MAX SMOOTHING SCALE ', minval(kernelSmoothingScale), maxval(kernelSmoothingScale)
@@ -3267,38 +3140,23 @@ module GridProjectedKDEModule
         ! Compute smoothing scale. 
         ! For the cases of really low roghness, use the limit
         ! value to keep bound the smoothing scale
-        !where (abs( netRoughness ) .gt. this%minLimitRoughness )
-        this%minLimitRoughness = 10d0*this%minLimitRoughness
+        this%minLimitRoughness = 1d-2
         kernelSmoothingScale = 0d0
         where (abs( netRoughness ) .gt. this%minLimitRoughness )
             kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( 1d0/( nDim + 4d0 ) )
         elsewhere
-        !    kernelSmoothingScale = sum( kernelSmoothingScaleOld )/this%nComputeBins
-            !( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*10d0*this%minLimitRoughness ) )**( 1d0/( nDim + 4d0 ) )
+            ! Estimate a scale based on minLimitRoughness
             kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( 1d0/( nDim + 4d0 ) )
         end where
 
-
-        !where (abs( netRoughness ) .gt. 0d0 )
-        !    kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( 1d0/( nDim + 4d0 ) )
-        !elsewhere
-        !    kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( 1d0/( nDim + 4d0 ) )
-        !end where
-
-        ! Limit kernelSmoothingScale decrease/growth relative
-        ! to previous optimization loop 
-        !where( (kernelSmoothingScale .gt. (1d0 + this%maxSmoothingGrowth )*kernelSmoothingScaleOld) )
-        !    kernelSmoothingScale = (1d0+this%maxSmoothingGrowth)*kernelSmoothingScaleOld
-        !end where
-        !where( (kernelSmoothingScale .lt. kernelSmoothingScaleOld/(1d0+this%maxSmoothingGrowth)) )
-        !    kernelSmoothingScale = kernelSmoothingScaleOld/(1d0+this%maxSmoothingGrowth)
-        !end where
+        ! Bounded 
         where( kernelSmoothingScale .gt. this%maxHOverLambda(1)*this%binSize(1) )
             kernelSmoothingScale = this%maxHOverLambda(1)*this%binSize(1)
         end where
          
 
-        ! Compute roughness scale
+        ! Compute roughness scale,
+        ! Even better: set as netRoughness
         roughnessScale = netRoughness
         !roughnessScale = 1d0
         !do nd=1,3
@@ -3314,17 +3172,10 @@ module GridProjectedKDEModule
         !    end if
         !end do
         !roughnessScale = roughnessScale**( 1d0/nDim )
-        !where ( roughnessScale .lt. this%minLimitRoughness )
-        !   roughnessScale = 0d0 
-        !end where
-        !where ( roughnessScale .gt. this%maxLimitRoughness )
-        !   roughnessScale = this%maxLimitRoughness
-        !end where
 
         ! The fact that roughnessScale can be zero
         ! indicate that one or more kernel dimensions 
         ! where compressed
-
 
         ! Compute shape factors and kernelSmoothing
         kernelSmoothing = 0d0
@@ -3334,69 +3185,20 @@ module GridProjectedKDEModule
                 !! IF ANISOTROPIC
                 select case (nd) 
                     case (1)   
-                        !where (( abs(roughnessXXActive) .gt.  this%minLimitRoughness ) .and. & 
-                        !where (( abs(roughnessXXActive) .gt.  0d0 ) .and. & 
-                        !       ( roughnessScale .ne.  0d0 ))
-                        !where (  abs(roughnessXXActive) .gt.  0d0 ) 
-                        !where (  abs(roughnessXXActive) .gt. this%minLimitRoughness ) 
                         where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
                             kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
                         end where
-                        !where (( abs(roughnessXXActive) .lt.  this%minLimitRoughness ) ) 
-                        !    kernelSmoothingShape( nd, : ) = 1d-1
-                        !end where
                     case (2) 
-                        !where (( abs(roughnessYYActive) .gt.  this%minLimitRoughness ) .and. &
-                        !where (( abs(roughnessYYActive) .gt.  0d0 ) .and. &
-                        !       ( roughnessScale .ne.  0d0 ))
-                        !where (  abs(roughnessYYActive) .gt.  0d0 ) 
-                        !where (  abs(roughnessYYActive) .gt. this%minLimitRoughness ) 
                         where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
                             kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
                         end where
-                        !where (( abs(roughnessYYActive) .lt.  this%minLimitRoughness ) ) 
-                        !    kernelSmoothingShape( nd, : ) = 1d-1
-                        !end where
                     case (3) 
-                        !where (( abs(roughnessZZActive) .gt.  this%minLimitRoughness ) .and. &
-                        !       ( roughnessScale .ne.  0d0 ))
-                        !where ( abs(roughnessZZActive) .gt.  0d0 )
-                        !where (  abs(roughnessZZActive) .gt. this%minLimitRoughness ) 
                         where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
                             kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
                         end where
-                        !where (( abs(roughnessZZActive) .lt.  this%minLimitRoughness ) ) 
-                        !    kernelSmoothingShape( nd, : ) = 1d-1
-                        !end where
-                    !case (1)   
-                    !    where (( abs(roughnessXXActive) .gt.  this%minLimitRoughness ) .and. & 
-                    !           ( roughnessScale .ne.  0d0 ))
-                    !        kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
-                    !    end where
-                    !    where (( abs(roughnessXXActive) .gt.  this%minLimitRoughness ) .and. &
-                    !           ( roughnessScale .eq.  0d0 ))
-                    !        kernelSmoothingShape( nd, : ) = 1d0 ! isotropic
-                    !    end where
-                    !case (2) 
-                    !    where (( abs(roughnessYYActive) .gt.  this%minLimitRoughness ) .and. &
-                    !           ( roughnessScale .ne.  0d0 ))
-                    !        kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
-                    !    end where
-                    !    where (( abs(roughnessYYActive) .gt.  this%minLimitRoughness ) .and. &
-                    !           ( roughnessScale .eq.  0d0 ))
-                    !        kernelSmoothingShape( nd, : ) = 1d0 ! isotropic
-                    !    end where
-                    !case (3) 
-                    !    where (( abs(roughnessZZActive) .gt.  this%minLimitRoughness ) .and. &
-                    !           ( roughnessScale .ne.  0d0 ))
-                    !        kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
-                    !    end where
-                    !    where (( abs(roughnessZZActive) .gt.  this%minLimitRoughness ) .and. &
-                    !           ( roughnessScale .eq.  0d0 ))
-                    !        kernelSmoothingShape( nd, : ) = 1d0 ! isotropic
-                    !    end where
                 end select
-        
+
+                ! Minimum roughness sets transition to isotropic        
                 where ( abs(netRoughness) .lt. this%minLimitRoughness ) 
                     kernelSmoothingShape( nd, : ) = 1d0
                 end where
@@ -3404,9 +3206,6 @@ module GridProjectedKDEModule
                 where( kernelSmoothingShape(nd,:) .gt. 10d0 )
                     kernelSmoothingShape(nd,:) = 10d0
                 end where
-                !where( kernelSmoothingShape(nd,:) .lt. 1d-1 )
-                !    kernelSmoothingShape(nd,:) = 1d-1
-                !end where
 
                 kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
 

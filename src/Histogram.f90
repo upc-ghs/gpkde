@@ -16,6 +16,7 @@ module HistogramModule
         integer, dimension(:), allocatable         :: nBins
         doubleprecision, dimension(:), allocatable :: binSize
         doubleprecision                            :: binVolume
+        doubleprecision                            :: binDistance
         integer, dimension(:,:), allocatable       :: activeBinIds
         integer                                    :: nActiveBins
         integer, dimension(:,:), allocatable       :: boundingBoxBinIds
@@ -76,10 +77,11 @@ contains
             this%domainOrigin = 0 
         end if
 
+        ! Initialize variables
         this%nBins     = nBins
         this%binSize   = binSize
         this%binVolume = product( binSize, mask=(locDimensionMask.eq.1) ) 
-
+        this%binDistance = ( this%binVolume )**(1d0/sum(locDimensionMask))
 
         ! Allocate and initialize histogram counts
         allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
