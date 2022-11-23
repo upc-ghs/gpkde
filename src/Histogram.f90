@@ -134,7 +134,6 @@ contains
         this%counts  = 0
         nPointsShape = shape(dataPoints)
 
-
         ! This could be done with OpenMP (?) 
         do np = 1, nPointsShape(1)
 
