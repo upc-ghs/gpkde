@@ -2392,9 +2392,6 @@ module GridProjectedKDEModule
         gc => null()
         kernelMatrix => null()
 
-        ! Reset grid values
-        densityEstimateGrid = 0d0
-        nEstimateGrid = 0d0
 
         ! Allocate arrays according to nComputebins
         call prAllocateArrays( this%nComputeBins,      &
@@ -2453,7 +2450,7 @@ module GridProjectedKDEModule
         rawDensity = rawDensity/this%histogram%binVolume
         activeGridCells => activeGridCellsMod
   
-        print *, ' --  AVG RAW DENSITY: ', sum(rawDensity)/this%nComputeBins
+        !print *, ' --  AVG RAW DENSITY: ', sum(rawDensity)/this%nComputeBins
 
 
         ! Initialize kernels
@@ -2475,7 +2472,7 @@ module GridProjectedKDEModule
         !else
             kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
         !end if
-        print *, ' -- KERNEL SMOOTHING: ', kernelSmoothing(:,1)
+        !print *, ' -- KERNEL SMOOTHING: ', kernelSmoothing(:,1)
 
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
@@ -2495,11 +2492,12 @@ module GridProjectedKDEModule
 
 
         ! Initialize nEstimate
+        nEstimateGrid = 0d0
+        nEstimateArray = 0d0
         !$omp parallel do schedule( dynamic, 1 )                    &
         !$omp default( none )                                       &
         !$omp shared( this )                                        &
         !$omp shared( activeGridCells )                             &
-        !$omp shared( densityEstimateGrid )                         &
         !$omp shared( nEstimateGrid, nEstimateArray )               &
         !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
         !$omp firstprivate( kernelSigma )                           &
@@ -2530,8 +2528,9 @@ module GridProjectedKDEModule
 
         end do
         !$omp end parallel do
-        nEstimateGrid = nEstimateGrid/this%histogram%binVolume
+        nEstimateGrid  = nEstimateGrid/this%histogram%binVolume
         nEstimateArray = nEstimateArray/this%histogram%binVolume
+
 
         !! Limit roughnesses based on limit smoothing
         !! Default, nDensityScale = 1d0
@@ -2545,10 +2544,8 @@ module GridProjectedKDEModule
         !    this%maxLimitRoughness /) )
 
 
-
         ! Initialize variables
         curvatureBandwidth = kernelSmoothing
-        !nEstimateArray = rawDensity
         kernelSmoothingOld = kernelSmoothing
         kernelSmoothingScaleOld = kernelSmoothingScale
 
@@ -2569,6 +2566,7 @@ module GridProjectedKDEModule
 
 
         ! Initialize density grid
+        densityEstimateGrid = 0d0
         densityEstimateArray = 0d0
         !$omp parallel do schedule( dynamic, 1 )  &
         !$omp default( none )                     &
@@ -2632,18 +2630,17 @@ module GridProjectedKDEModule
         netRoughnessArrayOld    = netRoughnessArray
         densityGridOld          = densityEstimateGrid
 
-        print *, '  - INITIATE ::::::::::::::::::::::'
-        print *, '  - OPTIMAL SMOOTHING MAX,MIN X', maxval( kernelSmoothing(1,:) ) ,minval( kernelSmoothing(1,:) ) 
-        print *, '  - OPTIMAL SMOOTHING MAX,MIN Y', maxval( kernelSmoothing(2,:) ) ,minval( kernelSmoothing(2,:) ) 
-        print *, '  - OPTIMAL SMOOTHING MAX,MIN Z', maxval( kernelSmoothing(3,:) ) ,minval( kernelSmoothing(3,:) ) 
-        print *, '----------------------------------------------------'
-        print *, ' errorRMSE INITIAL :', errorRMSE
-
+        !print *, '  - INITIATE ::::::::::::::::::::::'
+        !print *, '  - OPTIMAL SMOOTHING MAX,MIN X', maxval( kernelSmoothing(1,:) ) ,minval( kernelSmoothing(1,:) ) 
+        !print *, '  - OPTIMAL SMOOTHING MAX,MIN Y', maxval( kernelSmoothing(2,:) ) ,minval( kernelSmoothing(2,:) ) 
+        !print *, '  - OPTIMAL SMOOTHING MAX,MIN Z', maxval( kernelSmoothing(3,:) ) ,minval( kernelSmoothing(3,:) ) 
+        !print *, '----------------------------------------------------'
+        !print *, ' errorRMSE INITIAL :', errorRMSE
 
         ! Optimization loop
         do m = 1, nOptLoops
 
-            print *, '--------------------- LOOP ', m
+            !print *, '--------------------- LOOP ', m
             ! nEstimate
             nEstimateGrid = 0d0 
             nEstimateArray = 0d0
@@ -2682,6 +2679,7 @@ module GridProjectedKDEModule
 
             end do
             !$omp end parallel do
+
             if ( m.eq.1 ) then 
                 squareDensityDiff       = (nEstimateArray - rawDensity)**2
                 errorRMSE               = sqrt(sum( squareDensityDiff )/this%nComputeBins)
@@ -2757,7 +2755,6 @@ module GridProjectedKDEModule
 
             squareDensityDiff       = (nEstimateArray - rawDensity)**2
             errorRMSE               = sqrt(sum( squareDensityDiff )/this%nComputeBins)
-            !print *, ' errorRMSE N ESTIMATE:', errorRMSE
 
             ! Curvature bandwidths
             call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
@@ -2777,7 +2774,7 @@ module GridProjectedKDEModule
                     errorMetricArray = nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
                     0.25*netRoughnessArray*kernelSmoothingScale**4d0
                 end where
-                print *, ' errorALMISE INITIAL :', sum(errorMetricArray)/this%nComputeBins
+                !print *, ' errorALMISE INITIAL :', sum(errorMetricArray)/this%nComputeBins
             end if 
 
             ! Optimal smoothing
@@ -2850,7 +2847,6 @@ module GridProjectedKDEModule
 
             ! A proxy to error
             relativeDensityChange = 0d0
-
             where ( densityEstimateArrayOld .ne. 0d0 )
                 relativeDensityChange = abs(densityEstimateArray/maxval(densityEstimateArray) - & 
                                         densityEstimateArrayOld/maxval(densityEstimateArrayOld) )
@@ -2862,8 +2858,11 @@ module GridProjectedKDEModule
             ! A proxy to error 
             relativeRoughnessChange = 0d0
             where (netRoughnessArrayOld .ne. 0d0 ) 
-                relativeRoughnessChange = abs(netRoughnessArray - &
-                    netRoughnessArrayOld)/netRoughnessArrayOld
+                relativeRoughnessChange = &
+                abs(netRoughnessArray/maxval(netRoughnessArray) - &
+                    netRoughnessArrayOld/maxval(netRoughnessArrayOld))
+                !relativeRoughnessChange = abs(netRoughnessArray - &
+                !    netRoughnessArrayOld)/netRoughnessArrayOld
             end where
             !errorMetric = sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
 
@@ -2894,33 +2893,37 @@ module GridProjectedKDEModule
 
 
            
-            
-            ! Break optimization loop if error grows
-            ! or if it is lower than a given threshold
+            ! Error analysis 
             if (  ( errorMetric .lt. errorMetricConvergence ) ) then
-               print *, '-- Convergence: criteria 1 ------------------- LOOP ', m
-               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+                ! Criteria 1
+                ! Break optimization loop if 
+                ! relative density change lower than 
+                ! a given convergence
 
-               print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
-               print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
-               print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
-               print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
-               print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
-               print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
-               ! CONSIDER RELATIVE .LT. 0.1
-               print *, ' -- RELATIVE       :', m, ' ', errorMetric
-               ! CONSIDER RELATIVE N LT 0.5
-               print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
-               print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
-               print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
-               print *, ' -- RMSE           :', m, ' ', errorRMSE
-               print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
+                this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-               print *, ' -------------- DONE !'
+                !print *, '-- Convergence: criteria 1 ------------------- LOOP ', m
+                !print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
+                !print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
+                !print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
+                !print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
+                !print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
+                !print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
+                !! CONSIDER RELATIVE .LT. 0.1
+                !print *, ' -- RELATIVE       :', m, ' ', errorMetric
+                !! CONSIDER RELATIVE N LT 0.5
+                !print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
+                !print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
+                !print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
+                !print *, ' -- RMSE           :', m, ' ', errorRMSE
+                !print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
+                !print *, ' -------------- DONE !'
+                 
+                ! Break
+                exit
 
-
-               exit
-            else if ( (nDensityConvergence .lt. nDensityConvergenceOld ) ) then 
+            else if ( (nDensityConvergence .lt. nDensityConvergenceOld ) ) then
+                ! Criteria 2 
                 ! If the number of cells below the convergence limit decreases,
                 ! return previous density and leave
                 densityEstimateGrid = densityGridOld
@@ -2931,28 +2934,30 @@ module GridProjectedKDEModule
                     densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
                 end do
 
-               print *, '-- Convergence: criteria 2 ------------------- LOOP ', m
-               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+                this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-               print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
-               print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
-               print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
-               print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
-               print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
-               print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
-               ! CONSIDER RELATIVE .LT. 0.1
-               print *, ' -- RELATIVE       :', m, ' ', errorMetric
-               ! CONSIDER RELATIVE N LT 0.5
-               print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
-               print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
-               print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
-               print *, ' -- RMSE           :', m, ' ', errorRMSE
-               print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
+                !print *, '-- Convergence: criteria 2 ------------------- LOOP ', m
+                !print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
+                !print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
+                !print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
+                !print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
+                !print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
+                !print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
+                !! CONSIDER RELATIVE .LT. 0.1
+                !print *, ' -- RELATIVE       :', m, ' ', errorMetric
+                !! CONSIDER RELATIVE N LT 0.5
+                !print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
+                !print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
+                !print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
+                !print *, ' -- RMSE           :', m, ' ', errorRMSE
+                !print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
+                !print *, ' -------------- DONE !'
 
-               print *, ' -------------- DONE !'
-
+                ! Break
                 exit
-            else if ( (errorMetric .gt. errorMetricOld)  ) then 
+
+            else if ( (errorMetric .gt. errorMetricOld)  ) then
+                ! Criteria 3 
                 ! If the relative change in density increased with 
                 ! respect to previous value, return previous density and leave
 
@@ -2966,84 +2971,83 @@ module GridProjectedKDEModule
                     densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
                 end do
 
-               print *, '-- Convergence: criteria 3 ------------------- LOOP ', m
-               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+                this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-               print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
-               print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
-               print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
-               print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
-               print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
-               print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
-               ! CONSIDER RELATIVE .LT. 0.1
-               print *, ' -- RELATIVE       :', m, ' ', errorMetric
-               ! CONSIDER RELATIVE N LT 0.5
-               print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
-               print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
-               print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
-               print *, ' -- RMSE           :', m, ' ', errorRMSE
-               print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
+                !print *, '-- Convergence: criteria 3 ------------------- LOOP ', m
+                !print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
+                !print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
+                !print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
+                !print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
+                !print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
+                !print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
+                !! CONSIDER RELATIVE .LT. 0.1
+                !print *, ' -- RELATIVE       :', m, ' ', errorMetric
+                !! CONSIDER RELATIVE N LT 0.5
+                !print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
+                !print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
+                !print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
+                !print *, ' -- RMSE           :', m, ' ', errorRMSE
+                !print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
 
-               print *, ' -------------- DONE !'
+                !print *, ' -------------- DONE !'
 
                 exit
             else
                 ! Continue to next loop
-                 print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
-                 print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
-                 print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
-                 print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
-                 print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
-                 print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
-                 ! CONSIDER RELATIVE .LT. 0.1
-                 print *, ' -- RELATIVE       :', m, ' ', errorMetric
-                 ! CONSIDER RELATIVE N LT 0.5
-                 print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
-                 print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
-                 print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
-                 print *, ' -- RMSE           :', m, ' ', errorRMSE
-                 print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
+                !print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
+                !print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
+                !print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
+                !print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
+                !print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
+                !print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
+                !! CONSIDER RELATIVE .LT. 0.1
+                !print *, ' -- RELATIVE       :', m, ' ', errorMetric
+                !! CONSIDER RELATIVE N LT 0.5
+                !print *, ' -- RELATIVE N     :', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
+                !print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
+                !print *, ' -- RELATIVE N ROUG:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
+                !print *, ' -- RMSE           :', m, ' ', errorRMSE
+                !print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
 
-                 ! CONSIDER LT 0.05
-                 where( ( netRoughnessArray .ne. 0d0 ) .and. & 
-                         ( netRoughnessArrayOld .ne. 0d0 ) )
-                     errorMetricArray =   abs(netRoughnessArray/maxval(netRoughnessArray) & 
-                         - netRoughnessArrayOld/maxval(netRoughnessArrayOld) ) 
-                 end where
-                 errorMetricOld = sqrt( sum( errorMetricArray**2 )/this%nComputeBins )
-                 print *, ' -- ROUGHNESS SHAPE:', m, ' ', errorMetricOld
-                 where( ( densityEstimateArray .ne. 0d0 ) .and. & 
-                         ( densityEstimateArrayOld .ne. 0d0 ) )
-                      errorMetricArray = abs(densityEstimateArray/maxval(densityEstimateArray) &
-                                  - densityEstimateArrayOld/maxval(densityEstimateArrayOld) )
-                 end where
-                 errorMetricOld = sqrt( sum( errorMetricArray**2 )/this%nComputeBins )
-                 print *, ' -- DENSITY SHAPE:', m, ' ', errorMetricOld
+                ! CONSIDER LT 0.05
+                where( ( netRoughnessArray .ne. 0d0 ) .and. & 
+                        ( netRoughnessArrayOld .ne. 0d0 ) )
+                    errorMetricArray =   abs(netRoughnessArray/maxval(netRoughnessArray) & 
+                        - netRoughnessArrayOld/maxval(netRoughnessArrayOld) ) 
+                end where
+                errorMetricOld = sqrt( sum( errorMetricArray**2 )/this%nComputeBins )
+                !print *, ' -- ROUGHNESS SHAPE:', m, ' ', errorMetricOld
+                where( ( densityEstimateArray .ne. 0d0 ) .and. & 
+                        ( densityEstimateArrayOld .ne. 0d0 ) )
+                     errorMetricArray = abs(densityEstimateArray/maxval(densityEstimateArray) &
+                                 - densityEstimateArrayOld/maxval(densityEstimateArrayOld) )
+                end where
+                errorMetricOld = sqrt( sum( errorMetricArray**2 )/this%nComputeBins )
+                !print *, ' -- DENSITY SHAPE:', m, ' ', errorMetricOld
 
-                 errorMetricOld = errorMetric
-                 kernelSmoothingOld = kernelSmoothing
-                 netRoughnessArrayOld = netRoughnessArray
-                 densityEstimateArrayOld = densityEstimateArray
-                 densityGridOld = densityEstimateGrid
-                 nDensityConvergenceOld = nDensityConvergence
-                 nRoughnessConvergenceOld = nRoughnessConvergence
-                 call prComputeKernelSmoothingScale( this, kernelSmoothingOld, kernelSmoothingScaleOld )
+                errorMetricOld = errorMetric
+                kernelSmoothingOld = kernelSmoothing
+                netRoughnessArrayOld = netRoughnessArray
+                densityEstimateArrayOld = densityEstimateArray
+                densityGridOld = densityEstimateGrid
+                nDensityConvergenceOld = nDensityConvergence
+                nRoughnessConvergenceOld = nRoughnessConvergence
+                call prComputeKernelSmoothingScale( this, kernelSmoothingOld, kernelSmoothingScaleOld )
 
-                 ! Export optimization variables
-                 if ( exportOptimizationVariables ) then
-                     write( unit=loopId, fmt=* )m
-                     write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
-                     !call prExportOptimizationVariables( this, varsOutputFileName, & 
-                     !    densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
-                     !    curvatureBandwidth, nEstimateArray, netRoughnessArray )
-                     call prExportOptimizationVariablesExtendedError( this, varsOutputFileName, & 
-                         densityEstimateArray, kernelSmoothing, kernelSmoothingScale,kernelSmoothingShape,  & 
-                         kernelSigmaSupportScale, &
-                         curvatureBandwidth, nEstimateArray, roughnessXXArray, &
-                         roughnessYYArray, roughnessZZArray, netRoughnessArray, &
-                                  relativeDensityChange, relativeRoughnessChange )
-                 end if 
-
+                ! Export optimization variables
+                if ( exportOptimizationVariables ) then
+                    write( unit=loopId, fmt=* )m
+                    write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
+                    !call prExportOptimizationVariables( this, varsOutputFileName, & 
+                    !    densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
+                    !    curvatureBandwidth, nEstimateArray, netRoughnessArray )
+                    call prExportOptimizationVariablesExtendedError( this, varsOutputFileName, & 
+                        densityEstimateArray, kernelSmoothing, kernelSmoothingScale,kernelSmoothingShape,  & 
+                        kernelSigmaSupportScale, &
+                        curvatureBandwidth, nEstimateArray, roughnessXXArray, &
+                        roughnessYYArray, roughnessZZArray, netRoughnessArray, &
+                                 relativeDensityChange, relativeRoughnessChange )
+                end if 
 
             end if 
 
