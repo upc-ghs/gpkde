@@ -26,9 +26,9 @@ deltax = 0.005
 x      = np.arange( 0, L+deltax, deltax) 
 delr   = deltax
 #vol    = 1.9500000000000004e-07
-
 vol    = 9.750000000000002e-08
-mass   = 9.545001312800406e-11
+mass   = 7.636001050240325e-10
+#9.545001312800406e-11
 #mass   = 2.2625188297008372e-10
 #mass   = 7.636001050240325e-10
 #mass   = 9.545001312800406e-11
@@ -79,7 +79,9 @@ ax.plot(x/(v*TFIN),function(x,v,TFIN,D) - function(x,v,TFIN-TEND,D), zorder=11, 
 
 
 # LOAD FILE
-df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_' ),
+
+#df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_' ),
+df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_particles_dev.csv' ),
                      header=None,
                      delim_whitespace=True,
                      skiprows=0,

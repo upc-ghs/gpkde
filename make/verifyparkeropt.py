@@ -13,9 +13,7 @@ def function( x, v, t, D, co=1 ):
 
 
 DoverV = 0.01
-#v      = 118.46153846153845 # CLASSICAL WITH FLOW BOUNDARIES, SOME VARIABILITY
 v      = 118.16967337525458  # WITH CONSTANT HEAD BOUNDARIES, STD < 1e-12
-#v      = 59.230769230769226  # cm/hr
 D      = DoverV*v
 L      = 4
 vTEND  = 0.5
@@ -24,107 +22,128 @@ vTFIN  = 1
 TFIN   = vTFIN/v # END OF SIMULATION
 deltax = 0.005
 x      = np.arange( 0, L+deltax, deltax) 
-delr   = 1000*deltax
-#vol    = 1.9500000000000004e-07
+delr   = deltax
 
 vol    = 9.750000000000002e-08
-mass   = 9.545001312800406e-11
-#vol    = 1000*9.750000000000002e-08
-#facmas = 1.0005794666076087
-#mass  = 6.10880084019226e-12 #17
-#mass  = mass*facmas
-#mass = 1.1931251641000507e-11           # 16
-#mass = 4.887040672153808e-11           # 15
-#mass   = 9.545001312800406e-11
-#mass   = 2.2625188297008372e-10
-#mass   = 7.636001050240325e-10
-#mass   = 9.545001312800406e-11
-#mass   = 1.1931251641000507e-11
-#mass   = 6.10880084019226e-12
-#mass   = 1.1931251641000507e-11
-#mass   = 1.190185546875e-11
-#mass   = 6.09375e-12
-#mass   = 6.09375e-12  
-#mass   = 1.190185546875e-11
-print('MMASSS ', mass )
-#ass   = 2.8211805555555564e-11 
-#ass   = 9.521484375e-11
-# mass = 6.093750000000001e-10
-#mass   = 1.2187500000000002e-09
-#mass   = 4.7607421875e-11
+mass   = 7.636001050240325e-10 # N 12800
+#mass   = 9.545001312800406e-11 # N 102800
+co     = 1
+#-- totalparticles:  12800
+#-- PARTICLE MASS :  7.636001050240325e-10
 
-#vol    = 9.750000000000002e-08
-#mass   = 1.50462962962963e-10
-
-#mass   = 3.00925925925926e-10 # WITH NSUBS 3
-#mass   = 1.5234375e-09 # WITH NSUBS 2
-#mass   = 3.80859375e-10    # WITH NSUBS 4 
-#mass   = 4.7607421875e-11  # WITH NSUBS 8 
-
-co = 1
-
-nparticles = 10 # NOMINAL
-#nparticlestotal = 1600000 # REAL
-##nparticlestotal = 1599988 # REAL
-##nparticlestotal = 1599616 # REAL
-##nparticles = 8 # NOMINAL
-##nparticlestotal = 819007 # REAL
-#total_flow_rate = 0.00231
-#mass = co*total_flow_rate*TEND/nparticlestotal
-##mass = co*total_flow_rate*dtrelease/(nparticles)
-#print('MMASSS ', mass )
+#-- totalparticles:  1600000
+#-- PARTICLE MASS :  6.10880084019226e-12
 
 
 
 
-fig = plt.figure()
-ax  = fig.add_subplot(111)
+fig = plt.figure(figsize=(10,10))
+
+xlims =[0,2]
+
+ax0  = fig.add_subplot(311)
+ax1  = fig.add_subplot(312)
+ax2  = fig.add_subplot(313)
+#ax3  = fig.add_subplot(614)
+#ax4  = fig.add_subplot(615)
+#ax5  = fig.add_subplot(616)
 
 
 # ANALYTICAL
-ax.plot(x/(v*TFIN),function(x,v,TFIN,D) - function(x,v,TFIN-TEND,D), zorder=0, linewidth=2)
-
+ax0.plot(x/(v*TFIN),function(x,v,TFIN,D) - function(x,v,TFIN-TEND,D), zorder=0, linewidth=2, label='analytical', color='k', alpha=0.5)
 
 # LOAD FILE
 # STATE ZERO
-zerodf = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_particles_dev.csv' ),
+fname = 'gpkde_particles_dev.csv'
+zerodf = pd.read_csv( os.path.join( os.getcwd(), fname  ),
                      header=None,
                      delim_whitespace=True,
                      skiprows=0,
                      index_col=None
                  )
-ax.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[3].to_numpy()*mass*delr/vol, zorder=1, linewidth=1, color='r' )
-ax.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[4].to_numpy()*mass/vol, color='k', zorder=2, linewidth=0.8, alpha=0.5 )
-
-#loopids = [0,1]
-#for li in loopids:
-#    # LOAD FILE
-#    df = pd.read_csv( os.path.join( os.getcwd(), 'gpkde_density_output_'+str(li) ),
-#                         header=None,
-#                         delim_whitespace=True,
-#                         skiprows=0,
-#                         index_col=None
-#                     )
-#    print( np.mean(df[3].to_numpy()*mass*delr/vol ) )
-#
-#    ax.plot( x[ df[0]-4 ]/(1.0*v*TFIN), 1.0*df[3].to_numpy()*mass*delr/vol , linewidth=0.7, zorder=10-li, label=str(li) )
+ax0.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[3].to_numpy()*mass*delr/vol, zorder=1, linewidth=1, color='g', label='output' )
+ax0.plot( x[ zerodf[0]-4 ]/(1.0*v*TFIN), 1.0*zerodf[4].to_numpy()*mass/vol, color=3*[0.5], zorder=2, linewidth=0.8, alpha=0.5, label='histogram' )
 
 
 
-hlambda = 5 
-h       = deltax*hlambda/(v*TFIN)
-xo      = 0.71/(v*TFIN)
-print( xo )
-ax.axvline(xo    , linewidth=0.75, zorder=0, color='k', linestyle='--')
-ax.axvline(xo+h  , linewidth=0.75, zorder=0, color='k', linestyle='--')
-ax.axvline(xo-h  , linewidth=0.75, zorder=0, color='k', linestyle='--')
-ax.axvline(xo+3*h, linewidth=0.75, zorder=0, color='k', linestyle='--')
-ax.axvline(xo-3*h, linewidth=0.75, zorder=0, color='k', linestyle='--')
+
+colx           = 0
+coly           = 1
+colz           = 2
+coldensity     = 3
+colsmoothingx   = 4
+colsmoothingy   = 5
+colsmoothingz   = 6
+colsmoothingshapex = 7
+colsmoothingshapey = 8
+colsmoothingshapez = 9
+colsmoothingscale  = 10
+
+colroughnessxx   = 16
+colroughnessyy   = 17
+colroughnesszz   = 18
+colroughness     = 19
+
+cellsize = 0.005
+
+
+nloops  = 7
+loopids = np.arange(0,nloops+1,1).astype(np.int32)
+colors  =  ['b','c', 'lime', 'r', 'pink', 'y', 'gold', 'tab:purple', 'tab:orange', 'tab:brown'  ]
+for li in loopids:
+    # LOAD FILE
+    df = pd.read_csv( os.path.join( os.getcwd(), fname +str(li) ),
+                         header=None,
+                         delim_whitespace=True,
+                         skiprows=0,
+                         index_col=None
+                     )
+    ax0.plot( x[ df[0]-4 ]/(1.0*v*TFIN), 1.0*df[coldensity].to_numpy()*mass*delr/vol , linewidth=0.7, zorder=10+li, label=str(li), color=colors[li] )
+
+    # SMOOTHING
+    ax1.plot( x[ df[0]-4 ]/(1.0*v*TFIN), df[colsmoothingx].to_numpy()/cellsize , linewidth=0.7, zorder=10+li , color=colors[li])
+
+    # ROUGHNESS
+    ax2.plot( x[ df[0]-4 ]/(1.0*v*TFIN), df[colroughness].to_numpy() , linewidth=0.7, zorder=10+li, color=colors[li] )
+
+
+tx = 0.5
+ty = 0.5
+
+ax0.text(tx,ty,'density',transform=ax0.transAxes )
+ax1.text(tx,ty,'smoothing',transform=ax1.transAxes )
+ax2.text(tx,ty,'roughness',transform=ax2.transAxes )
+#ax2.text(tx,ty,'smoothing',transform=ax2.transAxes )
+#ax3.text(tx,ty,'smoothing',transform=ax3.transAxes )
+#ax4.text(tx,ty,'smoothing',transform=ax4.transAxes )
+#ax5.text(tx,ty,'smoothing',transform=ax5.transAxes )
+#ax6.text(tx,ty,'smoothing',transform=ax6.transAxes )
+
+ax0.set_xlim(xlims)
+ax1.set_xlim(xlims)
+ax2.set_xlim(xlims)
+#ax2.set_xlim(xlims)
+#ax3.set_xlim(xlims)
+#ax4.set_xlim(xlims)
+#ax5.set_xlim(xlims)
+
+
+ax2.set_yscale('log')
+
+#hlambda = 5 
+#h       = deltax*hlambda/(v*TFIN)
+#xo      = 0.71/(v*TFIN)
+#print( xo )
+#ax.axvline(xo    , linewidth=0.75, zorder=0, color='k', linestyle='--')
+#ax.axvline(xo+h  , linewidth=0.75, zorder=0, color='k', linestyle='--')
+#ax.axvline(xo-h  , linewidth=0.75, zorder=0, color='k', linestyle='--')
+#ax.axvline(xo+3*h, linewidth=0.75, zorder=0, color='k', linestyle='--')
+#ax.axvline(xo-3*h, linewidth=0.75, zorder=0, color='k', linestyle='--')
 
 
 
 #ax.set_yscale('log')
-ax.set_ylim([0.25,1])
+#ax.set_ylim([0.25,1])
 #ax.set_xlim([0.5,1])
 fig.legend()
 plt.savefig( 'figureopt.png' )
