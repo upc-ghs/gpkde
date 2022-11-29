@@ -12,7 +12,8 @@ def function( x, v, t, D, co=1 ):
     return first + sec - third
 
 
-DoverV = 0.01
+DoverV = 0.1
+#DoverV = 0.01
 v      = 118.16967337525458  # WITH CONSTANT HEAD BOUNDARIES, STD < 1e-12
 D      = DoverV*v
 L      = 4
@@ -25,7 +26,6 @@ x      = np.arange( 0, L+deltax, deltax)
 delr   = deltax
 
 vol    = 9.750000000000002e-08
-mass   = 9.545001312800406e-11 # N 102800
 co     = 1
 
 
@@ -48,7 +48,17 @@ ax2  = fig.add_subplot(313)
 
 # LOAD FILE
 # STATE ZERO
-fname = 'gpkde_particles_dev.csv999'
+# DV 01
+fname = 'gpkde_particles_dev.csv.np1.024.dv01'
+#fname = 'gpkde_particles_dev.csv.np0.128.dv01'
+
+# DV001
+#fname = 'gpkde_particles_dev.csv.np0.0128'
+#fname = 'gpkde_particles_dev.csv.np0.0016'
+#fname = 'gpkde_particles_dev.csv.np0.8192'
+#fname = 'gpkde_particles_dev.csv.np0.1024'
+#fname = 'gpkde_particles_dev.csv.np1.6'
+fname = fname + str(999)
 zerodf = pd.read_csv( os.path.join( os.getcwd(), fname  ),
                      header=None,
                      delim_whitespace=True,
@@ -63,8 +73,9 @@ ax0.plot( zerodf[ 0 ], zerodf[5].to_numpy(), color='b', zorder=2, linewidth=0.8,
 ax0.set_xlabel('relerrorloop')
 ax0.set_xlabel('nloop')
 ax0.set_yscale('log')
-
-
+ax0.set_ylim([1e-5,10])
+ax0.axhline(1e-2)
+ax0.axhline(5e-2, color='k')
 
 ax1.plot( zerodf[ 0 ], zerodf[7].to_numpy(), zorder=1, linewidth=1, color='g', label='rmsehist' )
 ax1.set_yscale('log')
