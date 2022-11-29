@@ -19,6 +19,7 @@ program testkernel
     doubleprecision :: minHOverLambda
     doubleprecision :: deltaHOverLambda
     doubleprecision :: densityRelativeConvergence
+    doubleprecision :: minLimitRoughness, maxLimitRoughness, maxSmoothingGrowth
      
 
 
@@ -35,8 +36,28 @@ program testkernel
     integer :: line_no, ix
     character(len=200) :: outputFileName
 
-    character(len=200) :: particlesFileName = 'particles_dev.csv'
-    integer            :: nlines = 12800
+    ! DV 01
+    character(len=200) :: particlesFileName = 'particles_dev.csv.np1.024.dv01'
+    integer            :: nlines = 1024000
+    !character(len=200) :: particlesFileName = 'particles_dev.csv.np0.128.dv01'
+    !integer            :: nlines = 128000
+
+    ! DV 001
+    !character(len=200) :: particlesFileName = 'particles_dev.csv.np1.6'
+    !integer            :: nlines = 1600000
+    !character(len=200) :: particlesFileName = 'particles_dev.csv.np0.8192'
+    !integer            :: nlines = 819200
+    !character(len=200) :: particlesFileName = 'particles_dev.csv.np0.3456'
+    !integer            :: nlines = 345600
+    !character(len=200) :: particlesFileName = 'particles_dev.csv.np0.1024'
+    !integer            :: nlines = 102400
+    !character(len=200) :: particlesFileName = 'particles_dev.csv.np0.0128'
+    !integer            :: nlines = 12800
+    !character(len=200) :: particlesFileName = 'particles_dev.csv.np0.0016'
+    !integer            :: nlines = 1600
+
+    !character(len=200) :: particlesFileName = 'particles_dev.csv'
+    !integer            :: nlines = 12800
     !character(len=200) :: particlesFileName = 'particles_dev.csv'
     !integer            :: nlines = 102400
     !character(len=200) :: particlesFileName = 'mpathsim.timeseries.nsub2.ct001.csv'
@@ -106,11 +127,14 @@ program testkernel
     allocate( dataArray( nlines, 3 ) )
 
     ! KDB LOG
-    maxHOverLambda     = 30.0
+    maxHOverLambda     = 100.0
     minHOverLambda     = 1
-    deltaHOverLambda   = 0.0001
-    nOptimizationLoops = 10
+    deltaHOverLambda   = 0.0
+    nOptimizationLoops = 40
     densityRelativeConvergence = 0.01
+    minLimitRoughness  = 1d-10
+    maxLimitRoughness  = 1d20
+    maxSmoothingGrowth = 10
 
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
@@ -134,13 +158,14 @@ program testkernel
             minHOverLambda          = minHOverLambda,     & 
             maxHOverLambda          = maxHOverLambda,     & 
             deltaHOverLambda        = deltaHOverLambda,   &
-            databaseOptimization    = .true.,            & 
-            bruteOptimization       = .false.,            & 
-            anisotropicSigmaSupport = .false.,            &
+            databaseOptimization    = .false.,            & 
             nOptimizationLoops      = nOptimizationLoops, & 
             domainOrigin            = domainOrigin,       & 
-            densityRelativeConvergence = densityRelativeConvergence & 
-            )
+            densityRelativeConvergence = densityRelativeConvergence, &
+            minRoughness = minLimitRoughness, & 
+            maxRoughness = maxLimitRoughness, & 
+            maxSmoothingGrowth = maxSmoothingGrowth & 
+        )
 
     print *, '-------------------------------------------------------'
     ! TIC
@@ -152,8 +177,10 @@ program testkernel
     call gpkde%ComputeDensity( &
         dataArray,                                   &
         nOptimizationLoops=gpkde%nOptimizationLoops, &
-        outputFileName=outputFileName  &
-       )
+        outputFileName=outputFileName,               &
+        exportOptimizationVariables=.true.,          &
+        skipErrorConvergence=.true.                 &
+    ) 
     ! TOC
     call system_clock(clockCountStop, clockCountRate, clockCountMax)
     elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
