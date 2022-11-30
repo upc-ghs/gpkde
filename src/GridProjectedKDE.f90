@@ -3055,7 +3055,24 @@ module GridProjectedKDEModule
                     ! Break
                     exit
 
-                else if ( (errorMetric .gt. errorMetricOld)  ) then
+                else if ( & 
+                    (errorRMSE .lt. errorRMSEOld) .and. ( errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
+                    (errorMetric .lt. defaultRelaxedDensityRelativeConvergence )   ) then
+                    ! Criteria
+                    ! 
+                    ! If the RMSE versus the histogram decreases, 
+                    ! but the ALMISE increases it is probably and indication 
+                    ! of high resolution in the particle model. 
+                    ! This has been observed for high number of particles 
+                    ! and error indicators oscillate.
+                        
+                    print *, '!! INCREASED ALMISE DECREASE RMSE AND SOFT CONVERGENCE !!'
+
+                    ! Break
+                    exit
+
+                else if ( (errorMetric .gt. errorMetricOld) .and. & 
+                    (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then
                     ! Criteria
                     ! 
                     ! If the relative change in density increased with 
@@ -3073,7 +3090,7 @@ module GridProjectedKDEModule
 
                     this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-                    print *, '!! INCREASED RELATIVE DENSITY CHANGE !!'
+                    print *, '!! INCREASED RELATIVE DENSITY CHANGE AND SOFT CONVERGENCE !!'
 
                     ! Break
                     exit
