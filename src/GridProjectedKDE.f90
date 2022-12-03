@@ -138,8 +138,6 @@ module GridProjectedKDEModule
         
         doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0
 
-
-
         ! Module constants
         doubleprecision :: supportDimensionConstant
         doubleprecision :: alphaDimensionConstant
@@ -549,19 +547,52 @@ module GridProjectedKDEModule
         class( GridProjectedKDEType ) :: this
         !------------------------------------------------------------------------------
 
+        ! Reset histogram
         call this%histogram%Reset()
-        !call this%kernel%Reset()
 
+        ! If kernel database optimization, drop
+        if ( this%databaseOptimization ) then 
+            call this%DropKernelDatabase()
+            this%kernelSDDatabase1 => null()
+            this%kernelSDDatabase2 => null()
+        end if
 
-        ! MAYBE HERE
-        !deallocate( kernelSmoothing )
-        !deallocate( kernelSigmaSupport )
+        this%binSize = 0
+        this%domainSize = 0
+        this%domainOrigin = 0
+        this%initialSmoothing = 0
+        this%nBins = 0
+        this%dimensionMask = 0
 
-        !deallocate( densityEstimateActiveBins )
-        !deallocate( nEstimateActiveBins )
+        if (allocated( this%kernelSmoothing ) ) deallocate( this%kernelSmoothing )
+        if (allocated( this%kernelSigmaSupport ) ) deallocate( this%kernelSigmaSupport )
+        if (allocated( this%curvatureBandwidth ) ) deallocate( this%curvatureBandwidth )
+        if (allocated( this%densityEstimateGrid )) deallocate( this%densityEstimateGrid )
+        if (allocated( nEstimateGrid )) deallocate( nEstimateGrid )
 
-        !deallocate( densityGridEstimate )
-        !deallocate( nGridEstimate )
+        this%deltaHOverLambda  = 0d0 
+        this%nDeltaHOverLambda = 0d0
+        this%minHOverLambda    = 0d0
+        this%maxHOverLambda    = 0d0
+
+        this%firstRun = .true.
+        this%logKernelDatabase = .false.
+        this%databaseOptimization = .false.
+
+        this%supportDimensionConstant = 0d0
+        this%alphaDimensionConstant = 0d0
+        this%betaDimensionConstant = 0d0
+
+        this%computeBinIds => null()
+
+        this%ComputeKernelDatabaseIndexes      => null()
+        this%ComputeKernelDatabaseFlatIndexes  => null()
+        this%ComputeNetRoughnessEstimate       => null()
+        this%SetKernel => null()
+        this%SetKernelSigma => null()
+        this%SetKernelSD    => null()
+        this%SetKernelSD2D  => null()
+        this%SetKernelSD3D  => null()
 
 
     end subroutine prReset
@@ -2122,10 +2153,6 @@ module GridProjectedKDEModule
 
         ! Dropping database does not mean 
         ! that parameters are resetted
-        !this%deltaHOverLambda  = 0d0 
-        !this%nDeltaHOverLambda = 0d0
-        !this%minHOverLambda    = 0d0
-        !this%maxHOverLambda    = 0d0
 
         return
 
@@ -3114,8 +3141,9 @@ module GridProjectedKDEModule
             end if
 
 
-            if ( exportLoopError ) then 
-               ! Write initial records
+            ! Export loop error
+            if ( exportLoopError ) then
+               ! Write error record 
                call prWriteErrorMetricsRecord( this, errorOutputUnit, m,      &
                      sqrt(sum(relativeDensityChange**2)/this%nComputeBins),   &  
                      sqrt(sum(relativeRoughnessChange**2)/this%nComputeBins), &  
@@ -3126,41 +3154,7 @@ module GridProjectedKDEModule
             end if 
 
 
-            !! Continue to next loop
-            !print *, ' -- MINMAX DENSITY :', m, ' ', minval(densityEstimateArray), maxval(densityEstimateArray)
-            !print *, ' -- MINMAX NDENSITY:', m, ' ', minval(nEstimateArray), maxval(nEstimateArray)
-            !print *, ' -- MINMAX SIGMA   :', m, ' ', minval(kernelSigmaSupportScale), maxval(kernelSigmaSupportScale)
-            !print *, ' -- MINMAX NET ROUG:', m, ' ', minval(netRoughnessArray), maxval(netRoughnessArray)
-            !print *, ' -- MINMAX CURV Ban:', m, ' ', minval(curvatureBandwidth(:,1)), maxval(curvatureBandwidth(:,1))
-            !print *, ' -- MINMAX SMOO Ban:', m, ' ', minval(kernelSmoothing(:,1)), maxval( kernelSmoothing(:,1) )
-            !! CONSIDER RELATIVE .LT. 0.1
-            !print *, ' -- RELATIVE DENS  :', m, ' ', errorMetric
-            !! CONSIDER RELATIVE N LT 0.5
-            !print *, ' -- RELATIVE DENS N:', m, ' ', real(nDensityConvergence)/real(this%nComputeBins)
-            !print *, ' -- RELATIVE ROUG  :', m, ' ', sqrt( sum(relativeRoughnessChange**2)/this%nComputeBins )
-            !print *, ' -- RELATIVE ROUG N:', m, ' ', real(nRoughnessConvergence)/real(this%nComputeBins)
-            !print *, ' -- RELATIVE SMOO  :', m, ' ', sqrt( sum(relativeSmoothingChange**2)/this%nComputeBins )
-            !print *, ' -- RELATIVE SMOO N:', m, ' ', real(nSmoothingConvergence)/real(this%nComputeBins)
-            !print *, ' -- RMSE           :', m, ' ', errorRMSE
-            !print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
-            !print *, ' -- ALMISE PROXY 2 :', m, ' ', sqrt(sum(errorMetricArray**2)/this%nComputeBins)
-
-            ! CONSIDER LT 0.05
-            !where( ( netRoughnessArray .ne. 0d0 ) .and. & 
-            !        ( netRoughnessArrayOld .ne. 0d0 ) )
-            !    errorMetricArray =   abs(netRoughnessArray/maxval(netRoughnessArray) & 
-            !        - netRoughnessArrayOld/maxval(netRoughnessArrayOld) ) 
-            !end where
-            !errorMetricOld = sqrt( sum( errorMetricArray**2 )/this%nComputeBins )
-            !print *, ' -- ROUGHNESS SHAPE:', m, ' ', errorMetricOld
-            !where( ( densityEstimateArray .ne. 0d0 ) .and. & 
-            !        ( densityEstimateArrayOld .ne. 0d0 ) )
-            !     errorMetricArray = abs(densityEstimateArray/maxval(densityEstimateArray) &
-            !                 - densityEstimateArrayOld/maxval(densityEstimateArrayOld) )
-            !end where
-            !errorMetricOld = sqrt( sum( errorMetricArray**2 )/this%nComputeBins )
-            !print *, ' -- DENSITY SHAPE:', m, ' ', errorMetricOld
- 
+            ! Update old error metrics
             errorALMISEProxyOld      = errorALMISEProxy
             errorRMSEOld             = errorRMSE
             errorMetricOld           = errorMetric
@@ -3172,6 +3166,7 @@ module GridProjectedKDEModule
             nRoughnessConvergenceOld = nRoughnessConvergence
             nSmoothingConvergenceOld = nSmoothingConvergence
             call prComputeKernelSmoothingScale( this, kernelSmoothingOld, kernelSmoothingScaleOld )
+
 
             ! Export optimization variables
             if ( exportVariables ) then
