@@ -34,10 +34,12 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 5d0
+    doubleprecision :: defaultInitialSmoothingFactor = 1d0
     doubleprecision :: defaultDensityScale           = 1d0
-    doubleprecision :: defaultMinLimitRoughness      = 1d-4
-    doubleprecision :: defaultMaxLimitRoughness      = 1d4
+    !doubleprecision :: defaultMinLimitRoughness      = 1d-4
+    !doubleprecision :: defaultMaxLimitRoughness      = 1d4
+    doubleprecision :: defaultMinLimitRoughness      = 1d-20
+    doubleprecision :: defaultMaxLimitRoughness      = 1d20
     doubleprecision :: defaultMaxSmoothingGrowth     = 5d-1
     doubleprecision :: defaultMaxKernelShape         = 10d0
     doubleprecision :: defaultMinKernelShape         = 5d-1
@@ -361,6 +363,13 @@ module GridProjectedKDEModule
               this%nBins, this%binSize, &
            dimensionMask=dimensionMask, & 
          domainOrigin=this%domainOrigin )
+
+
+        print *, 'DIMENSION MASK : ', dimensionMask
+        print *, 'NBINS : ', this%nBins
+        print *, 'NDIM : ', nDIm
+        print *, 'VOLUME : ', this%histogram%binVolume
+        print *, 'BINDISTANCE : ', this%histogram%binDistance
 
         
      print *, ' HISTOGRAM INITIALIZE '
@@ -2526,7 +2535,7 @@ module GridProjectedKDEModule
         !else
             kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
         !end if
-        !print *, ' -- KERNEL SMOOTHING: ', kernelSmoothing(:,1)
+        print *, ' -- KERNEL SMOOTHING: ', kernelSmoothing(:,1)
 
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
@@ -2619,6 +2628,7 @@ module GridProjectedKDEModule
         ! Update smoothing scale
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
 
+        print *, 'MAX KERNEL ', maxval( kernelSmoothing(:,1) )
 
 
         ! Initialize density grid
@@ -2674,10 +2684,14 @@ module GridProjectedKDEModule
             densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
 
-        
+        print *, 'MAX DENSITY ', maxval( densityEstimateArray ), sum(densityEstimateArray)/this%nComputeBins
+        print *, 'MAX RAW DENSITY ', maxval( rawDensity ), sum( rawDensity )/this%nComputeBins, sum(rawDensity)
+
+
         ! Error monitoring
         squareDensityDiff       = (densityEstimateArray - rawDensity)**2
         errorRMSE               = sqrt(sum( squareDensityDiff )/this%nComputeBins)
+
 
         ! Initialize error metric 
         errorMetricArray = 0d0
