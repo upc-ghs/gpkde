@@ -702,7 +702,11 @@ contains
         ! dimension is zero
 
         ! This means that matrixPositiveShape will have a zero in the compressed dimension
-        this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
+        where ( this%binSize .ne. 0d0 ) 
+            this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
+        elsewhere
+            this%matrixPositiveShape = 0
+        end where
 
         allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
         allocate( zPYGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
@@ -765,7 +769,10 @@ contains
         end if
 
         ! Compute normalized smoothing bandwidth/lambda
-        hLambda = this%bandwidth/this%binSize
+        hLambda = 0d0
+        where( this%binSize .ne. 0d0 ) 
+            hLambda = this%bandwidth/this%binSize
+        end where
 
         ! Compute kernel
         zeroPositiveMatrix(:,:,:) = (0.5**nDim)
@@ -842,7 +849,10 @@ contains
         end if
 
         ! Compute normalized smoothing bandwidth/lambda
-        hLambda = this%bandwidth/this%binSize
+        hLambda = 0d0
+        where( this%binSize .ne. 0d0 ) 
+            hLambda = this%bandwidth/this%binSize
+        end where
 
 
         ! Compute kernel
@@ -937,7 +947,10 @@ contains
         end if
 
         ! Compute normalized smoothing bandwidth/lambda
-        hLambda = this%bandwidth/this%binSize
+        hLambda = 0d0
+        where( this%binSize .ne. 0d0 ) 
+            hLambda = this%bandwidth/this%binSize
+        end where
 
 
         ! Compute kernel
@@ -1031,8 +1044,13 @@ contains
             this%matrix = 0d0
             return
         end if
+
+
         ! Compute normalized smoothing bandwidth/lambda
-        hLambda = this%bandwidth/this%binSize
+        hLambda = 0d0
+        where( this%binSize .ne. 0d0 ) 
+            hLambda = this%bandwidth/this%binSize
+        end where
 
 
         ! Compute kernel

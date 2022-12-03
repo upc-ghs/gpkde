@@ -13,16 +13,15 @@ module HistogramModule
 
         ! Properties
         integer, dimension(:,:,:), allocatable     :: counts 
-        integer, dimension(:), allocatable         :: nBins
-        doubleprecision, dimension(:), allocatable :: binSize
+        integer, dimension(3)                      :: nBins
+        doubleprecision, dimension(3)              :: binSize
         doubleprecision                            :: binVolume
         doubleprecision                            :: binDistance
         integer, dimension(:,:), allocatable       :: activeBinIds
         integer                                    :: nActiveBins
         integer, dimension(:,:), allocatable       :: boundingBoxBinIds
         integer                                    :: nBBoxBins 
-        doubleprecision, dimension(:), allocatable :: domainOrigin ! of the reconstruction grid 
-        !doubleprecision, dimension(3)              :: domainOrigin ! of the reconstruction grid 
+        doubleprecision, dimension(3)              :: domainOrigin ! of the reconstruction grid 
 
     contains
 
@@ -50,18 +49,13 @@ contains
         !------------------------------------------------------------------------------
         implicit none 
         class(HistogramType)            :: this
-        integer, dimension(:)           :: nBins
-        doubleprecision, dimension(:)   :: binSize
-        integer                         :: nBinsShape
+        integer, dimension(3)           :: nBins
+        doubleprecision, dimension(3)   :: binSize
         integer, dimension(3), optional :: dimensionMask
         integer, dimension(3)           :: locDimensionMask
-        doubleprecision, dimension(:), optional :: domainOrigin
+        doubleprecision, dimension(3), optional :: domainOrigin
         !------------------------------------------------------------------------------
 
-        nBinsShape = size( nBins ) 
-        allocate(   this%nBins( nBinsShape ) ) 
-        allocate( this%binSize( nBinsShape ) ) 
-        allocate( this%domainOrigin( nBinsShape ) ) 
 
         ! dimensionMask
         if( present(dimensionMask) ) then 
@@ -107,8 +101,9 @@ contains
         this%binSize     = 0d0
         this%binVolume   = 0d0
 
-        deallocate( this%counts )
-        deallocate( this%activeBinIds ) 
+        if( allocated(this%counts) ) deallocate( this%counts )
+        if( allocated(this%activeBinIds) ) deallocate( this%activeBinIds ) 
+        if( allocated(this%boundingBoxBinIds) ) deallocate( this%boundingBoxBinIds ) 
         
 
     end subroutine prReset
