@@ -2366,7 +2366,7 @@ module GridProjectedKDEModule
         character(len=20)  :: loopId
         character(len=20)  :: auxChar
         logical            :: exportVariables, skipErrorBreak = .false.
-        logical            :: exportLoopError = .true.
+        logical            :: exportLoopError = .false.
         integer            :: errorOutputUnit = 999 
 
         ! Optimization error monitoring 
