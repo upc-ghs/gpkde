@@ -492,13 +492,6 @@ module GridProjectedKDEModule
         !    this%maxLimitRoughness /) )
 
 
-        print *, '###########################################'
-        print *, 'MAX H ROUGHNESS: ', maxHRoughness
-        print *, 'MIN H ROUGHNESS: ', minHRoughness
-        print *, 'MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
-        print *, 'MIN LIMIT ROUGHNESS: ', this%minLimitRoughness
-
-
         ! Initialize kernel database 
         if ( this%databaseOptimization ) then
 
@@ -2138,7 +2131,8 @@ module GridProjectedKDEModule
                                                       particleGroupId, &
                                               persistentKernelDatabase,&
                                            exportOptimizationVariables,&
-                                                  skipErrorConvergence )
+                                                  skipErrorConvergence,&
+                                                           unitVolume  )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -2170,9 +2164,11 @@ module GridProjectedKDEModule
         logical, intent(in), optional :: persistentKernelDatabase
         logical, intent(in), optional :: exportOptimizationVariables
         logical, intent(in), optional :: skipErrorConvergence
+        logical, intent(in), optional :: unitVolume
         logical :: persistKDB = .true.
         logical :: locExportOptimizationVariables =.false.
         logical :: locSkipErrorConvergence =.false.
+        logical :: locUnitVolume =.false.
 
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
@@ -2201,6 +2197,10 @@ module GridProjectedKDEModule
         if ( present( skipErrorConvergence ) ) then
             locSkipErrorConvergence = skipErrorConvergence
         end if
+
+        if ( present( unitVolume ) ) then 
+            locUnitVolume = unitVolume
+        end if 
 
         ! Histogram quantities
         call this%histogram%ComputeCounts( dataPoints )
@@ -2315,7 +2315,14 @@ module GridProjectedKDEModule
         else if ( present( outputFileName ) ) then  
             call this%ExportDensity( outputFileName )
         end if
-       
+      
+        ! If unit volume, modify density to 
+        ! express it as mass
+        if ( locUnitVolume ) then  
+            this%densityEstimateGrid = &
+            this%densityEstimateGrid*this%histogram%binVolume
+        end if
+
 
         ! Done
         return
