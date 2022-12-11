@@ -106,9 +106,12 @@ module GridProjectedKDEModule
         integer        , dimension(3)   :: nBins
         integer        , dimension(3)   :: dimensionMask
     
-        ! Variables 
+        ! Variables
+        ! Consider replacing some for a common grid, 
+        ! replacing values when necessary
         doubleprecision, dimension(:)    , allocatable :: densityEstimate
         doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
+        doubleprecision, dimension(:,:,:), allocatable :: rawDensityEstimateGrid
         !doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
         doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
         doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
@@ -2127,12 +2130,10 @@ module GridProjectedKDEModule
 
     ! Density computation manager 
     subroutine prComputeDensity( this, dataPoints, nOptimizationLoops, &
-                         outputFileName, outputFileUnit, outputDataId, &
-                                                      particleGroupId, &
-                                              persistentKernelDatabase,&
-                                           exportOptimizationVariables,&
-                                                  skipErrorConvergence,&
-                                                           unitVolume  )
+        outputFileName, outputFileUnit, outputDataId, particleGroupId, &
+                persistentKernelDatabase, exportOptimizationVariables, & 
+                                     skipErrorConvergence, unitVolume, &
+                                 scalingFactor, histogramScalingFactor )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -2165,10 +2166,15 @@ module GridProjectedKDEModule
         logical, intent(in), optional :: exportOptimizationVariables
         logical, intent(in), optional :: skipErrorConvergence
         logical, intent(in), optional :: unitVolume
+        doubleprecision, intent(in), optional :: scalingFactor
+        doubleprecision, intent(in), optional :: histogramScalingFactor
         logical :: persistKDB = .true.
         logical :: locExportOptimizationVariables =.false.
         logical :: locSkipErrorConvergence =.false.
         logical :: locUnitVolume =.false.
+        doubleprecision :: locScalingFactor = 1d0
+        logical         :: locScaleHistogram = .false.
+        doubleprecision :: locHistogramScalingFactor = 1d0
 
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
@@ -2201,6 +2207,15 @@ module GridProjectedKDEModule
         if ( present( unitVolume ) ) then 
             locUnitVolume = unitVolume
         end if 
+
+        if ( present( scalingFactor ) ) then 
+            locScalingFactor = scalingFactor
+        end if
+
+        if ( present( histogramScalingFactor ) ) then
+            locScaleHistogram = .true. 
+            locHistogramScalingFactor = histogramScalingFactor
+        end if
 
         ! Histogram quantities
         call this%histogram%ComputeCounts( dataPoints )
@@ -2323,6 +2338,17 @@ module GridProjectedKDEModule
             this%densityEstimateGrid*this%histogram%binVolume
         end if
 
+
+        if ( locScalingFactor .ne. 0d0 ) then
+            ! Proxy for a common "mass" 
+            this%densityEstimateGrid = this%densityEstimateGrid*locScalingFactor
+        end if
+
+        if ( locScaleHistogram ) then
+            ! Proxy for a common "mass"
+            if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
+            this%rawDensityEstimateGrid = this%histogram%counts*locHistogramScalingFactor
+        end if 
 
         ! Done
         return
