@@ -34,13 +34,13 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 1d0
+    doubleprecision :: defaultInitialSmoothingFactor = 3d0
     doubleprecision :: defaultDensityScale           = 1d0
     !doubleprecision :: defaultMinLimitRoughness      = 1d-4
     !doubleprecision :: defaultMaxLimitRoughness      = 1d4
-    doubleprecision :: defaultMinLimitRoughness      = 1d-20
-    doubleprecision :: defaultMaxLimitRoughness      = 1d20
-    doubleprecision :: defaultMaxSmoothingGrowth     = 5d-1
+    doubleprecision :: defaultMinLimitRoughness      = 1d-40
+    doubleprecision :: defaultMaxLimitRoughness      = 1d40
+    doubleprecision :: defaultMaxSmoothingGrowth     = 10d0
     doubleprecision :: defaultMaxKernelShape         = 10d0
     doubleprecision :: defaultMinKernelShape         = 5d-1
 
@@ -363,22 +363,6 @@ module GridProjectedKDEModule
               this%nBins, this%binSize, &
            dimensionMask=dimensionMask, & 
          domainOrigin=this%domainOrigin )
-
-
-        print *, 'DIMENSION MASK : ', dimensionMask
-        print *, 'NBINS : ', this%nBins
-        print *, 'NDIM : ', nDIm
-        print *, 'VOLUME : ', this%histogram%binVolume
-        print *, 'BINDISTANCE : ', this%histogram%binDistance
-
-        
-     print *, ' HISTOGRAM INITIALIZE '
-     print *, ' NBINS : ', this%nBins
-     print *, ' BINSIZE : ', this%binSize
-     print *, ' DIMENSIONMASK : ', dimensionMask
-     print *, ' DOMAINORIGIN : ', this%domainOrigin
-
-
 
         
         ! Process optional arguments
@@ -2328,7 +2312,7 @@ module GridProjectedKDEModule
         ! Write output files
         if ( present( outputFileUnit ) .and. present( outputDataId ) .and. present( particleGroupId )) then
             call this%ExportDensityUnit( outputFileUnit, outputDataId, particleGroupId )
-        else 
+        else if ( present( outputFileName ) ) then  
             call this%ExportDensity( outputFileName )
         end if
        
