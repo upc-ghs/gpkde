@@ -2133,7 +2133,8 @@ module GridProjectedKDEModule
         outputFileName, outputFileUnit, outputDataId, particleGroupId, &
                 persistentKernelDatabase, exportOptimizationVariables, & 
                                      skipErrorConvergence, unitVolume, &
-                                 scalingFactor, histogramScalingFactor )
+                                 scalingFactor, histogramScalingFactor,&
+                                           weightedHistogram, weights  )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -2166,8 +2167,10 @@ module GridProjectedKDEModule
         logical, intent(in), optional :: exportOptimizationVariables
         logical, intent(in), optional :: skipErrorConvergence
         logical, intent(in), optional :: unitVolume
+        logical, intent(in), optional :: weightedHistogram
         doubleprecision, intent(in), optional :: scalingFactor
         doubleprecision, intent(in), optional :: histogramScalingFactor
+        doubleprecision, dimension(:), intent(in), optional :: weights
         logical :: persistKDB = .true.
         logical :: locExportOptimizationVariables =.false.
         logical :: locSkipErrorConvergence =.false.
@@ -2175,6 +2178,8 @@ module GridProjectedKDEModule
         doubleprecision :: locScalingFactor = 1d0
         logical         :: locScaleHistogram = .false.
         doubleprecision :: locHistogramScalingFactor = 1d0
+        logical         :: locWeightedHistogram = .false.
+        integer, dimension(2) :: dataPointsShape
 
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
@@ -2217,10 +2222,29 @@ module GridProjectedKDEModule
             locHistogramScalingFactor = histogramScalingFactor
         end if
 
-        ! Histogram quantities
-        call this%histogram%ComputeCounts( dataPoints )
+        if ( present( weightedHistogram ) ) then
+            locWeightedHistogram = weightedHistogram
+        end if
 
-        
+        if ( (locWeightedHistogram).and.(.not.present(weights)) ) then 
+            print *, 'ERROR: weightedHistogram requires weights and were not given. Stop.'
+            call exit(0)
+        end if 
+
+        dataPointsShape = shape(dataPoints)
+        if ( (locWeightedHistogram).and.(size(weights).ne.dataPointsShape(1)) ) then 
+            print *, 'ERROR: given weights are not the same length than datapoints. Stop.'
+            call exit(0)
+        end if
+
+        if ( locWeightedHistogram ) then 
+          ! Cummulative histogram-like quantities
+          call this%histogram%ComputeCountsWeighted( dataPoints, weights )
+        else
+          ! Histogram quantities
+          call this%histogram%ComputeCounts( dataPoints )
+        end if
+
         ! Bounding box or active bins
         if ( useBoundingBox ) then 
 
@@ -2338,7 +2362,6 @@ module GridProjectedKDEModule
             this%densityEstimateGrid*this%histogram%binVolume
         end if
 
-
         if ( locScalingFactor .ne. 0d0 ) then
             ! Proxy for a common "mass" 
             this%densityEstimateGrid = this%densityEstimateGrid*locScalingFactor
@@ -2348,6 +2371,12 @@ module GridProjectedKDEModule
             ! Proxy for a common "mass"
             if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
             this%rawDensityEstimateGrid = this%histogram%counts*locHistogramScalingFactor
+
+            ! if scaled histogram, and not as unit volume
+            ! transform to rawDensity 
+            if( .not. locUnitVolume ) then 
+              this%rawDensityEstimateGrid = this%rawDensityEstimateGrid/this%histogram%binVolume
+            end if 
         end if 
 
         ! Done
@@ -4374,7 +4403,8 @@ module GridProjectedKDEModule
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
                     ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES/COLUMNS
-                    write(outputUnit,"(I8,I8,I8,I8,I6,es18.9e3,I8)") outputDataId, particleGroupId, &
+                   ! write(outputUnit,"(I8,I8,I8,I8,I6,es18.9e3,I8)") outputDataId, particleGroupId, &
+                    write(outputUnit,"(I8,I8,I8,I8,I6,2es18.9e3)") outputDataId, particleGroupId, &
                         ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
                                        this%histogram%counts( ix, iy, iz ) 
                 end do

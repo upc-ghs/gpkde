@@ -12,7 +12,8 @@ module HistogramModule
     type, public :: HistogramType
 
         ! Properties
-        integer, dimension(:,:,:), allocatable     :: counts 
+        doubleprecision, dimension(:,:,:), allocatable :: counts 
+        !integer, dimension(:,:,:), allocatable     :: counts 
         integer, dimension(3)                      :: nBins
         doubleprecision, dimension(3)              :: binSize
         doubleprecision                            :: binVolume
@@ -29,6 +30,7 @@ module HistogramModule
         procedure :: Initialize    => prInitialize
         procedure :: Reset         => prReset
         procedure :: ComputeCounts => prComputeCounts
+        procedure :: ComputeCountsWeighted => prComputeCountsWeighted
         procedure :: Export        => prExport
         procedure :: ComputeActiveBinIds => prComputeActiveBinIds
         procedure :: ComputeBoundingBox  => prComputeBoundingBox
@@ -146,12 +148,59 @@ contains
 
             ! Increase counter
             this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
-                this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1
+                this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1d0
+            !this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+            !    this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1
 
         end do 
        
 
     end subroutine prComputeCounts
+
+
+    subroutine prComputeCountsWeighted( this, dataPoints, weights )
+        !------------------------------------------------------------------------------
+        ! 
+        !
+        !------------------------------------------------------------------------------
+        ! Specifications 
+        !------------------------------------------------------------------------------
+        implicit none 
+        class(HistogramType) :: this
+        doubleprecision, dimension(:,:), intent(in) :: dataPoints
+        doubleprecision, dimension(:), intent(in)   :: weights
+        integer, dimension(2)              :: nPointsShape
+        integer                            :: np, ix, iy, iz, nd
+        integer, dimension(3)              :: gridIndexes
+        !------------------------------------------------------------------------------
+
+        ! Reset counts
+        this%counts  = 0
+        nPointsShape = shape(dataPoints)
+
+        ! This could be done with OpenMP (?) 
+        do np = 1, nPointsShape(1)
+
+            gridIndexes = 1
+            do nd = 1, 3
+                if ( this%nBins(nd) .gt. 1 ) then
+                    gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
+                end if 
+            end do
+
+            ! Points outside the grid are not taken into account
+            if( any( gridIndexes .gt. this%nBins ) .or. any( gridIndexes .le. 0 ) ) then
+                cycle
+            end if
+
+            ! Increase counter
+            this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+                this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)
+
+        end do 
+       
+
+    end subroutine prComputeCountsWeighted
 
 
 
@@ -282,7 +331,8 @@ contains
             do iy = 1, this%nBins(2)
                 do iz = 1, this%nBins(3)
                     if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
-                    write(histogramUnit,"(I6,I6,I6,I6)") ix, iy, iz, this%counts( ix, iy, iz )
+                    write(histogramUnit,"(I6,I6,I6,es18.9e3)") ix, iy, iz, this%counts( ix, iy, iz )
+                    !write(histogramUnit,"(I6,I6,I6,I6)") ix, iy, iz, this%counts( ix, iy, iz )
                 end do
             end do
         end do
