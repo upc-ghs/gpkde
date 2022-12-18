@@ -26,6 +26,7 @@ program testkernel
     doubleprecision :: minHOverLambda
     doubleprecision :: deltaHOverLambda
     doubleprecision :: densityRelativeConvergence
+    doubleprecision :: maxSmoothingGrowth
      
 
 
@@ -42,8 +43,17 @@ program testkernel
     integer :: line_no, ix
     character(len=200) :: outputFileName
 
-    character(len=200) :: particlesFileName = 'particles_10_2D.csv'
-    integer            :: nlines = 11200
+    character(len=200) :: particlesFileName = 'particles_20_2D.csv'
+    integer            :: nlines = 280000
+    !character(len=200) :: particlesFileName = 'particles_1_2D.csv'
+    !integer            :: nlines = 4480000
+    !character(len=200) :: particlesFileName = 'particles_2_2D.csv'
+    !integer            :: nlines = 1120000
+    !character(len=200) :: particlesFileName = 'particles_100_2D.csv'
+    !integer            :: nlines = 280000
+
+    !character(len=200) :: particlesFileName = 'particles_200_2D.csv'
+    !integer            :: nlines = 70000
     doubleprecision, dimension(:,:), allocatable :: dataArray
     doubleprecision, dimension(:,:), allocatable :: reDataArray
     integer :: nOptimizationLoops
@@ -55,12 +65,15 @@ program testkernel
     dataArray = 0d0
     reDataArray = 0d0
 
+
     ! KDB LOG
     maxHOverLambda     = 20.0
     minHOverLambda     = 1
     deltaHOverLambda   = 0.0001
-    nOptimizationLoops = 20
-    densityRelativeConvergence = 0.001
+    nOptimizationLoops = 10
+    maxSmoothingGrowth = 5d-1
+    densityRelativeConvergence = 0.01
+
 
     ! TIC
     call system_clock(clockCountStart, clockCountRate, clockCountMax)
@@ -94,8 +107,9 @@ program testkernel
             anisotropicSigmaSupport = .false.,            &
             nOptimizationLoops      = nOptimizationLoops, & 
             domainOrigin            = domainOrigin,       & 
-            densityRelativeConvergence = densityRelativeConvergence & 
-            )
+            densityRelativeConvergence = densityRelativeConvergence, &
+            maxSmoothingGrowth         = maxSmoothingGrowth & 
+        )
 
     print *, '-------------------------------------------------------'
     ! TIC

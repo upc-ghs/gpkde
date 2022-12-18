@@ -138,6 +138,7 @@ module GridProjectedKDEModule
         doubleprecision :: minKernelShape
         doubleprecision :: maxKernelShape
         logical :: firstRun = .true. 
+        integer, allocatable, dimension(:,:) :: outputBinIds
         
         doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0
 
@@ -2581,8 +2582,6 @@ module GridProjectedKDEModule
         !else
             kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
         !end if
-        print *, ' -- KERNEL SMOOTHING: ', kernelSmoothing(:,1)
-
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
         kernelSigmaSupport      = spread( kernelSigmaSupportScale, 1, 3 )
@@ -4394,8 +4393,14 @@ module GridProjectedKDEModule
         integer, intent(in) :: outputDataId
         integer, intent(in) :: particleGroupId
         integer :: ix, iy, iz, n
+        integer :: countNonZero, counter
         !------------------------------------------------------------------------------
 
+        counter      = 0
+        countNonZero = count(this%densityEstimateGrid /=0d0)
+        if( allocated( this%outputBinIds ) ) deallocate( this%outputBinIds )
+        allocate( this%outputBinIds(countNonZero,3) )
+         
 
         ! Following column-major nesting
         do iz = 1, this%nBins(3)
@@ -4407,6 +4412,8 @@ module GridProjectedKDEModule
                     write(outputUnit,"(I8,I8,I8,I8,I6,2es18.9e3)") outputDataId, particleGroupId, &
                         ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
                                        this%histogram%counts( ix, iy, iz ) 
+                    counter = counter + 1 
+                    this%outputBinIds(counter,:) = (/ix,iy,iz/)
                 end do
             end do
         end do

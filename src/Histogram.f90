@@ -219,7 +219,8 @@ contains
         ! Reset icount
         icount = 1
 
-        this%nActiveBins = count( this%counts/=0 )
+        this%nActiveBins = count( this%counts/=0d0 )
+        !this%nActiveBins = count( this%counts/=0 )
 
         ! Reallocate activeBinIds to new size 
         if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
@@ -230,7 +231,8 @@ contains
         do iz = 1, this%nBins(3)
             do iy = 1, this%nBins(2)
                 do ix = 1, this%nBins(1)
-                    if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
+                    if ( this%counts( ix, iy, iz ) .eq. 0d0 ) cycle
+                    !if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
                     this%activeBinIds( :, icount ) = [ ix, iy, iz ]
                     icount = icount + 1
                 end do
