@@ -2192,7 +2192,7 @@ module GridProjectedKDEModule
         if ( present( nOptimizationLoops ) ) then 
             localNOptimizationLoops = nOptimizationLoops
         else 
-            localNOptimizationLoops = defaultNOptLoops
+            localNOptimizationLoops = this%nOptimizationLoops
         end if 
 
         if ( present( outputFileName ) ) then 
@@ -2538,8 +2538,9 @@ module GridProjectedKDEModule
         if ( present( nOptimizationLoops ) ) then 
             nOptLoops = nOptimizationLoops
         else 
-            nOptLoops = defaultNOptLoops
+            nOptLoops = this%nOptimizationLoops
         end if 
+
         if ( present( skipErrorConvergence ) ) then 
             skipErrorBreak = skipErrorConvergence
         end if 
