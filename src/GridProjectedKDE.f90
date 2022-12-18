@@ -34,7 +34,7 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 3d0
+    doubleprecision :: defaultInitialSmoothingFactor = 1d0
     doubleprecision :: defaultDensityScale           = 1d0
     !doubleprecision :: defaultMinLimitRoughness      = 1d-4
     !doubleprecision :: defaultMaxLimitRoughness      = 1d4
