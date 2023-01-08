@@ -3203,7 +3203,7 @@ module GridProjectedKDEModule
             !print *, ' -- RELATIVE SMOO  :', m, ' ', sqrt( sum(relativeSmoothingChange**2)/this%nComputeBins )
             !print *, ' -- RELATIVE SMOO N:', m, ' ', real(nSmoothingConvergence)/real(this%nComputeBins)
             !print *, ' -- RMSE           :', m, ' ', errorRMSE
-            !print *, ' -- ALMISE PROXY   :', m, ' ', sum(errorMetricArray)/this%nComputeBins
+            !print *, ' -- ALMISE PROXY   :', m, ' ', errorALMISEProxy
             !print *, ' -- ALMISE PROXY 2 :', m, ' ', sqrt(sum(errorMetricArray**2)/this%nComputeBins)
 
             ! CONSIDER LT 0.05
@@ -4369,7 +4369,8 @@ module GridProjectedKDEModule
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
                     ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-                    write(outputUnit,"(I8,I8,I8,es18.9e3,I8)") ix, iy, iz, & 
+                    !write(outputUnit,"(I8,I8,I8,es18.9e3,I8)") ix, iy, iz, & 
+                    write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
                       this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
                 end do
             end do
