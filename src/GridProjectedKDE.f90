@@ -2674,8 +2674,6 @@ module GridProjectedKDEModule
         ! Update smoothing scale
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
 
-        print *, 'MAX KERNEL ', maxval( kernelSmoothing(:,1) )
-
 
         ! Initialize density grid
         densityEstimateGrid = 0d0
