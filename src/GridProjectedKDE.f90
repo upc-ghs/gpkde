@@ -34,7 +34,7 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 3d0
+    doubleprecision :: defaultInitialSmoothingFactor = 1d0
     doubleprecision :: defaultDensityScale           = 1d0
     !doubleprecision :: defaultMinLimitRoughness      = 1d-4
     !doubleprecision :: defaultMaxLimitRoughness      = 1d4
@@ -138,6 +138,7 @@ module GridProjectedKDEModule
         doubleprecision :: minKernelShape
         doubleprecision :: maxKernelShape
         logical :: firstRun = .true. 
+        integer, allocatable, dimension(:,:) :: outputBinIds
         
         doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0
 
@@ -2191,7 +2192,7 @@ module GridProjectedKDEModule
         if ( present( nOptimizationLoops ) ) then 
             localNOptimizationLoops = nOptimizationLoops
         else 
-            localNOptimizationLoops = defaultNOptLoops
+            localNOptimizationLoops = this%nOptimizationLoops
         end if 
 
         if ( present( outputFileName ) ) then 
@@ -2537,8 +2538,9 @@ module GridProjectedKDEModule
         if ( present( nOptimizationLoops ) ) then 
             nOptLoops = nOptimizationLoops
         else 
-            nOptLoops = defaultNOptLoops
+            nOptLoops = this%nOptimizationLoops
         end if 
+
         if ( present( skipErrorConvergence ) ) then 
             skipErrorBreak = skipErrorConvergence
         end if 
@@ -2581,8 +2583,6 @@ module GridProjectedKDEModule
         !else
             kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
         !end if
-        print *, ' -- KERNEL SMOOTHING: ', kernelSmoothing(:,1)
-
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
         kernelSigmaSupportScale = 3d0*kernelSmoothingScale
         kernelSigmaSupport      = spread( kernelSigmaSupportScale, 1, 3 )
@@ -2673,8 +2673,6 @@ module GridProjectedKDEModule
                                                                  kernelSmoothingShape )
         ! Update smoothing scale
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
-
-        print *, 'MAX KERNEL ', maxval( kernelSmoothing(:,1) )
 
 
         ! Initialize density grid
@@ -4395,8 +4393,14 @@ module GridProjectedKDEModule
         integer, intent(in) :: outputDataId
         integer, intent(in) :: particleGroupId
         integer :: ix, iy, iz, n
+        integer :: countNonZero, counter
         !------------------------------------------------------------------------------
 
+        counter      = 0
+        countNonZero = count(this%densityEstimateGrid /=0d0)
+        if( allocated( this%outputBinIds ) ) deallocate( this%outputBinIds )
+        allocate( this%outputBinIds(countNonZero,3) )
+         
 
         ! Following column-major nesting
         do iz = 1, this%nBins(3)
@@ -4408,6 +4412,8 @@ module GridProjectedKDEModule
                     write(outputUnit,"(I8,I8,I8,I8,I6,2es18.9e3)") outputDataId, particleGroupId, &
                         ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
                                        this%histogram%counts( ix, iy, iz ) 
+                    counter = counter + 1 
+                    this%outputBinIds(counter,:) = (/ix,iy,iz/)
                 end do
             end do
         end do
