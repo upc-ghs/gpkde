@@ -18,7 +18,7 @@ module GridProjectedKDEModule
     ! Default configuration
     integer, parameter :: defaultKernelRange   = 3
     integer, parameter :: defaultKernelSDRange = 4
-    integer, parameter :: defaultNOptLoops     = 10
+    integer, parameter :: defaultNOptLoops     = 2
 
     logical, parameter :: defaultFlatKernelDatabase   = .true.
     logical, parameter :: defaultDatabaseOptimization = .true.
@@ -34,7 +34,7 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 1d0
+    doubleprecision :: defaultInitialSmoothingFactor = 2d0
     doubleprecision :: defaultDensityScale           = 1d0
     !doubleprecision :: defaultMinLimitRoughness      = 1d-4
     !doubleprecision :: defaultMaxLimitRoughness      = 1d4
@@ -2673,8 +2673,6 @@ module GridProjectedKDEModule
                                                                  kernelSmoothingShape )
         ! Update smoothing scale
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
-
-        print *, 'MAX KERNEL ', maxval( kernelSmoothing(:,1) )
 
 
         ! Initialize density grid
