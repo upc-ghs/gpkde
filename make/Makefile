@@ -18,12 +18,7 @@ ${SOURCEDIR1}
 
 # Define the Fortran compile flags
 FC = gfortran
-#FFLAGS = -O2 -g -pg -fbacktrace -fopenmp -Wall -Wextra -fbounds-check -fcheck=bounds -fcheck=all
-#FFLAGS =  -g -pg -fbacktrace -fopenmp
-#FFLAGS = -g -O2 -fbacktrace -fopenmp
-#FFLAGS = -g -pg -fbacktrace -fopenmp -Wall -Wextra -fcheck=all
-#FFLAGS = -g -fbacktrace -fopenmp -Wall -Wextra -fcheck=all 
-FFLAGS = -g -O2 -fbacktrace -fopenmp -fcheck=all -ffpe-trap=invalid,zero,overflow,underflow
+FFLAGS = -O2 -fbacktrace -fopenmp
 
 # Define the C compile flags
 CC = gcc
@@ -37,15 +32,8 @@ $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridCell.o \
 $(OBJDIR)/GridProjectedKDE.o \
-$(OBJDIR)/testbounded.o
-#$(OBJDIR)/testorigin.o
-#$(OBJDIR)/testboundarymatrix.o
-#$(OBJDIR)/testbbox.o
-#$(OBJDIR)/testwithparameters.o
-#$(OBJDIR)/testkerneldbreal.o
-#$(OBJDIR)/testgpkdeomp.o
-#$(OBJDIR)/testgpkde.o
-#$(OBJDIR)/testunfoldmatrix.o
+$(OBJDIR)/test2d.o
+
 
 # Define task functions
 
