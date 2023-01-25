@@ -356,7 +356,7 @@ module GridProjectedKDEModule
 
         ! Initialize module dimensions
         call prInitializeModuleDimensions( this, nDim, dimensionMask ) 
-        
+
 
         ! Initialize module constants, uses nDim
         call this%InitializeModuleConstants()

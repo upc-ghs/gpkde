@@ -133,8 +133,13 @@ contains
         ! This could be done with OpenMP (?) 
         do np = 1, nPointsShape(1)
 
-            gridIndexes = 0
+            gridIndexes = 1
             do nd = 1, 3
+              ! Detection of which dims should 
+              ! be computed MUST be done only once
+              ! and avoid this continuous checking
+              ! COME ON !
+              if ( this%binSize(nd) .le. 0d0 ) cycle
               gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
             end do
 
@@ -178,8 +183,13 @@ contains
         ! This could be done with OpenMP (?) 
         do np = 1, nPointsShape(1)
 
-            gridIndexes = 0
-            do nd = 1, 3
+            gridIndexes = 1
+            do nd = 1,3
+              ! Detection of which dims should 
+              ! be computed MUST be done only once
+              ! and avoid this continuous checking
+              ! COME ON !
+              if ( this%binSize(nd) .le. 0d0 ) cycle
               gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
             end do
 
