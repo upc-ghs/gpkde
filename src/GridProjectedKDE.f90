@@ -665,7 +665,6 @@ module GridProjectedKDEModule
         integer :: n, nd, currentDim
         !------------------------------------------------------------------------------
 
-
         ! Determine dimensions based on number of bins
         do n = 1,3
             if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
@@ -675,7 +674,6 @@ module GridProjectedKDEModule
 
 
         ! Identify directions
-
         ! 1D
         if ( nDim .eq. 1 ) then 
             ! Relate x,y,z dimensions to 1 dimensions
@@ -2134,7 +2132,8 @@ module GridProjectedKDEModule
         outputFileName, outputFileUnit, outputDataId, particleGroupId, &
                 persistentKernelDatabase, exportOptimizationVariables, & 
                                      skipErrorConvergence, unitVolume, &
-                                 scalingFactor, histogramScalingFactor,&
+                                scalingFactor, histogramScalingFactor, &
+                                                    computeRawDensity, &
                                            weightedHistogram, weights  )
         !------------------------------------------------------------------------------
         ! 
@@ -2169,6 +2168,7 @@ module GridProjectedKDEModule
         logical, intent(in), optional :: skipErrorConvergence
         logical, intent(in), optional :: unitVolume
         logical, intent(in), optional :: weightedHistogram
+        logical, intent(in), optional :: computeRawDensity
         doubleprecision, intent(in), optional :: scalingFactor
         doubleprecision, intent(in), optional :: histogramScalingFactor
         doubleprecision, dimension(:), intent(in), optional :: weights
@@ -2178,6 +2178,7 @@ module GridProjectedKDEModule
         logical :: locUnitVolume =.false.
         doubleprecision :: locScalingFactor = 1d0
         logical         :: locScaleHistogram = .false.
+        logical         :: locComputeRawDensity = .false.
         doubleprecision :: locHistogramScalingFactor = 1d0
         logical         :: locWeightedHistogram = .false.
         integer, dimension(2) :: dataPointsShape
@@ -2212,6 +2213,10 @@ module GridProjectedKDEModule
 
         if ( present( unitVolume ) ) then 
             locUnitVolume = unitVolume
+        end if 
+
+        if ( present( computeRawDensity ) ) then 
+            locComputeRawDensity = computeRawDensity
         end if 
 
         if ( present( scalingFactor ) ) then 
@@ -2349,36 +2354,39 @@ module GridProjectedKDEModule
         end if 
 
 
-        ! Write output files
+        ! Some corrections to relevant variables before writing to output files !
+
+        if ( locComputeRawDensity ) then 
+          ! Compute the rawDensityEstimate: histogram/binvolume
+          if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
+          this%rawDensityEstimateGrid = this%histogram%counts/this%histogram%binVolume
+        end if 
+
+        if ( locUnitVolume ) then  
+            ! If unit volume, modify density to 
+            ! express it as mass
+            this%densityEstimateGrid = &
+            this%densityEstimateGrid*this%histogram%binVolume
+        end if
+
+        if ( locScalingFactor .ne. 0d0 ) then
+            ! Apply scalingFactor to density
+            this%densityEstimateGrid = this%densityEstimateGrid*locScalingFactor
+        end if
+
+        if ( locScaleHistogram ) then
+            ! Apply histogramScalingFactor to histogram
+            this%histogram%counts = this%histogram%counts*locHistogramScalingFactor
+        end if 
+
+
+        ! Write output files !
         if ( present( outputFileUnit ) .and. present( outputDataId ) .and. present( particleGroupId )) then
             call this%ExportDensityUnit( outputFileUnit, outputDataId, particleGroupId )
         else if ( present( outputFileName ) ) then  
             call this%ExportDensity( outputFileName )
         end if
       
-        ! If unit volume, modify density to 
-        ! express it as mass
-        if ( locUnitVolume ) then  
-            this%densityEstimateGrid = &
-            this%densityEstimateGrid*this%histogram%binVolume
-        end if
-
-        if ( locScalingFactor .ne. 0d0 ) then
-            ! Proxy for a common "mass" 
-            this%densityEstimateGrid = this%densityEstimateGrid*locScalingFactor
-        end if
-
-        if ( locScaleHistogram ) then
-            ! Proxy for a common "mass"
-            if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
-            this%rawDensityEstimateGrid = this%histogram%counts*locHistogramScalingFactor
-
-            ! if scaled histogram, and not as unit volume
-            ! transform to rawDensity 
-            if( .not. locUnitVolume ) then 
-              this%rawDensityEstimateGrid = this%rawDensityEstimateGrid/this%histogram%binVolume
-            end if 
-        end if 
 
         ! Done
         return
@@ -3282,11 +3290,8 @@ module GridProjectedKDEModule
 
         ! Probably more to be deallocated !
         
-
-        
         ! It run
         this%firstRun = .false.
-
 
 
     end subroutine prComputeDensityOptimization
@@ -4382,41 +4387,40 @@ module GridProjectedKDEModule
 
 
     subroutine prExportDensityUnit( this, outputUnit, outputDataId, particleGroupId )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(GridProjectedKDEType) :: this
-        integer, intent(in) :: outputUnit
-        integer, intent(in) :: outputDataId
-        integer, intent(in) :: particleGroupId
-        integer :: ix, iy, iz, n
-        integer :: countNonZero, counter
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none 
+      class(GridProjectedKDEType) :: this
+      integer, intent(in) :: outputUnit
+      integer, intent(in) :: outputDataId
+      integer, intent(in) :: particleGroupId
+      integer :: ix, iy, iz, n
+      integer :: countNonZero, counter
+      !------------------------------------------------------------------------------
 
-        counter      = 0
-        countNonZero = count(this%densityEstimateGrid /=0d0)
-        if( allocated( this%outputBinIds ) ) deallocate( this%outputBinIds )
-        allocate( this%outputBinIds(countNonZero,3) )
-         
-
-        ! Following column-major nesting
-        do iz = 1, this%nBins(3)
-            do iy = 1, this%nBins(2)
-                do ix = 1, this%nBins(1)
-                    if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-                    ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES/COLUMNS
-                   ! write(outputUnit,"(I8,I8,I8,I8,I6,es18.9e3,I8)") outputDataId, particleGroupId, &
-                    write(outputUnit,"(I8,I8,I8,I8,I6,2es18.9e3)") outputDataId, particleGroupId, &
-                        ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
-                                       this%histogram%counts( ix, iy, iz ) 
-                    counter = counter + 1 
-                    this%outputBinIds(counter,:) = (/ix,iy,iz/)
-                end do
-            end do
+      counter      = 0
+      countNonZero = count(this%densityEstimateGrid /=0d0)
+      if( allocated( this%outputBinIds ) ) deallocate( this%outputBinIds )
+      allocate( this%outputBinIds(countNonZero,3) )
+       
+      ! Following column-major nesting
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
+            ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES/COLUMNS
+            ! write(outputUnit,"(I8,I8,I8,I8,I6,es18.9e3,I8)") outputDataId, particleGroupId, &
+            write(outputUnit,"(I8,I8,I8,I8,I6,2es18.9e3)") outputDataId, particleGroupId, &
+                ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
+                               this%histogram%counts( ix, iy, iz ) 
+            counter = counter + 1 
+            this%outputBinIds(counter,:) = (/ix,iy,iz/)
+          end do
         end do
+      end do
 
 
     end subroutine prExportDensityUnit

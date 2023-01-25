@@ -58,7 +58,6 @@ contains
         doubleprecision, dimension(3), optional :: domainOrigin
         !------------------------------------------------------------------------------
 
-
         ! dimensionMask
         if( present(dimensionMask) ) then 
             locDimensionMask = dimensionMask
@@ -134,11 +133,9 @@ contains
         ! This could be done with OpenMP (?) 
         do np = 1, nPointsShape(1)
 
-            gridIndexes = 1
+            gridIndexes = 0
             do nd = 1, 3
-                if ( this%nBins(nd) .gt. 1 ) then
-                    gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
-                end if 
+              gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
             end do
 
             ! Points outside the grid are not taken into account
@@ -181,12 +178,19 @@ contains
         ! This could be done with OpenMP (?) 
         do np = 1, nPointsShape(1)
 
-            gridIndexes = 1
+            gridIndexes = 0
             do nd = 1, 3
-                if ( this%nBins(nd) .gt. 1 ) then
-                    gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
-                end if 
+              gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
             end do
+
+            ! It looks like the previous loop 
+            ! and the following check can be combined 
+            ! on a single loop. This would allow to integrate 
+            ! in a single process, determination of whether
+            ! a point is outside the domain, plus handling of 
+            ! binSize .eq. 0 for some dimension.
+            ! Note: nBins comes with a default size of 1 if 
+            ! binSize for a dimension .eq. 0d0 
 
             ! Points outside the grid are not taken into account
             if( any( gridIndexes .gt. this%nBins ) .or. any( gridIndexes .le. 0 ) ) then
