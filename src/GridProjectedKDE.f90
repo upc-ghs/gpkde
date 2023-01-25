@@ -143,6 +143,11 @@ module GridProjectedKDEModule
         doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0
 
 
+        ! Report to outUnit
+        logical :: reportToOutUnit = .false.
+        integer :: outFileUnit
+        character(len=200) :: outFileName
+
 
         ! Module constants
         doubleprecision :: supportDimensionConstant
@@ -295,7 +300,8 @@ module GridProjectedKDEModule
                                         nOptimizationLoops, domainOrigin, &
                                 densityRelativeConvergence, densityScale, &
                           maxRoughness, minRoughness, maxSmoothingGrowth, &
-                                           minKernelShape, maxKernelShape )
+                                          minKernelShape, maxKernelShape, & 
+                                                              outFileName )
         !------------------------------------------------------------------------------
         !
         !------------------------------------------------------------------------------
@@ -324,11 +330,28 @@ module GridProjectedKDEModule
         integer :: n
         ! Limit roughness
         doubleprecision ::  minHRoughness, maxHRoughness, nDensityScale
-
+        ! The analog to a listUnit, reports
+        character(len=200), intent(in), optional :: outFileName
+        integer :: isThisFileOpen = -1
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
         doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
+
+
+        ! Enable reporting to outUnit if given 
+        if( present( outFileName ) ) then 
+          inquire( file=outFileName, number=isThisFileOpen )
+          if ( isThisFileOpen .gt. 0 ) then 
+            this%reportToOutUnit = .true.
+            this%outFileUnit = isThisFileOpen
+            this%outFileName = outFileName
+            write( this%outFileUnit, * )
+            write( this%outFileUnit, '(A)' ) '------------------------------'
+            write( this%outFileUnit, '(A)' ) ' GPKDE module is initializing '
+          end if 
+        end if 
+
 
 
         ! Initialize reconstruction grid 
@@ -496,6 +519,10 @@ module GridProjectedKDEModule
         !    this%maxLimitRoughness /) )
 
 
+
+
+
+
         ! Initialize kernel database 
         if ( this%databaseOptimization ) then
 
@@ -529,6 +556,15 @@ module GridProjectedKDEModule
         allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
         if ( allocated( nEstimateGrid ) ) deallocate( nEstimateGrid )
         allocate( nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+
+
+        ! Report intialization
+        if ( this%reportToOutUnit ) then 
+          write( this%outFileUnit, '(A)' ) ' GPKDE module is initialized. '
+          write( this%outFileUnit, '(A)' ) '------------------------------'
+          write( this%outFileUnit,  *    ) 
+        end if
+
 
 
     end subroutine prInitialize
@@ -2134,7 +2170,7 @@ module GridProjectedKDEModule
                                      skipErrorConvergence, unitVolume, &
                                 scalingFactor, histogramScalingFactor, &
                                                     computeRawDensity, &
-                                           weightedHistogram, weights  )
+                                           weightedHistogram, weights  ) 
         !------------------------------------------------------------------------------
         ! 
         !
@@ -2251,7 +2287,9 @@ module GridProjectedKDEModule
           call this%histogram%ComputeCounts( dataPoints )
         end if
 
+
         ! Bounding box or active bins
+        ! Not in use !
         if ( useBoundingBox ) then 
 
             ! Compute bounding box
@@ -2310,11 +2348,23 @@ module GridProjectedKDEModule
             deallocate( computeThisBin )
 
         else
-            ! Active bins: Only cells with particles
-            call this%histogram%ComputeActiveBinIds()
+          ! Active bins: Only cells with particles
+          call this%histogram%ComputeActiveBinIds()
 
-            this%computeBinIds => this%histogram%activeBinIds
-            this%nComputeBins  = this%histogram%nActiveBins
+          this%computeBinIds => this%histogram%activeBinIds
+          this%nComputeBins  = this%histogram%nActiveBins
+              
+          if ( this%nComputeBins .eq. 0 ) then 
+           ! No bins to compute 
+           if ( this%reportToOutUnit ) then
+            write(this%outFileUnit, *  )
+            write(this%outFileUnit, '(A)' ) 'WARNING: GPKDE module  '
+            write(this%outFileUnit, '(A)' ) 'NO bins to compute. Check origin coordinates or particles. Leaving ComputeDensity.'
+            write(this%outFileUnit, *  )
+           end if
+           ! Leaving  
+           return
+          end if 
 
         end if 
 
@@ -2735,9 +2785,6 @@ module GridProjectedKDEModule
             gc => activeGridCells(n)
             densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
-
-        print *, 'MAX DENSITY ', maxval( densityEstimateArray ), sum(densityEstimateArray)/this%nComputeBins
-        print *, 'MAX RAW DENSITY ', maxval( rawDensity ), sum( rawDensity )/this%nComputeBins, sum(rawDensity)
 
 
         ! Error monitoring
