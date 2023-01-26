@@ -349,7 +349,11 @@ module GridProjectedKDEModule
             write( this%outFileUnit, * )
             write( this%outFileUnit, '(A)' ) '------------------------------'
             write( this%outFileUnit, '(A)' ) ' GPKDE module is initializing '
-          end if 
+          end if
+        else if ( this%reportToOutUnit ) then 
+          write( this%outFileUnit, * )
+          write( this%outFileUnit, '(A)' ) '------------------------------'
+          write( this%outFileUnit, '(A)' ) ' GPKDE module is initializing '
         end if 
 
 
@@ -371,10 +375,8 @@ module GridProjectedKDEModule
           print *, 'Error while initializing GPKDE, some nBins .lt. 1. Stop.'
           call exit(0)
         end if
-
         this%binSize    = binSize
         this%domainSize = domainSize
-
 
 
         ! domainOrigin
@@ -386,25 +388,48 @@ module GridProjectedKDEModule
 
         
         ! Depending on nBins, is the number of dimensions 
-        ! of the reconstruction process. If any nBins is 1, 
+        ! of the  GPDKE reconstruction process. If any nBins is 1, 
         ! then that dimension is compressed. e.g. nBins = (10,1,20),
         ! then it is a 2D reconstruction process where dimensions
-        ! x and z define the 2D plane.
+        ! x and z define the 2D plane. This is not necessarily the 
+        ! same for the computation of Histograms, where determination 
+        ! of a particle inside the grid is related to the 
+        ! binSize. If a given binSize is zero, then histogram computation 
+        ! does not consider this dimension. If nBins .eq. 1 and binSize .gt. 0
+        ! then dimension is considered as valid, and compared against the
+        ! origin.
 
         ! Initialize module dimensions
         call prInitializeModuleDimensions( this, nDim, dimensionMask ) 
 
+       
+        if ( this%reportToOutUnit ) then 
+          write( this%outFileUnit, *) '  Given binSize      :', this%binSize
+          write( this%outFileUnit, *) '  Given domainSize   :', this%domainSize
+          write( this%outFileUnit, *) '  Given domainOrigin :', this%domainOrigin
+          write( this%outFileUnit, *) '  Computed nBins     :', this%nBins
+          write( this%outFileUnit, *) '  Dimensionality for reconstruction is determined from nBins '
+          write( this%outFileUnit, *) '  Will perform reconstruction in ', nDim, ' dimensions.'
+        end if  
+        
 
         ! Initialize module constants, uses nDim
         call this%InitializeModuleConstants()
 
-        
+        if ( this%reportToOutUnit ) then 
+          write( this%outFileUnit, '(A)' ) ' GPKDE initializing Histogram '
+        end if
+
         ! Initialize histogram
         call this%histogram%Initialize( &
               this%nBins, this%binSize, &
            dimensionMask=dimensionMask, & 
          domainOrigin=this%domainOrigin )
 
+        if ( this%reportToOutUnit ) then 
+          write( this%outFileUnit, *) '  Histogram determines dimensions to be analyzed based on binSizes '
+          write( this%outFileUnit, *) '  Will compute Histogram considering ', this%histogram%nDim, ' dimensions '
+        end if  
         
         ! Process optional arguments
         ! Kernel database 
@@ -574,7 +599,7 @@ module GridProjectedKDEModule
 
         ! Report intialization
         if ( this%reportToOutUnit ) then 
-          write( this%outFileUnit, '(A)' ) ' GPKDE module is initialized. '
+          write( this%outFileUnit, '(A)' ) ' GPKDE module is initialized  '
           write( this%outFileUnit, '(A)' ) '------------------------------'
           write( this%outFileUnit,  *    ) 
         end if
