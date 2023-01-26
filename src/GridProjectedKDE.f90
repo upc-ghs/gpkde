@@ -353,15 +353,29 @@ module GridProjectedKDEModule
         end if 
 
 
+        ! Stop if all bin sizes are wrong
+        if ( all( binSize .lt. 0d0 ) ) then 
+          print *, 'Error while initializing GPKDE, all binSizes are .lt. 0d0. Stop.'
+          call exit(0)
+        end if 
 
         ! Initialize reconstruction grid 
-        this%binSize    = binSize
-        this%domainSize = domainSize
         where( binSize .ne. 0d0 ) 
             this%nBins = ceiling( domainSize/binSize )
         elsewhere
             this%nBins = 1
         end where
+
+        ! Stop if any nBins .lt. 1
+        if ( any( this%nBins .lt. 1 ) ) then 
+          print *, 'Error while initializing GPKDE, some nBins .lt. 1. Stop.'
+          call exit(0)
+        end if
+
+        this%binSize    = binSize
+        this%domainSize = domainSize
+
+
 
         ! domainOrigin
         if ( present( domainOrigin ) ) then 
@@ -703,11 +717,15 @@ module GridProjectedKDEModule
 
         ! Determine dimensions based on number of bins
         do n = 1,3
-            if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
+          if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
         end do 
         nDim = sum(dimensionMask)
         this%dimensionMask = dimensionMask
 
+        if ( nDim .le. 0 ) then 
+          print *, 'Error while initializing GPKDE dimensions. nDim .le. 0. Stop.'
+          call exit(0)
+        end if 
 
         ! Identify directions
         ! 1D
@@ -2851,7 +2869,7 @@ module GridProjectedKDEModule
         ! Optimization loop
         do m = 1, nOptLoops
 
-            print *, '--------------------- LOOP ', m
+            !print *, '--------------------- LOOP ', m
             ! nEstimate
             nEstimateGrid = 0d0 
             nEstimateArray = 0d0

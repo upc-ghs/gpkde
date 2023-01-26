@@ -23,6 +23,8 @@ module HistogramModule
         integer, dimension(:,:), allocatable       :: boundingBoxBinIds
         integer                                    :: nBBoxBins 
         doubleprecision, dimension(3)              :: domainOrigin ! of the reconstruction grid 
+        integer, dimension(:), allocatable         :: dimensions
+        integer                                    :: nDim
 
     contains
 
@@ -50,13 +52,26 @@ contains
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none 
-        class(HistogramType)            :: this
-        integer, dimension(3)           :: nBins
-        doubleprecision, dimension(3)   :: binSize
-        integer, dimension(3), optional :: dimensionMask
-        integer, dimension(3)           :: locDimensionMask
-        doubleprecision, dimension(3), optional :: domainOrigin
+        class(HistogramType)                      :: this
+        integer, dimension(3), intent(in)         :: nBins
+        doubleprecision, dimension(3), intent(in) :: binSize
+        integer, dimension(3), optional           :: dimensionMask
+        integer, dimension(3)                     :: locDimensionMask
+        doubleprecision, dimension(3), optional   :: domainOrigin
+        integer :: nd, dcount
         !------------------------------------------------------------------------------
+
+        ! Stop if all bin sizes are wrong
+        if ( all( binSize .lt. 0d0 ) ) then 
+          print *, 'Error while initializing Histogram, all binSizes are .lt. 0d0. Stop.'
+          call exit(0)
+        end if 
+
+        ! Stop if any nBins .lt. 1
+        if ( any( nBins .lt. 1 ) ) then 
+          print *, 'Error while initializing Histogram, some nBins .lt. 1. Stop.'
+          call exit(0)
+        end if
 
         ! dimensionMask
         if( present(dimensionMask) ) then 
@@ -65,6 +80,25 @@ contains
             locDimensionMask = (/1,1,1/)
         end if
 
+
+        ! Assign dim properties
+        this%nDim = sum(dimensionMask, mask=(locDimensionMask.eq.1))
+        if ( this%nDim .le. 0 ) then 
+          print *, 'Error while initializing Histogram. nDim .le. 0. Stop.'
+          call exit(0)
+        end if 
+
+        ! Save dim mask into dimensions 
+        if ( allocated( this%dimensions ) ) deallocate( this%dimensions ) 
+        allocate( this%dimensions( this%nDim  ) )
+        dcount= 0
+        do nd = 1, 3
+          if ( locDimensionMask(nd) .eq. 0 ) cycle
+          dcount = dcount + 1
+          this%dimensions(dcount) = nd
+        end do 
+
+
         ! domainOrigin
         if ( present( domainOrigin ) ) then 
             this%domainOrigin = domainOrigin
@@ -72,11 +106,13 @@ contains
             this%domainOrigin = 0 
         end if
 
+
         ! Initialize variables
         this%nBins     = nBins
         this%binSize   = binSize
         this%binVolume = product( binSize, mask=(locDimensionMask.eq.1) ) 
         this%binDistance = ( this%binVolume )**(1d0/sum(locDimensionMask))
+
 
         ! Allocate and initialize histogram counts
         allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
@@ -122,7 +158,7 @@ contains
         class(HistogramType) :: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
         integer, dimension(2)              :: nPointsShape
-        integer                            :: np, ix, iy, iz, nd
+        integer                            :: np, ix, iy, iz, nd, did
         integer, dimension(3)              :: gridIndexes
         !------------------------------------------------------------------------------
 
@@ -172,8 +208,9 @@ contains
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
         doubleprecision, dimension(:), intent(in)   :: weights
         integer, dimension(2)              :: nPointsShape
-        integer                            :: np, ix, iy, iz, nd
+        integer                            :: np, ix, iy, iz, nd, did
         integer, dimension(3)              :: gridIndexes
+        logical :: inside
         !------------------------------------------------------------------------------
 
         ! Reset counts
@@ -182,30 +219,23 @@ contains
 
         ! This could be done with OpenMP (?) 
         do np = 1, nPointsShape(1)
-
+            ! Initialize point
+            inside      = .true.
             gridIndexes = 1
-            do nd = 1,3
-              ! Detection of which dims should 
-              ! be computed MUST be done only once
-              ! and avoid this continuous checking
-              ! COME ON !
-              if ( this%binSize(nd) .le. 0d0 ) cycle
-              gridIndexes(nd) = floor( ( dataPoints( np, nd ) - this%domainOrigin(nd) )/this%binSize(nd) ) + 1
+            ! Compute gridIndex and verify  
+            ! only for active dimensions if inside or not
+            ! One may still argue that inactive dimensions
+            ! should also be checked ( for discussion )
+            do nd = 1,this%nDim
+              did = this%dimensions(nd)
+              gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + 1
+              if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
+                  (gridIndexes(did) .le. 0) ) then
+                inside = .false. 
+                exit
+              end if 
             end do
-
-            ! It looks like the previous loop 
-            ! and the following check can be combined 
-            ! on a single loop. This would allow to integrate 
-            ! in a single process, determination of whether
-            ! a point is outside the domain, plus handling of 
-            ! binSize .eq. 0 for some dimension.
-            ! Note: nBins comes with a default size of 1 if 
-            ! binSize for a dimension .eq. 0d0 
-
-            ! Points outside the grid are not taken into account
-            if( any( gridIndexes .gt. this%nBins ) .or. any( gridIndexes .le. 0 ) ) then
-                cycle
-            end if
+            if ( .not. inside ) cycle
 
             ! Increase counter
             this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
