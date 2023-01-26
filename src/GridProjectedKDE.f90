@@ -2453,11 +2453,15 @@ module GridProjectedKDEModule
           ! Compute the rawDensityEstimate: histogram/binvolume
           if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
           this%rawDensityEstimateGrid = this%histogram%counts/this%histogram%binVolume
+          if ( locUnitVolume ) then  
+            ! If unit volume, modify 
+            this%rawDensityEstimateGrid = &
+            this%rawDensityEstimateGrid*this%histogram%binVolume
+          end if
         end if 
 
         if ( locUnitVolume ) then  
-            ! If unit volume, modify density to 
-            ! express it as mass
+            ! If unit volume, modify 
             this%densityEstimateGrid = &
             this%densityEstimateGrid*this%histogram%binVolume
         end if
