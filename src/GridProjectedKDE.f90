@@ -332,7 +332,7 @@ module GridProjectedKDEModule
         doubleprecision ::  minHRoughness, maxHRoughness, nDensityScale
         ! The analog to a listUnit, reports
         character(len=200), intent(in), optional :: outFileName
-        integer :: isThisFileOpen = -1
+        integer :: isThisFileOpen
         ! Time monitoring
         integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
         doubleprecision :: elapsedTime
@@ -340,7 +340,8 @@ module GridProjectedKDEModule
 
 
         ! Enable reporting to outUnit if given 
-        if( present( outFileName ) ) then 
+        if( present( outFileName ) ) then
+          isThisFileOpen = -1
           inquire( file=outFileName, number=isThisFileOpen )
           if ( isThisFileOpen .gt. 0 ) then 
             this%reportToOutUnit = .true.
@@ -359,8 +360,8 @@ module GridProjectedKDEModule
 
         ! Stop if all bin sizes are wrong
         if ( all( binSize .lt. 0d0 ) ) then 
-          print *, 'Error while initializing GPKDE, all binSizes are .lt. 0d0. Stop.'
-          call exit(0)
+          write(*,*) 'Error while initializing GPKDE, all binSizes are .lt. 0d0. Stop.'
+          stop 
         end if 
 
         ! Initialize reconstruction grid 
@@ -372,8 +373,8 @@ module GridProjectedKDEModule
 
         ! Stop if any nBins .lt. 1
         if ( any( this%nBins .lt. 1 ) ) then 
-          print *, 'Error while initializing GPKDE, some nBins .lt. 1. Stop.'
-          call exit(0)
+          write(*,*) 'Error while initializing GPKDE, some nBins .lt. 1. Stop.'
+          stop 
         end if
         this%binSize    = binSize
         this%domainSize = domainSize
@@ -748,8 +749,8 @@ module GridProjectedKDEModule
         this%dimensionMask = dimensionMask
 
         if ( nDim .le. 0 ) then 
-          print *, 'Error while initializing GPKDE dimensions. nDim .le. 0. Stop.'
-          call exit(0)
+          write(*,*) 'Error while initializing GPKDE dimensions. nDim .le. 0. Stop.'
+          stop
         end if 
 
         ! Identify directions
@@ -2239,16 +2240,16 @@ module GridProjectedKDEModule
         logical, intent(in), optional                       :: onlyHistogram
         doubleprecision, dimension(:), intent(in), optional :: weights
         ! local 
-        logical               :: persistKDB = .true.
-        logical               :: locExportOptimizationVariables =.false.
-        logical               :: locSkipErrorConvergence =.false.
-        logical               :: locUnitVolume =.false.
-        doubleprecision       :: locScalingFactor = 1d0
-        logical               :: locScaleHistogram = .false.
-        logical               :: locComputeRawDensity = .false.
-        doubleprecision       :: locHistogramScalingFactor = 1d0
-        logical               :: locWeightedHistogram = .false.
-        logical               :: locOnlyHistogram = .false.
+        logical               :: persistKDB
+        logical               :: locExportOptimizationVariables
+        logical               :: locSkipErrorConvergence
+        logical               :: locUnitVolume
+        doubleprecision       :: locScalingFactor
+        logical               :: locScaleHistogram
+        logical               :: locComputeRawDensity
+        doubleprecision       :: locHistogramScalingFactor
+        logical               :: locWeightedHistogram
+        logical               :: locOnlyHistogram 
         integer               :: localNOptimizationLoops
         integer, dimension(2) :: dataPointsShape
 
@@ -2267,15 +2268,26 @@ module GridProjectedKDEModule
         !doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
 
-        ! Process optional arguments
+        ! Initialize optional arguments
+        persistKDB = .true.
+        locExportOptimizationVariables =.false.
+        locSkipErrorConvergence =.false.
+        locUnitVolume =.false.
+        locScalingFactor = 1d0
+        locScaleHistogram = .false.
+        locComputeRawDensity = .false.
+        locHistogramScalingFactor = 1d0
+        locWeightedHistogram = .false.
+        locOnlyHistogram = .false.
+        localNOptimizationLoops = this%nOptimizationLoops
+
+        ! Process them
         if ( present( nOptimizationLoops ) ) then 
             localNOptimizationLoops = nOptimizationLoops
-        else 
-            localNOptimizationLoops = this%nOptimizationLoops
         end if 
         if ( present( outputFileName ) ) then 
             this%outputFileName = outputFileName
-        end if 
+        end if
         if ( present( persistentKernelDatabase ) ) then
             persistKDB = persistentKernelDatabase
         end if
@@ -2325,8 +2337,12 @@ module GridProjectedKDEModule
 
         ! If only histogram, leave
         if ( locOnlyHistogram ) then 
+          if ( locComputeRawDensity ) then 
+            this%histogram%counts = this%histogram%counts/this%histogram%binVolume
+          end if 
           return
         end if 
+
 
         ! SOON TO BE DEPRECATED !
         ! Bounding box or active bins
@@ -2345,7 +2361,6 @@ module GridProjectedKDEModule
             ! Allocate the identifier 
             allocate( computeThisBin( this%histogram%nBBoxBins ) )
             computeThisBin = .false.
-
 
             ! Now loop over the cells within the bounding box,
             ! and count how many bins will be computed.
@@ -2442,13 +2457,14 @@ module GridProjectedKDEModule
 
         if ( locComputeRawDensity ) then 
           ! Compute the rawDensityEstimate: histogram/binvolume
-          if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
-          this%rawDensityEstimateGrid = this%histogram%counts/this%histogram%binVolume
-          if ( locUnitVolume ) then  
-            ! If unit volume, modify 
-            this%rawDensityEstimateGrid = &
-            this%rawDensityEstimateGrid*this%histogram%binVolume
-          end if
+          this%histogram%counts = this%histogram%counts/this%histogram%binVolume
+          !if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
+          !this%rawDensityEstimateGrid = this%histogram%counts/this%histogram%binVolume
+          !if ( locUnitVolume ) then  
+          !  ! If unit volume, modify 
+          !  this%rawDensityEstimateGrid = &
+          !  this%rawDensityEstimateGrid*this%histogram%binVolume
+          !end if
         end if 
 
         if ( locUnitVolume ) then  
@@ -2524,17 +2540,17 @@ module GridProjectedKDEModule
         integer            :: n, m, o, p, q, nd, nr
         integer            :: od, pd, qd
         integer            :: iX, iY, iZ
-        integer            :: convergenceCount = 0
-        integer            :: softConvergenceCount = 0
-        integer            :: zeroDensityCount     = 0
+        integer            :: convergenceCount 
+        integer            :: softConvergenceCount
+        integer            :: zeroDensityCount    
         character(len=200) :: densityOutputFileName
         character(len=500) :: varsOutputFileName
         character(len=500) :: errorOutputFileName
         character(len=20)  :: loopId
         character(len=20)  :: auxChar
-        logical            :: exportVariables, skipErrorBreak = .false.
-        logical            :: exportLoopError = .false.
-        integer            :: errorOutputUnit = 999 
+        logical            :: exportVariables, skipErrorBreak
+        logical            :: exportLoopError
+        integer            :: errorOutputUnit
 
         ! Optimization error monitoring 
         doubleprecision :: errorRMSE
@@ -2586,6 +2602,14 @@ module GridProjectedKDEModule
         doubleprecision :: elapsedTime3
         !------------------------------------------------------------------------------
 
+        ! Initialize vars
+        convergenceCount = 0
+        softConvergenceCount = 0
+        zeroDensityCount = 0
+        exportVariables = .false.
+        skipErrorBreak = .false.
+        exportLoopError = .false.
+        errorOutputUnit = 999 
         
         ! Pointers to null
         gc => null()
@@ -3140,8 +3164,9 @@ module GridProjectedKDEModule
             squareDensityDiff = (densityEstimateArray - rawDensity)**2
             errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
 
-           
-            ! Error analysis
+
+            ! Error analysis:
+            ! SHOULD REPORT SOMETHING TO OUTPUT UNIT !
             if ( .not. skipErrorBreak ) then
 
                 if (  ( errorMetric .lt. errorMetricConvergence ) ) then
@@ -3153,7 +3178,7 @@ module GridProjectedKDEModule
 
                     this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-                    print *, '!! DENSITY CONVERGENCE !!'
+                    !print *, '!! DENSITY CONVERGENCE !!'
 
                     ! Break
                     exit
@@ -3166,7 +3191,7 @@ module GridProjectedKDEModule
 
                     this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-                    print *, '!! SMOOTHING CONVERGENCE !!'
+                    !print *, '!! SMOOTHING CONVERGENCE !!'
                     
                     ! Break
                     exit
@@ -3216,7 +3241,7 @@ module GridProjectedKDEModule
 
                     this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-                    print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
+                    !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
 
                     ! Break
                     exit
@@ -3232,7 +3257,7 @@ module GridProjectedKDEModule
                     ! This has been observed for high number of particles 
                     ! and error indicators oscillate.
                         
-                    print *, '!! INCREASED ALMISE DECREASE RMSE AND SOFT CONVERGENCE !!'
+                    !print *, '!! INCREASED ALMISE DECREASE RMSE AND SOFT CONVERGENCE !!'
 
                     ! Break
                     exit
@@ -3256,7 +3281,7 @@ module GridProjectedKDEModule
 
                     this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
 
-                    print *, '!! INCREASED RELATIVE DENSITY CHANGE AND SOFT CONVERGENCE !!'
+                    !print *, '!! INCREASED RELATIVE DENSITY CHANGE AND SOFT CONVERGENCE !!'
 
                     ! Break
                     exit
