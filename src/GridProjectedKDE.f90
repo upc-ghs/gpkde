@@ -2213,20 +2213,46 @@ module GridProjectedKDEModule
                                      skipErrorConvergence, unitVolume, &
                                 scalingFactor, histogramScalingFactor, &
                                                     computeRawDensity, &
-                                           weightedHistogram, weights  ) 
+                            weightedHistogram, weights, onlyHistogram  ) 
         !------------------------------------------------------------------------------
         ! 
-        !
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
         implicit none
-        class( GridProjectedKDEType ), target:: this
-        doubleprecision, dimension(:,:), intent(in) :: dataPoints
-        integer, intent(in), optional :: nOptimizationLoops
-        integer :: localNOptimizationLoops
+        ! input
+        class( GridProjectedKDEType ), target               :: this
+        doubleprecision, dimension(:,:), intent(in)         :: dataPoints
+        integer, intent(in), optional                       :: nOptimizationLoops
+        character(len=*), intent(in), optional              :: outputFileName
+        integer, intent(in), optional                       :: outputFileUnit
+        integer, intent(in), optional                       :: outputDataId
+        integer, intent(in), optional                       :: particleGroupId
+        logical, intent(in), optional                       :: persistentKernelDatabase
+        logical, intent(in), optional                       :: exportOptimizationVariables
+        logical, intent(in), optional                       :: skipErrorConvergence
+        logical, intent(in), optional                       :: unitVolume
+        doubleprecision, intent(in), optional               :: scalingFactor
+        doubleprecision, intent(in), optional               :: histogramScalingFactor
+        logical, intent(in), optional                       :: computeRawDensity
+        logical, intent(in), optional                       :: weightedHistogram
+        logical, intent(in), optional                       :: onlyHistogram
+        doubleprecision, dimension(:), intent(in), optional :: weights
+        ! local 
+        logical               :: persistKDB = .true.
+        logical               :: locExportOptimizationVariables =.false.
+        logical               :: locSkipErrorConvergence =.false.
+        logical               :: locUnitVolume =.false.
+        doubleprecision       :: locScalingFactor = 1d0
+        logical               :: locScaleHistogram = .false.
+        logical               :: locComputeRawDensity = .false.
+        doubleprecision       :: locHistogramScalingFactor = 1d0
+        logical               :: locWeightedHistogram = .false.
+        logical               :: locOnlyHistogram = .false.
+        integer               :: localNOptimizationLoops
+        integer, dimension(2) :: dataPointsShape
 
-        ! DEV
+        ! DEV (DEPRECATE)
         logical :: useBoundingBox = .false.
         type( KernelMultiGaussianType ) :: filterKernel
         integer, dimension(2) :: xGridSpan, yGridSpan, zGridSpan
@@ -2235,91 +2261,58 @@ module GridProjectedKDEModule
         integer :: n
         integer :: bcount = 1
         logical, dimension(:), allocatable :: computeThisBin
-        character(len=*), optional :: outputFileName
         doubleprecision, dimension(:,:,:), allocatable :: densityGrid
-       
-        ! For integration with modpath 
-        integer, intent(in), optional :: outputFileUnit
-        integer, intent(in), optional :: outputDataId
-        integer, intent(in), optional :: particleGroupId
-        logical, intent(in), optional :: persistentKernelDatabase
-        logical, intent(in), optional :: exportOptimizationVariables
-        logical, intent(in), optional :: skipErrorConvergence
-        logical, intent(in), optional :: unitVolume
-        logical, intent(in), optional :: weightedHistogram
-        logical, intent(in), optional :: computeRawDensity
-        doubleprecision, intent(in), optional :: scalingFactor
-        doubleprecision, intent(in), optional :: histogramScalingFactor
-        doubleprecision, dimension(:), intent(in), optional :: weights
-        logical :: persistKDB = .true.
-        logical :: locExportOptimizationVariables =.false.
-        logical :: locSkipErrorConvergence =.false.
-        logical :: locUnitVolume =.false.
-        doubleprecision :: locScalingFactor = 1d0
-        logical         :: locScaleHistogram = .false.
-        logical         :: locComputeRawDensity = .false.
-        doubleprecision :: locHistogramScalingFactor = 1d0
-        logical         :: locWeightedHistogram = .false.
-        integer, dimension(2) :: dataPointsShape
-
-        ! Time monitoring
-        integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-        doubleprecision :: elapsedTime
+        !! Time monitoring
+        !integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+        !doubleprecision :: elapsedTime
         !------------------------------------------------------------------------------
 
-
-        ! Define nOptimizationLoops
+        ! Process optional arguments
         if ( present( nOptimizationLoops ) ) then 
             localNOptimizationLoops = nOptimizationLoops
         else 
             localNOptimizationLoops = this%nOptimizationLoops
         end if 
-
         if ( present( outputFileName ) ) then 
             this%outputFileName = outputFileName
         end if 
-
         if ( present( persistentKernelDatabase ) ) then
             persistKDB = persistentKernelDatabase
         end if
-
         if ( present( exportOptimizationVariables ) ) then
             locExportOptimizationVariables = exportOptimizationVariables
         end if
         if ( present( skipErrorConvergence ) ) then
             locSkipErrorConvergence = skipErrorConvergence
         end if
-
         if ( present( unitVolume ) ) then 
             locUnitVolume = unitVolume
         end if 
-
         if ( present( computeRawDensity ) ) then 
             locComputeRawDensity = computeRawDensity
         end if 
-
         if ( present( scalingFactor ) ) then 
             locScalingFactor = scalingFactor
         end if
-
         if ( present( histogramScalingFactor ) ) then
             locScaleHistogram = .true. 
             locHistogramScalingFactor = histogramScalingFactor
         end if
-
+        if ( present( onlyHistogram ) ) then
+            locOnlyHistogram = onlyHistogram
+        end if
         if ( present( weightedHistogram ) ) then
             locWeightedHistogram = weightedHistogram
         end if
-
         if ( (locWeightedHistogram).and.(.not.present(weights)) ) then 
-            print *, 'ERROR: weightedHistogram requires weights and were not given. Stop.'
-            call exit(0)
+          write(*,*) 'ERROR: weightedHistogram requires weights and were not given. Stop.'
+          stop
         end if 
 
         dataPointsShape = shape(dataPoints)
         if ( (locWeightedHistogram).and.(size(weights).ne.dataPointsShape(1)) ) then 
-            print *, 'ERROR: given weights are not the same length than datapoints. Stop.'
-            call exit(0)
+          write(*,*) 'ERROR: given weights are not the same length than datapoints. Stop.'
+          stop
         end if
 
         if ( locWeightedHistogram ) then 
@@ -2330,7 +2323,12 @@ module GridProjectedKDEModule
           call this%histogram%ComputeCounts( dataPoints )
         end if
 
+        ! If only histogram, leave
+        if ( locOnlyHistogram ) then 
+          return
+        end if 
 
+        ! SOON TO BE DEPRECATED !
         ! Bounding box or active bins
         ! Not in use !
         if ( useBoundingBox ) then 
@@ -2414,38 +2412,31 @@ module GridProjectedKDEModule
 
         ! Density optimization 
         if ( this%databaseOptimization ) then
-
-            ! Initialize database if not allocated
-            if ( .not. allocated( this%kernelDatabaseFlat ) ) then 
-                call this%InitializeKernelDatabaseFlat( this%minHOverLambda(1), &
-                                                        this%maxHOverLambda(1), &
-                                                      this%deltaHOverLambda(1), &
-                                                        this%logKernelDatabase  )
-            end if
-
-            ! Compute density
-            call this%ComputeDensityOptimization(                              &
-                    this%densityEstimateGrid,                                  &
-                    nOptimizationLoops=localNOptimizationLoops,                &
-                    exportOptimizationVariables=locExportOptimizationVariables,&
-                    skipErrorConvergence=locSkipErrorConvergence ) 
-
-            ! Drop database ?
-            if ( .not. persistKDB ) then
-                call this%DropKernelDatabase()
-            end if
-
+          ! Initialize database if not allocated
+          if ( .not. allocated( this%kernelDatabaseFlat ) ) then 
+              call this%InitializeKernelDatabaseFlat( this%minHOverLambda(1), &
+                                                      this%maxHOverLambda(1), &
+                                                    this%deltaHOverLambda(1), &
+                                                      this%logKernelDatabase  )
+          end if
+          ! Compute density
+          call this%ComputeDensityOptimization(                              &
+                  this%densityEstimateGrid,                                  &
+                  nOptimizationLoops=localNOptimizationLoops,                &
+                  exportOptimizationVariables=locExportOptimizationVariables,&
+                  skipErrorConvergence=locSkipErrorConvergence ) 
+          ! Drop database ?
+          if ( .not. persistKDB ) then
+              call this%DropKernelDatabase()
+          end if
         else
-
-            ! Brute force optimization
-            call this%ComputeDensityOptimization(                              &
-                    this%densityEstimateGrid,                                  &
-                    nOptimizationLoops=localNOptimizationLoops,                &
-                    exportOptimizationVariables=locExportOptimizationVariables,&
-                    skipErrorConvergence=locSkipErrorConvergence ) 
-
+          ! Brute force optimization
+          call this%ComputeDensityOptimization(                              &
+                  this%densityEstimateGrid,                                  &
+                  nOptimizationLoops=localNOptimizationLoops,                &
+                  exportOptimizationVariables=locExportOptimizationVariables,&
+                  skipErrorConvergence=locSkipErrorConvergence ) 
         end if 
-
 
         ! Some corrections to relevant variables before writing to output files !
 
