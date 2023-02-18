@@ -99,11 +99,6 @@ contains
         implicit none
         class( GridCellType ) :: this
         integer, dimension(3), intent(in) :: id
-        type( KernelMultiGaussianType )     :: ikernel      
-        type( KernelMultiGaussianType )     :: ikernelSigma 
-        type( KernelSecondDerivativeXType ) :: ikernelSDX   
-        type( KernelSecondDerivativeYType ) :: ikernelSDY   
-        type( KernelSecondDerivativeZType ) :: ikernelSDZ   
         !------------------------------------------------------------------------------
 
         this%id = id

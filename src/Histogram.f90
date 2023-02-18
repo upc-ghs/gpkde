@@ -1,13 +1,13 @@
 module HistogramModule
     !------------------------------------------------------------------------------
-    ! 
-    ! 
+    ! Histogram related operations
+    !  - Count elements on a regular grid
+    !  - Count weighted elements on a regular grid 
     !------------------------------------------------------------------------------
     implicit none
 
     ! Set default access status to private
     private
-
 
     type, public :: HistogramType
 
@@ -167,7 +167,7 @@ contains
         class(HistogramType) :: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
         integer, dimension(2)              :: nPointsShape
-        integer                            :: np, ix, iy, iz, nd, did
+        integer                            :: np, nd, did
         integer, dimension(3)              :: gridIndexes
         logical :: inside
         !------------------------------------------------------------------------------
@@ -208,7 +208,6 @@ contains
     subroutine prComputeCountsWeighted( this, dataPoints, weights )
         !------------------------------------------------------------------------------
         ! 
-        !
         !------------------------------------------------------------------------------
         ! Specifications 
         !------------------------------------------------------------------------------
@@ -217,7 +216,7 @@ contains
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
         doubleprecision, dimension(:), intent(in)   :: weights
         integer, dimension(2)              :: nPointsShape
-        integer                            :: np, ix, iy, iz, nd, did
+        integer                            :: np, nd, did
         integer, dimension(3)              :: gridIndexes
         logical :: inside
         !------------------------------------------------------------------------------

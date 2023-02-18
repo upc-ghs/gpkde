@@ -1,24 +1,19 @@
 module KernelMultiGaussianModule
     !------------------------------------------------------------------------------
-    ! Module that provides function for evaluating a regular 3D grid projected 
-    ! MultiGaussian kernel 
+    ! Module that provides grid-projected MultiGaussian kernels 
     !------------------------------------------------------------------------------
     implicit none
-
 
     ! Parameters
     doubleprecision, parameter :: pi      = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtPi  = sqrt(4.d0*atan(1.d0))
     doubleprecision, parameter :: sqrtTwo = sqrt(2d0)
-    integer           :: nDim    = 3
-
     integer, parameter :: defaultKernelRange   = 3
     integer, parameter :: defaultKernelSDRange = 4
-
+    integer            :: nDim    = 3
 
     ! Set default access status to private
     private
-
 
     type, public, abstract :: KernelType
         
@@ -29,17 +24,15 @@ module KernelMultiGaussianModule
         integer, dimension(3)         :: matrixPositiveShape = 0 
         doubleprecision, dimension(:,:,:), allocatable :: matrix
         doubleprecision, dimension(:,:,:), allocatable :: bmatrix
-
         integer, dimension(3) :: dimensionMask
         integer               :: idDim1, idDim2
-
-        logical :: shouldIntegrateOne 
+        logical               :: shouldIntegrateOne 
 
     contains 
         
         ! Procedures
-        procedure, non_overridable :: Initialize                => prInitialize ! Consider deferring
-        procedure, non_overridable :: Reset                     => prReset      ! Consider deferring
+        procedure, non_overridable :: Initialize                => prInitialize 
+        procedure, non_overridable :: Reset                     => prReset      
         procedure, non_overridable :: ResetMatrix               => prResetMatrix
         procedure, non_overridable :: ComputeGridSpans          => prComputeGridSpans
         procedure, non_overridable :: ComputeGridSpansTranspose => prComputeGridSpansTranspose
@@ -385,7 +378,6 @@ contains
         integer, dimension(3), intent(in) :: gridIndexes
         integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
         integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
-        integer :: lenbx, lenby, lenbz
         integer, intent(in) :: boundLocX, boundLocY, boundLocZ
         logical, intent(in) :: isBoundaryX    
         logical, intent(in) :: isBoundaryY
@@ -394,10 +386,8 @@ contains
         integer, intent(in) :: boundDirY
         integer, intent(in) :: boundDirZ
         integer, dimension(:), allocatable :: kernelShape
-        integer, dimension(:), allocatable :: nBins
-        integer :: nx, ny, nz
         integer, dimension(3), intent(in) :: dimensionMask
-        integer :: n,m 
+        integer :: lenb
         !------------------------------------------------------------------------------
 
         ! This was done outside
@@ -418,16 +408,16 @@ contains
             select case( boundDirX ) 
               case(1)
                 ! WEST
-                lenbx = boundLocX
-                this%bmatrix( boundLocX + 1: boundLocX + lenbx, :, :) = &
-                this%bmatrix( boundLocX + 1: boundLocX + lenbx, :, :) + &
+                lenb = boundLocX
+                this%bmatrix( boundLocX + 1: boundLocX + lenb, :, :) = &
+                this%bmatrix( boundLocX + 1: boundLocX + lenb, :, :) + &
                 this%bmatrix( boundLocX:1:-1, :, :)
                 this%bmatrix( :boundLocX, :, :) = 0
               case(2)
                 ! EAST 
-                lenbx = kernelShape(1) - boundLocX
-                this%bmatrix( boundLocX - lenbx + 1: boundLocX, :, :) = &
-                this%bmatrix( boundLocX - lenbx + 1: boundLocX, :, :) + &
+                lenb = kernelShape(1) - boundLocX
+                this%bmatrix( boundLocX - lenb + 1: boundLocX, :, :) = &
+                this%bmatrix( boundLocX - lenb + 1: boundLocX, :, :) + &
                 this%bmatrix( kernelShape(1): boundLocX + 1 :-1, :, :)
                 this%bmatrix( boundLocX + 1:, :, :) = 0
             end select    
@@ -441,16 +431,16 @@ contains
             select case( boundDirY ) 
               case(1)
                 ! SOUTH
-                lenbx = boundLocY
-                this%bmatrix( :, boundLocY + 1: boundLocY + lenbx, :) = &
-                this%bmatrix( :, boundLocY + 1: boundLocY + lenbx, :) + &
+                lenb = boundLocY
+                this%bmatrix( :, boundLocY + 1: boundLocY + lenb, :) = &
+                this%bmatrix( :, boundLocY + 1: boundLocY + lenb, :) + &
                 this%bmatrix( :, boundLocY:1:-1, :)
                 this%bmatrix( :, :boundLocY, :) = 0
               case(2)
                 ! NORTH
-                lenbx = kernelShape(2) - boundLocY 
-                this%bmatrix( :, boundLocY - lenbx + 1 : boundLocY, :) = &
-                this%bmatrix( :, boundLocY - lenbx + 1 : boundLocY, :) + &
+                lenb = kernelShape(2) - boundLocY 
+                this%bmatrix( :, boundLocY - lenb + 1 : boundLocY, :) = &
+                this%bmatrix( :, boundLocY - lenb + 1 : boundLocY, :) + &
                 this%bmatrix( :, kernelShape(2): boundLocY + 1 :-1, :)
                 this%bmatrix( :, boundLocY + 1 :, :) = 0
             end select    
@@ -464,16 +454,16 @@ contains
             select case( boundDirZ ) 
               case(1)
                 ! BOTTOM
-                lenbx = boundLocZ
-                this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenbx) = &
-                this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenbx) + &
+                lenb = boundLocZ
+                this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenb) = &
+                this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenb) + &
                 this%bmatrix( :, :, boundLocZ:1:-1)
                 this%bmatrix( :, :, :boundLocZ) = 0
               case(2)
                 ! TOP
-                lenbx = kernelShape(3) - boundLocZ
-                this%bmatrix( :, :, boundLocZ - lenbx + 1 : boundLocZ) = &
-                this%bmatrix( :, :, boundLocZ - lenbx + 1 : boundLocZ) + &
+                lenb = kernelShape(3) - boundLocZ
+                this%bmatrix( :, :, boundLocZ - lenb + 1 : boundLocZ) = &
+                this%bmatrix( :, :, boundLocZ - lenb + 1 : boundLocZ) + &
                 this%bmatrix( :, :, kernelShape(3): boundLocZ + 1 :-1)
                 this%bmatrix( :, :, boundLocZ + 1 :) = 0
             end select
@@ -482,9 +472,9 @@ contains
 
 
         if ( this%shouldIntegrateOne ) then 
-            if ( ( abs( sum(this%bmatrix) ) .lt. 0.99 ) ) then  
-                print *, 'BAD KERNEL ', sum(this%bmatrix)
-            end if
+          if ( ( abs( sum(this%bmatrix) ) .lt. 0.99 ) ) then  
+            write(*,*) 'Kernel does not integrate one and it should. Integral: ', sum(this%bmatrix)
+          end if
         end if 
 
 
