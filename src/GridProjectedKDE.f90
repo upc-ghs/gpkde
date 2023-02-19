@@ -363,9 +363,9 @@ module GridProjectedKDEModule
 
       ! Initialize reconstruction grid 
       where( binSize .ne. 0d0 ) 
-          this%nBins = ceiling( domainSize/binSize )
+        this%nBins = ceiling( domainSize/binSize )
       elsewhere
-          this%nBins = 1
+        this%nBins = 1
       end where
 
       ! Stop if any nBins .lt. 1
@@ -378,9 +378,9 @@ module GridProjectedKDEModule
 
       ! domainOrigin
       if ( present( domainOrigin ) ) then 
-          this%domainOrigin = domainOrigin
+        this%domainOrigin = domainOrigin
       else 
-          this%domainOrigin = (/0,0,0/)
+        this%domainOrigin = (/0,0,0/)
       end if
 
       ! Depending on nBins, is the number of dimensions 
@@ -428,88 +428,84 @@ module GridProjectedKDEModule
       ! Process optional arguments
       ! Kernel database 
       if ( present( databaseOptimization ) ) then 
-          this%databaseOptimization = databaseOptimization
+        this%databaseOptimization = databaseOptimization
       else 
-          this%databaseOptimization = defaultDatabaseOptimization
+        this%databaseOptimization = defaultDatabaseOptimization
       end if 
-
       ! flatKernelDatabase
       if ( present( flatKernelDatabase ) ) then 
-          this%flatKernelDatabase = flatKernelDatabase
+        this%flatKernelDatabase = flatKernelDatabase
       else 
-          this%flatKernelDatabase = defaultFlatKernelDatabase
+        this%flatKernelDatabase = defaultFlatKernelDatabase
       end if
-
       ! Process kernel database discretization parameters 
       if ( present( maxHOverLambda ) ) then 
-          this%maxHOverLambda = maxHOverLambda
+        this%maxHOverLambda = maxHOverLambda
       else 
-          this%maxHOverLambda = defaultMaxHOverLambda
+        this%maxHOverLambda = defaultMaxHOverLambda
       end if
       if ( present( minHOverLambda ) ) then 
-          this%minHOverLambda = minHOverLambda
+        this%minHOverLambda = minHOverLambda
       else 
-          this%minHOverLambda = defaultMinHOverLambda
+        this%minHOverLambda = defaultMinHOverLambda
       end if
       if ( present( deltaHOverLambda ) ) then 
-          this%deltaHOverLambda = deltaHOverLambda
+        this%deltaHOverLambda = deltaHOverLambda
       else 
-          this%deltaHOverLambda = defaultDeltaHOverLambda
+        this%deltaHOverLambda = defaultDeltaHOverLambda
       end if
       if ( present( densityRelativeConvergence ) ) then 
-          this%densityRelativeConvergence = densityRelativeConvergence
+        this%densityRelativeConvergence = densityRelativeConvergence
       else 
-          this%densityRelativeConvergence = defaultDensityRelativeConvergence
+        this%densityRelativeConvergence = defaultDensityRelativeConvergence
       end if
       if ( present( minRoughness ) ) then 
-          this%minLimitRoughness = minRoughness
+        this%minLimitRoughness = minRoughness
       else 
-          this%minLimitRoughness = defaultMinLimitRoughness
+        this%minLimitRoughness = defaultMinLimitRoughness
       end if
       if ( present( maxRoughness ) ) then 
-          this%maxLimitRoughness = maxRoughness
+        this%maxLimitRoughness = maxRoughness
       else 
-          this%maxLimitRoughness = defaultMaxLimitRoughness
+        this%maxLimitRoughness = defaultMaxLimitRoughness
       end if
       if ( present( logKernelDatabase ) ) then 
-          this%logKernelDatabase = logKernelDatabase
+        this%logKernelDatabase = logKernelDatabase
       else 
-          this%logKernelDatabase = defaultLogKernelDatabase
+        this%logKernelDatabase = defaultLogKernelDatabase
       end if
       ! bruteOptimization, not used
       if ( present( bruteOptimization ) ) then 
-          this%bruteOptimization = bruteOptimization
+        this%bruteOptimization = bruteOptimization
       else 
-          this%bruteOptimization = defaultBruteOptimization       
+        this%bruteOptimization = defaultBruteOptimization       
       end if
       ! Not implemented 
       if ( present( anisotropicSigmaSupport ) ) then 
-          this%anisotropicSigmaSupport = anisotropicSigmaSupport
+        this%anisotropicSigmaSupport = anisotropicSigmaSupport
       else 
-          this%anisotropicSigmaSupport = defaultAnisotropicSigmaSupport
+        this%anisotropicSigmaSupport = defaultAnisotropicSigmaSupport
       end if
       ! nOptimizationLoops
       if ( present( nOptimizationLoops ) ) then 
-          this%nOptimizationLoops = nOptimizationLoops
+        this%nOptimizationLoops = nOptimizationLoops
       else 
-          this%nOptimizationLoops = defaultNOptLoops
+        this%nOptimizationLoops = defaultNOptLoops
       end if 
       ! Initialize smoothing,
       ! could be a vector for active bins 
       if ( present( initialSmoothing ) ) then
-          this%initialSmoothing = initialSmoothing
+        this%initialSmoothing = initialSmoothing
       else
-          ! The initial estimate could be improved
-          this%initialSmoothing = defaultInitialSmoothingFactor*this%histogram%binDistance
+        ! The initial estimate could be improved
+        this%initialSmoothing = defaultInitialSmoothingFactor*this%histogram%binDistance
       end if 
-  
       ! Fix to be consistent with dimensions 
       do n =1,3
         if ( dimensionMask(n) .eq. 0 ) then 
           this%initialSmoothing(n) = 0d0
         end if 
       end do
-
       ! Smoothing growth
       if ( present( maxSmoothingGrowth ) ) then 
         this%maxSmoothingGrowth = maxSmoothingGrowth
@@ -702,99 +698,95 @@ module GridProjectedKDEModule
 
 
     subroutine prInitializeModuleDimensions( this, nDim, dimensionMask )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        class( GridProjectedKDEType ), target :: this 
-        integer, intent(inout)        :: nDim
-        integer, dimension(3), intent(inout) :: dimensionMask
-        integer :: n, nd, currentDim
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      class( GridProjectedKDEType ), target :: this 
+      integer, intent(inout)        :: nDim
+      integer, dimension(3), intent(inout) :: dimensionMask
+      integer :: n, nd, currentDim
+      !------------------------------------------------------------------------------
 
-        ! Determine dimensions based on number of bins
-        do n = 1,3
-          if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
-        end do 
-        nDim = sum(dimensionMask)
-        this%dimensionMask = dimensionMask
+      ! Determine dimensions based on number of bins
+      do n = 1,3
+        if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
+      end do 
+      nDim = sum(dimensionMask)
+      this%dimensionMask = dimensionMask
 
-        if ( nDim .le. 0 ) then 
-          write(*,*) 'Error while initializing GPKDE dimensions. nDim .le. 0. Stop.'
-          stop
-        end if 
+      if ( nDim .le. 0 ) then 
+        write(*,*) 'Error while initializing GPKDE dimensions. nDim .le. 0. Stop.'
+        stop
+      end if 
 
-        ! Identify directions
-        ! 1D
-        if ( nDim .eq. 1 ) then 
-            ! Relate x,y,z dimensions to 1 dimensions
-            do nd = 1,3
-                if ( this%dimensionMask( nd ) .eq. 0 ) cycle
-                select case(nd) 
-                    case (1)
-                        this%idDim1 = nd
-                    case (2)
-                        this%idDim1 = nd
-                    case (3)
-                        this%idDim1 = nd
-                end select   
-                ! Use the first found
-                exit
-            end do
-        end if
+      ! Identify directions
+      ! 1D
+      if ( nDim .eq. 1 ) then 
+        ! Relate x,y,z dimensions to 1 dimensions
+        do nd = 1,3
+          if ( this%dimensionMask( nd ) .eq. 0 ) cycle
+          select case(nd) 
+            case (1)
+              this%idDim1 = nd
+            case (2)
+              this%idDim1 = nd
+            case (3)
+              this%idDim1 = nd
+          end select   
+          ! Use the first found
+          exit
+        end do
+      end if
 
-        ! 2D
-        if ( nDim .eq. 2 ) then
-            ! Relate x,y,z dimensions to 1,2 dimensions
-            do nd = 1,3
-                if ( this%dimensionMask( nd ) .eq. 0 ) cycle
-                currentDim = sum( this%dimensionMask(1:nd) )
-                select case(nd) 
-                    case (1)
-                        this%idDim1 = nd
-                    case (2)
-                        if ( currentDim .eq. 1 ) then 
-                            this%idDim1 = nd
-                        else if ( currentDim .eq. 2 ) then
-                            this%idDim2 = nd
-                        end if
-                    case (3)
-                        this%idDim2 = nd
-                end select   
-            end do
-        end if
+      ! 2D
+      if ( nDim .eq. 2 ) then
+        ! Relate x,y,z dimensions to 1,2 dimensions
+        do nd = 1,3
+          if ( this%dimensionMask( nd ) .eq. 0 ) cycle
+          currentDim = sum( this%dimensionMask(1:nd) )
+          select case(nd) 
+            case (1)
+              this%idDim1 = nd
+            case (2)
+              if ( currentDim .eq. 1 ) then 
+                this%idDim1 = nd
+              else if ( currentDim .eq. 2 ) then
+                this%idDim2 = nd
+              end if
+            case (3)
+              this%idDim2 = nd
+          end select   
+        end do
+      end if
 
-
-        return
-
+      return
 
     end subroutine prInitializeModuleDimensions 
 
 
-
     subroutine prInitializeModuleConstants( this )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        class( GridProjectedKDEType ) :: this 
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      class( GridProjectedKDEType ) :: this 
+      !------------------------------------------------------------------------------
+
+      ! Compute constants
+      this%supportDimensionConstant = ( ( nDim + 2d0 )*( 8d0*pi )**( 0.5*nDim ) )**( 0.25 )
+
+      this%alphaDimensionConstant = ( ( 1d0 + 2d0**(0.5*nDim + 2d0) )/( 3d0*2d0**( 4d0/( nDim + 4d0 ) ) ) )**(&
+          1d0/(nDim + 6d0) )*( nDim + 2d0 )**( 1d0/(nDim + 4d0) )/( ( nDim + 4d0 )**( 1d0/(nDim + 6d0) ) )
+
+      this%betaDimensionConstant  = 2d0/( nDim + 4d0)/( nDim + 6d0 ) 
 
 
-        ! Compute constants
-        this%supportDimensionConstant = ( ( nDim + 2d0 )*( 8d0*pi )**( 0.5*nDim ) )**( 0.25 )
-
-        this%alphaDimensionConstant = ( ( 1d0 + 2d0**(0.5*nDim + 2d0) )/( 3d0*2d0**( 4d0/( nDim + 4d0 ) ) ) )**(&
-            1d0/(nDim + 6d0) )*( nDim + 2d0 )**( 1d0/(nDim + 4d0) )/( ( nDim + 4d0 )**( 1d0/(nDim + 6d0) ) )
-
-        this%betaDimensionConstant  = 2d0/( nDim + 4d0)/( nDim + 6d0 ) 
-
-
-        return
+      return
 
 
     end subroutine prInitializeModuleConstants 
@@ -805,110 +797,47 @@ module GridProjectedKDEModule
     ! net roughness
     ! initialize
     subroutine prInitializeNetRoughnessFunction( this, nDim )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        class( GridProjectedKDEType ), target :: this 
-        integer, intent(in)        :: nDim
-        integer :: currentDim, nd
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      class( GridProjectedKDEType ), target :: this 
+      integer, intent(in)        :: nDim
+      !------------------------------------------------------------------------------
 
+      if ( nDim .eq. 1 ) then 
+        ! Assign interfaces
+        this%ComputeNetRoughnessEstimate => prComputeNetRoughness1D
+        if ( this%databaseOptimization ) then 
+          this%SetKernelSD => prSetKernelSD1DFromDatabase
+        else
+          this%SetKernelSD => prSetKernelSD1DBrute
+        end if 
+      end if
 
-        if ( nDim .eq. 1 ) then 
-            ! Relate x,y,z dimensions to 1 dimensions
-            do nd = 1,3
+      if ( nDim .eq. 2 ) then
+        ! Assign interface
+        this%ComputeNetRoughnessEstimate => prComputeNetRoughness2D
+        if ( this%databaseOptimization ) then 
+          this%SetKernelSD2D => prSetKernelSD2DFromDatabase
+        else
+          this%SetKernelSD2D => prSetKernelSD2DBrute
+        end if 
+      end if
 
-                if ( this%dimensionMask( nd ) .eq. 0 ) cycle
-            
-                select case(nd) 
-                    case (1)
-                        this%kernelSDDatabase1 => this%kernelSDXDatabase
-                        this%idDim1 = nd
-                    case (2)
-                        this%kernelSDDatabase1 => this%kernelSDYDatabase
-                        this%idDim1 = nd
-                    case (3)
-                        this%kernelSDDatabase1 => this%kernelSDZDatabase
-                        this%idDim1 = nd
-                end select   
+      if ( nDim .eq. 3 ) then 
+        ! Assign interface
+        this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
+        if ( this%databaseOptimization ) then 
+            this%SetKernelSD3D => prSetKernelSD3DFromDatabase
+        else
+            this%SetKernelSD3D => prSetKernelSD3DBrute
+        end if 
+      end if
 
-                ! Use the first found
-                exit
-
-            end do
-
-            ! Assign interfaces
-            this%ComputeNetRoughnessEstimate => prComputeNetRoughness1D
-
-            if ( this%databaseOptimization ) then 
-                this%SetKernelSD => prSetKernelSD1DFromDatabase
-            else
-                this%SetKernelSD => prSetKernelSD1DBrute
-            end if 
-
-
-        end if
-
-
-        if ( nDim .eq. 2 ) then
-
-            ! Relate x,y,z dimensions to 1,2 dimensions
-            do nd = 1,3
-
-                if ( this%dimensionMask( nd ) .eq. 0 ) cycle
-                currentDim = sum( this%dimensionMask(1:nd) )
-            
-                select case(nd) 
-                    case (1)
-                        this%kernelSDDatabase1 => this%kernelSDXDatabase
-                        this%idDim1 = nd
-                    case (2)
-                        if ( currentDim .eq. 1 ) then 
-                            this%kernelSDDatabase1 => this%kernelSDYDatabase
-                            this%idDim1 = nd
-                        else if ( currentDim .eq. 2 ) then
-                            this%kernelSDDatabase2 => this%kernelSDYDatabase
-                            this%idDim2 = nd
-                        end if
-                    case (3)
-                        this%kernelSDDatabase2 => this%kernelSDZDatabase
-                        this%idDim2 = nd
-                end select   
-
-            end do
-
-            ! Assign interface
-            this%ComputeNetRoughnessEstimate => prComputeNetRoughness2D
-
-            if ( this%databaseOptimization ) then 
-                this%SetKernelSD2D => prSetKernelSD2DFromDatabase
-            else
-                this%SetKernelSD2D => prSetKernelSD2DBrute
-            end if 
-
-
-        end if
-
-
-        if ( nDim .eq. 3 ) then 
-
-            ! Assign interface
-            this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
-
-            if ( this%databaseOptimization ) then 
-                this%SetKernelSD3D => prSetKernelSD3DFromDatabase
-            else
-                this%SetKernelSD3D => prSetKernelSD3DBrute
-            end if 
-
-        end if
-
-
-        return
-
+      return
 
     end subroutine prInitializeNetRoughnessFunction 
 
@@ -1598,294 +1527,287 @@ module GridProjectedKDEModule
                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                             netRoughnessArray, kernelSigmaSupport, &
                                                    kernelSDX, kernelSDY, kernelSDZ ) 
-        !------------------------------------------------------------------------------
-        ! Net roughness in 3D
-        !
-        !  - Eq. 13c in Sole-Mari et al. (2019)
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        !input
-        class( GridProjectedKDEType ), target :: this
-        type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
-        doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
-        doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
-        type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
-        type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
-        type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
-        ! out
-        doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
-        doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
-        doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
-        doubleprecision, dimension(:), intent(inout)   :: netRoughnessArray
-        ! local 
-        type( GridCellType ), pointer :: gc => null()
-        doubleprecision, dimension(:,:,:), pointer :: curvature
-        doubleprecision, dimension(:,:,:), pointer :: roughness
-        doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureX
-        doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureY
-        doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXX
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureZZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXX
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYY
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYZ
-        doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessZZ
-        integer :: n, nr  
-        integer :: iX, iY, iZ 
-        !------------------------------------------------------------------------------
-        allocate(          curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(          curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(          curvatureZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         curvatureZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        allocate(         roughnessZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! Net roughness in 3D
+      !
+      !  - Eq. 13c in Sole-Mari et al. (2019)
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      !input
+      class( GridProjectedKDEType ), target :: this
+      type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
+      doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
+      doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
+      type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
+      type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
+      type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
+      ! out
+      doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
+      doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
+      doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
+      doubleprecision, dimension(:), intent(inout)   :: netRoughnessArray
+      ! local 
+      type( GridCellType ), pointer :: gc => null()
+      doubleprecision, dimension(:,:,:), pointer :: curvature
+      doubleprecision, dimension(:,:,:), pointer :: roughness
+      doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureX
+      doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureY
+      doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureZ
+      doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXX
+      doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXY
+      doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXZ
+      doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYY
+      doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYZ
+      doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureZZ
+      doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXX
+      doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXY
+      doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXZ
+      doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYY
+      doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYZ
+      doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessZZ
+      integer :: n, nr  
+      integer :: iX, iY, iZ 
+      !------------------------------------------------------------------------------
+      allocate(          curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(          curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(          curvatureZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         curvatureXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         curvatureXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         curvatureXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         curvatureYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         curvatureYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         curvatureZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         roughnessXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         roughnessXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         roughnessXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         roughnessYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         roughnessYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      allocate(         roughnessZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+      !------------------------------------------------------------------------------
 
 
-        ! Initialize 
-        curvatureX  = 0d0
-        curvatureY  = 0d0
-        curvatureZ  = 0d0
-        roughnessXX = 0d0 
-        roughnessYY = 0d0
-        roughnessZZ = 0d0
-        roughnessXY = 0d0
-        roughnessXZ = 0d0
-        roughnessYZ = 0d0
+      ! Initialize 
+      curvatureX  = 0d0
+      curvatureY  = 0d0
+      curvatureZ  = 0d0
+      roughnessXX = 0d0 
+      roughnessYY = 0d0
+      roughnessZZ = 0d0
+      roughnessXY = 0d0
+      roughnessXZ = 0d0
+      roughnessYZ = 0d0
 
 
-        ! Curvatures, kappa
-        !$omp parallel do schedule( dynamic, 1 )           & 
-        !$omp default( none )                              &
-        !$omp shared( this )                               &
-        !$omp shared( activeGridCells )                    &
-        !$omp reduction( +:curvatureX )                    &
-        !$omp reduction( +:curvatureY )                    &
-        !$omp reduction( +:curvatureZ )                    &
-        !$omp shared( curvatureBandwidth )                 &
-        !$omp firstprivate( kernelSDX )                    &
-        !$omp firstprivate( kernelSDY )                    &
-        !$omp firstprivate( kernelSDZ )                    &
-        !$omp private( gc )                       
-        do n = 1, this%nComputeBins
+      ! Curvatures, kappa
+      !$omp parallel do schedule( dynamic, 1 )           & 
+      !$omp default( none )                              &
+      !$omp shared( this )                               &
+      !$omp shared( activeGridCells )                    &
+      !$omp reduction( +:curvatureX )                    &
+      !$omp reduction( +:curvatureY )                    &
+      !$omp reduction( +:curvatureZ )                    &
+      !$omp shared( curvatureBandwidth )                 &
+      !$omp firstprivate( kernelSDX )                    &
+      !$omp firstprivate( kernelSDY )                    &
+      !$omp firstprivate( kernelSDZ )                    &
+      !$omp private( gc )                       
+      do n = 1, this%nComputeBins
     
-            ! Assign gc pointer 
-            gc => activeGridCells(n)
+        ! Assign gc pointer 
+        gc => activeGridCells(n)
   
-            if ( ( any( curvatureBandwidth( :, n ) .lt. 0d0 ) ) .or. & 
-                 ( any( curvatureBandwidth( :, n ) /= curvatureBandwidth( :, n ) ) ) ) cycle
+        if ( ( any( curvatureBandwidth( :, n ) .lt. 0d0 ) ) .or. & 
+             ( any( curvatureBandwidth( :, n ) /= curvatureBandwidth( :, n ) ) ) ) cycle
 
-            ! Set kernels        
-            call this%SetKernelSD3D( gc, kernelSDX, kernelSDY, kernelSDZ, curvatureBandwidth( :, n ) )
+        ! Set kernels        
+        call this%SetKernelSD3D( gc, kernelSDX, kernelSDY, kernelSDZ, curvatureBandwidth( :, n ) )
 
-            ! Compute curvature
-            curvatureX( &
-                    gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
-                    gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
-                    gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-                ) = curvatureX( &
-                    gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
-                    gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
-                    gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-                ) + this%histogram%counts(                               &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(   &
-                            gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
-                            gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
-                            gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
-                    )
+        ! Compute curvature
+        curvatureX( &
+                gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
+                gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
+                gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
+            ) = curvatureX( &
+                gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
+                gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
+                gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
+            ) + this%histogram%counts(                               &
+                gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(   &
+                        gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
+                        gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
+                        gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
+                )
 
-            ! Compute curvature
-            curvatureY( &
-                    gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
-                    gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
-                    gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-                ) = curvatureY( &
-                    gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
-                    gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
-                    gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-                ) + this%histogram%counts(                               &
-                       gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
-                            gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
-                            gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
-                            gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
-                       )
-            
-            ! Compute curvature 
-            curvatureZ( &
-                    gc%kernelSD3XGSpan(1):gc%kernelSD3XGSpan(2), &
-                    gc%kernelSD3YGSpan(1):gc%kernelSD3YGSpan(2), & 
-                    gc%kernelSD3ZGSpan(1):gc%kernelSD3ZGSpan(2)  & 
-                ) = curvatureZ( &
-                    gc%kernelSD3XGSpan(1):gc%kernelSD3XGSpan(2), &
-                    gc%kernelSD3YGSpan(1):gc%kernelSD3YGSpan(2), & 
-                    gc%kernelSD3ZGSpan(1):gc%kernelSD3ZGSpan(2)  & 
-                ) + this%histogram%counts(                             &
-                    gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD3Matrix(&
-                            gc%kernelSD3XMSpan(1):gc%kernelSD3XMSpan(2), &
-                            gc%kernelSD3YMSpan(1):gc%kernelSD3YMSpan(2), & 
-                            gc%kernelSD3ZMSpan(1):gc%kernelSD3ZMSpan(2)  & 
-                    )
+        ! Compute curvature
+        curvatureY( &
+                gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
+                gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
+                gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
+            ) = curvatureY( &
+                gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
+                gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
+                gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
+            ) + this%histogram%counts(                               &
+                   gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
+                        gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
+                        gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
+                        gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
+                   )
+        
+        ! Compute curvature 
+        curvatureZ( &
+                gc%kernelSD3XGSpan(1):gc%kernelSD3XGSpan(2), &
+                gc%kernelSD3YGSpan(1):gc%kernelSD3YGSpan(2), & 
+                gc%kernelSD3ZGSpan(1):gc%kernelSD3ZGSpan(2)  & 
+            ) = curvatureZ( &
+                gc%kernelSD3XGSpan(1):gc%kernelSD3XGSpan(2), &
+                gc%kernelSD3YGSpan(1):gc%kernelSD3YGSpan(2), & 
+                gc%kernelSD3ZGSpan(1):gc%kernelSD3ZGSpan(2)  & 
+            ) + this%histogram%counts(                             &
+                gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD3Matrix(&
+                        gc%kernelSD3XMSpan(1):gc%kernelSD3XMSpan(2), &
+                        gc%kernelSD3YMSpan(1):gc%kernelSD3YMSpan(2), & 
+                        gc%kernelSD3ZMSpan(1):gc%kernelSD3ZMSpan(2)  & 
+                )
     
-        end do
-        !$omp end parallel do
-        curvatureX = curvatureX/this%histogram%binVolume
-        curvatureY = curvatureY/this%histogram%binVolume
-        curvatureZ = curvatureZ/this%histogram%binVolume
-        ! Matrix from curvature kernels is lambda**2*KernelVMatrix
-        curvatureX = curvatureX/( this%binSize(1)**2 )
-        curvatureY = curvatureY/( this%binSize(2)**2 )
-        curvatureZ = curvatureZ/( this%binSize(3)**2 )
+      end do
+      !$omp end parallel do
+      curvatureX = curvatureX/this%histogram%binVolume
+      curvatureY = curvatureY/this%histogram%binVolume
+      curvatureZ = curvatureZ/this%histogram%binVolume
+      ! Matrix from curvature kernels is lambda**2*KernelVMatrix
+      curvatureX = curvatureX/( this%binSize(1)**2 )
+      curvatureY = curvatureY/( this%binSize(2)**2 )
+      curvatureZ = curvatureZ/( this%binSize(3)**2 )
 
+      ! Compute curvatures product
+      curvatureXX = curvatureX*curvatureX
+      curvatureYY = curvatureY*curvatureY
+      curvatureZZ = curvatureZ*curvatureZ
+      curvatureXY = curvatureX*curvatureY
+      curvatureXZ = curvatureX*curvatureZ
+      curvatureYZ = curvatureY*curvatureZ
 
-        ! Compute curvatures product
-        curvatureXX = curvatureX*curvatureX
-        curvatureYY = curvatureY*curvatureY
-        curvatureZZ = curvatureZ*curvatureZ
-        curvatureXY = curvatureX*curvatureY
-        curvatureXZ = curvatureX*curvatureZ
-        curvatureYZ = curvatureY*curvatureZ
+      ! Compute roughnesses
+      do nr = 1, 6
+        select case(nr) 
+          case (1)
+            roughness => roughnessXX
+            curvature => curvatureXX
+          case (2)
+            roughness => roughnessYY
+            curvature => curvatureYY
+          case (3)
+            roughness => roughnessZZ
+            curvature => curvatureZZ
+          case (4)
+            roughness => roughnessXY
+            curvature => curvatureXY
+          case (5)
+            roughness => roughnessXZ
+            curvature => curvatureXZ
+          case (6)
+            roughness => roughnessYZ
+            curvature => curvatureYZ
+        end select
 
-
-        ! Compute roughnesses
-        do nr = 1, 6
-
-            select case(nr) 
-                case (1)
-                    roughness => roughnessXX
-                    curvature => curvatureXX
-                case (2)
-                    roughness => roughnessYY
-                    curvature => curvatureYY
-                case (3)
-                    roughness => roughnessZZ
-                    curvature => curvatureZZ
-                case (4)
-                    roughness => roughnessXY
-                    curvature => curvatureXY
-                case (5)
-                    roughness => roughnessXZ
-                    curvature => curvatureXZ
-                case (6)
-                    roughness => roughnessYZ
-                    curvature => curvatureYZ
-            end select
-
-
-            !$omp parallel do schedule( dynamic, 1 ) &
-            !$omp default( none )                    &
-            !$omp shared( this )                     &
-            !$omp shared( activeGridCells )          &
-            !$omp shared( curvature )                &
-            !$omp shared( roughness )                & 
-            !$omp private( gc )
-            do n = 1, this%nComputeBins
-
-                ! Assign pointer 
-                gc => activeGridCells(n)
-
-                ! Compute roughness grid estimates
-                roughness( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
-                    curvature(&
-                        gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-                        gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-                        gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-                    )*gc%kernelSigmaMatrix(&
-                        gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-                        gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                        gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
-
-            end do
-            !$omp end parallel do 
-
-
-        end do
-
-
-        ! Net roughness
-        roughnessXXArray  = 0d0 
-        roughnessYYArray  = 0d0 
-        roughnessZZArray  = 0d0 
-        netRoughnessArray = 0d0
         !$omp parallel do schedule( dynamic, 1 ) &
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( activeGridCells )          &
-        !$omp shared( roughnessXX, roughnessYY ) &
-        !$omp shared( roughnessZZ, roughnessXY ) &
-        !$omp shared( roughnessXZ, roughnessYZ ) &
-        !$omp shared( roughnessXXArray )         &
-        !$omp shared( roughnessYYArray )         &
-        !$omp shared( roughnessZZArray )         &
-        !$omp shared( netRoughnessArray )        &
-        !$omp private( gc )                      & 
-        !$omp private( iX, iY, iZ )  
+        !$omp shared( curvature )                &
+        !$omp shared( roughness )                & 
+        !$omp private( gc )
         do n = 1, this%nComputeBins
 
-            ! Assign pointer 
-            gc => activeGridCells(n)
+          ! Assign pointer 
+          gc => activeGridCells(n)
 
-            iX = gc%id(1)
-            iY = gc%id(2)
-            iZ = gc%id(3)
+          ! Compute roughness grid estimates
+          roughness( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+              curvature(&
+                  gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+                  gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+                  gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+              )*gc%kernelSigmaMatrix(&
+                  gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+                  gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+                  gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
 
-            ! Assign info for needed arrays 
-            roughnessXXArray( n ) = roughnessXX(iX,iY,iZ)
-            roughnessYYArray( n ) = roughnessYY(iX,iY,iZ)
-            roughnessZZArray( n ) = roughnessZZ(iX,iY,iZ)
-
-            ! Compute net roughness
-            ! 3D
-            ! ISOTROPIC
-            netRoughnessArray( n ) = roughnessXX(iX,iY,iZ) + 2*roughnessXY(iX,iY,iZ) + 2*roughnessXZ(iX,iY,iZ) + &
-                                           roughnessYY(iX,iY,iZ) + 2*roughnessYZ(iX,iY,iZ) + roughnessZZ(iX,iY,iZ)
-
-            ! ANISOTROPIC
-            !netRoughnessArray( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3d0) + &
-            !    2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
-            !    2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
-            !    2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6d0)
-
-            ! NEED COMBINED !
         end do
-        !$omp end parallel do
+        !$omp end parallel do 
+      end do
+
+      ! Net roughness
+      roughnessXXArray  = 0d0 
+      roughnessYYArray  = 0d0 
+      roughnessZZArray  = 0d0 
+      netRoughnessArray = 0d0
+      !$omp parallel do schedule( dynamic, 1 ) &
+      !$omp default( none )                    &
+      !$omp shared( this )                     &
+      !$omp shared( activeGridCells )          &
+      !$omp shared( roughnessXX, roughnessYY ) &
+      !$omp shared( roughnessZZ, roughnessXY ) &
+      !$omp shared( roughnessXZ, roughnessYZ ) &
+      !$omp shared( roughnessXXArray )         &
+      !$omp shared( roughnessYYArray )         &
+      !$omp shared( roughnessZZArray )         &
+      !$omp shared( netRoughnessArray )        &
+      !$omp private( gc )                      & 
+      !$omp private( iX, iY, iZ )  
+      do n = 1, this%nComputeBins
+
+        ! Assign pointer 
+        gc => activeGridCells(n)
+
+        iX = gc%id(1)
+        iY = gc%id(2)
+        iZ = gc%id(3)
+
+        ! Assign info for needed arrays 
+        roughnessXXArray( n ) = roughnessXX(iX,iY,iZ)
+        roughnessYYArray( n ) = roughnessYY(iX,iY,iZ)
+        roughnessZZArray( n ) = roughnessZZ(iX,iY,iZ)
+
+        ! Compute net roughness
+        ! 3D
+        ! ISOTROPIC
+        netRoughnessArray( n ) = roughnessXX(iX,iY,iZ) + 2*roughnessXY(iX,iY,iZ) + 2*roughnessXZ(iX,iY,iZ) + &
+                                       roughnessYY(iX,iY,iZ) + 2*roughnessYZ(iX,iY,iZ) + roughnessZZ(iX,iY,iZ)
+
+        ! ANISOTROPIC
+        !netRoughnessArray( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3d0) + &
+        !    2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
+        !    2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
+        !    2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6d0)
+
+        ! NEED COMBINED !
+      end do
+      !$omp end parallel do
       
-        ! Deallocate
-        deallocate(          curvatureX )
-        deallocate(          curvatureY )
-        deallocate(          curvatureZ )
-        deallocate(         curvatureXX )
-        deallocate(         curvatureXY )
-        deallocate(         curvatureXZ )
-        deallocate(         curvatureYY )
-        deallocate(         curvatureYZ )
-        deallocate(         curvatureZZ )
-        deallocate(         roughnessXX )
-        deallocate(         roughnessXY )
-        deallocate(         roughnessXZ )
-        deallocate(         roughnessYY )
-        deallocate(         roughnessYZ )
-        deallocate(         roughnessZZ )
+      ! Deallocate
+      deallocate(          curvatureX )
+      deallocate(          curvatureY )
+      deallocate(          curvatureZ )
+      deallocate(         curvatureXX )
+      deallocate(         curvatureXY )
+      deallocate(         curvatureXZ )
+      deallocate(         curvatureYY )
+      deallocate(         curvatureYZ )
+      deallocate(         curvatureZZ )
+      deallocate(         roughnessXX )
+      deallocate(         roughnessXY )
+      deallocate(         roughnessXZ )
+      deallocate(         roughnessYY )
+      deallocate(         roughnessYZ )
+      deallocate(         roughnessZZ )
 
 
-        ! Done
-        return
+      ! Done
+      return
 
 
     end subroutine prComputeNetRoughness3D
@@ -1896,258 +1818,350 @@ module GridProjectedKDEModule
                       minHOverLambda, maxHOverLambda, &
                  deltaHOverLambda, logKernelDatabase, &
                            kernelRange, kernelSDRange )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType ) :: this
-        ! input
-        doubleprecision,   intent(in) :: minHOverLambda
-        doubleprecision,   intent(in) :: maxHOverLambda
-        doubleprecision,   intent(in) :: deltaHOverLambda
-        logical, intent(in), optional :: logKernelDatabase
-        integer, intent(in), optional :: kernelRange
-        integer, intent(in), optional :: kernelSDRange
-        ! local
-        doubleprecision, dimension(3) :: inputSmoothing
-        doubleprecision, dimension(:), allocatable :: hOverLambda
-        integer :: nDelta
-        integer :: i, n, m, o, dbi
-        logical :: localLogDatabase
-        integer :: localKernelRange
-        integer :: localKernelSDRange
+      !------------------------------------------------------------------------------
+      ! 
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target :: this
+      ! input
+      doubleprecision,   intent(in) :: minHOverLambda
+      doubleprecision,   intent(in) :: maxHOverLambda
+      doubleprecision,   intent(in) :: deltaHOverLambda
+      logical, intent(in), optional :: logKernelDatabase
+      integer, intent(in), optional :: kernelRange
+      integer, intent(in), optional :: kernelSDRange
+      ! local
+      doubleprecision, dimension(3) :: inputSmoothing
+      doubleprecision, dimension(:), allocatable :: hOverLambda
+      integer :: nDelta
+      integer :: i, n, m, o, dbi
+      logical :: localLogDatabase
+      integer :: localKernelRange
+      integer :: localKernelSDRange
 
-        ! Mem debug
-        doubleprecision :: kernelMatrixMemory = 0d0
-        doubleprecision :: kernelDBMemory     = 0d0
-        doubleprecision :: kernelSDDBMemory   = 0d0
+      ! Mem debug
+      doubleprecision :: kernelMatrixMemory
+      doubleprecision :: kernelDBMemory    
+      doubleprecision :: kernelSDDBMemory  
 
-        ! Time monitoring
-        integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-        doubleprecision :: elapsedTime
-        !------------------------------------------------------------------------------
+      ! Time monitoring
+      integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+      doubleprecision :: elapsedTime
+      !------------------------------------------------------------------------------
 
-        ! Sanity check for input parameters
+      ! Sanity check for input parameters
 
-        ! Default parameters
-
-        ! logDatabase as false
-        if ( present( logKernelDatabase ) ) then 
-            localLogDatabase = logKernelDatabase
-        else
-            localLogDatabase = defaultLogKernelDatabase
-        end if 
-
-        ! Kernel ranges 
-        if ( present( kernelRange ) )  then 
-            localKernelRange = kernelRange
-        else 
-            localKernelRange = defaultKernelRange
-        end if
-
-        if ( present( kernelSDRange ) ) then 
-            localKernelSDRange = kernelSDRange
-        else 
-            localKernelSDRange = defaultKernelSDRange
-        end if 
+      ! Default parameters
+      ! logDatabase as false
+      if ( present( logKernelDatabase ) ) then 
+        localLogDatabase = logKernelDatabase
+      else
+        localLogDatabase = defaultLogKernelDatabase
+      end if 
+      ! Kernel ranges 
+      if ( present( kernelRange ) )  then 
+        localKernelRange = kernelRange
+      else 
+        localKernelRange = defaultKernelRange
+      end if
+      if ( present( kernelSDRange ) ) then 
+        localKernelSDRange = kernelSDRange
+      else 
+        localKernelSDRange = defaultKernelSDRange
+      end if 
 
 
-        ! In the meantime a single nDelta, 
-        ! it could be any discretization
-        if ( localLogDatabase ) then
-            ! LOG FORM
-            ! Verify this 
-            nDelta      = ceiling( log10( maxHOverLambda/minHOverLambda )/log10( 1 + deltaHOverLambda ) ) + 1
-            allocate( hOverLambda( nDelta ) )
-            hOverLambda = this%GenerateLogSpaceData( minHOverLambda, maxHOverLambda, nDelta )
+      ! In the meantime a single nDelta, 
+      ! it could be any discretization
+      if ( localLogDatabase ) then
+        ! LOG FORM
+        ! Verify this 
+        nDelta      = ceiling( log10( maxHOverLambda/minHOverLambda )/log10( 1 + deltaHOverLambda ) ) + 1
+        allocate( hOverLambda( nDelta ) )
+        hOverLambda = this%GenerateLogSpaceData( minHOverLambda, maxHOverLambda, nDelta )
 
-            ! Assign indexes interfaces
-            this%ComputeKernelDatabaseFlatIndexes => prComputeKernelDatabaseFlatIndexesLog
-            this%ComputeKernelDatabaseIndexes     => prComputeKernelDatabaseIndexesLog ! meanwhile for SD's
+        ! Assign indexes interfaces
+        this%ComputeKernelDatabaseFlatIndexes => prComputeKernelDatabaseFlatIndexesLog
+        this%ComputeKernelDatabaseIndexes     => prComputeKernelDatabaseIndexesLog ! meanwhile for SD's
 
-            this%deltaHOverLambda = log( hOverLambda(2)/hOverLambda(1) ) ! Fix this inconsistency, is overwritten
+        this%deltaHOverLambda = log( hOverLambda(2)/hOverLambda(1) ) ! Fix this inconsistency, is overwritten
+      else 
+        ! LINEAR FORM
+        nDelta      = floor( ( maxHOverLambda - minHOverLambda )/deltaHOverLambda )
+        allocate( hOverLambda( nDelta ) )
+        hOverLambda = [ (minHOverLambda + i*deltaHOverLambda, i=0, nDelta ) ]
 
-        else 
-            ! LINEAR FORM
-            nDelta      = floor( ( maxHOverLambda - minHOverLambda )/deltaHOverLambda )
-            allocate( hOverLambda( nDelta ) )
-            hOverLambda = [ (minHOverLambda + i*deltaHOverLambda, i=0, nDelta ) ]
+        ! Assign indexes interface
+        this%ComputeKernelDatabaseFlatIndexes => prComputeKernelDatabaseFlatIndexesLinear
+        this%ComputeKernelDatabaseIndexes     => prComputeKernelDatabaseIndexesLinear ! meanwhile for SD's
+      end if 
 
-            ! Assign indexes interface
-            this%ComputeKernelDatabaseFlatIndexes => prComputeKernelDatabaseFlatIndexesLinear
-            this%ComputeKernelDatabaseIndexes     => prComputeKernelDatabaseIndexesLinear ! meanwhile for SD's
+      ! Assign to the object
+      ! Temporarilly the same value for each axis
+      this%nDeltaHOverLambda   = nDelta
 
-        end if 
+      ! Depending on the number of dimensions
+      ! is the required kernel database.
+      select case(nDim)
+      !1D
+      case(1)
+        ! Allocate kernel databases
+        allocate( this%kernelDatabaseFlat( nDelta, 1 ) )
 
-        ! Assign to the object
-        ! Temporarilly the same value for 
-        ! each axis
-        this%nDeltaHOverLambda   = nDelta
+        ! Assign kernelSD db pointer according 
+        ! to determined direction
+        select case(this%idDim1) 
+          case (1)
+            allocate( this%kernelSDXDatabase( nDelta ) )
+            this%kernelSDDatabase1 => this%kernelSDXDatabase
+          case (2)
+            allocate( this%kernelSDYDatabase( nDelta ) )
+            this%kernelSDDatabase1 => this%kernelSDYDatabase
+          case (3)
+            allocate( this%kernelSDZDatabase( nDelta ) )
+            this%kernelSDDatabase1 => this%kernelSDZDatabase
+        end select   
 
-
-        ! Dependinn on the number of dimensions
-        ! is the required kernel database.
-
-        ! 1D
-        if ( nDim .eq. 1 ) then 
-
-          ! Allocate kernel databases
-          allocate( this%kernelDatabaseFlat( nDelta, 1 ) )
-          allocate( this%kernelSDXDatabase( nDelta )  )    ! AS A PROXY FOR ANY DIM, NOT
-
-          ! TIC
-          call system_clock(clockCountStart, clockCountRate, clockCountMax)
-          print *, '## GPKDE: Computing W kernels database'
-          ! Kernel database
-          !$omp parallel do schedule( dynamic, 1 )  &
-          !$omp private( n )                        &
-          !$omp reduction( +:kernelDBMemory)        &
-          !$omp private( kernelMatrixMemory )       &
-          !$omp private( inputSmoothing )
-          do n = 1, nDelta
-              inputSmoothing = 0
-              inputSmoothing( this%idDim1 ) = hOverLambda(n)
-              call this%kernelDatabaseFlat( n, 1 )%Initialize( &
-                      this%binSize, matrixRange=localKernelRange, dimensionMask=this%dimensionMask )
-              call this%kernelDatabaseFlat( n, 1 )%SetupMatrix( inputSmoothing*this%binSize )
-              kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( n, 1 )%matrix )/1d6
-              kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
-          end do
-          !$omp end parallel do
-
-          ! TOC
-          call system_clock(clockCountStop, clockCountRate, clockCountMax)
-          elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-          print *, '## GPKDE Computing W kernel database took ', elapsedTime, ' seconds'
-          print *, '## GPKDE W Kernel database size GB', kernelDBMemory/1d3
-          
-
-          kernelMatrixMemory = 0d0
-          ! TIC
-          call system_clock(clockCountStart, clockCountRate, clockCountMax)
-          print *, '## GPKDE: Computing SD kernels database'
-          ! Second derivatives
-          !$omp parallel do schedule( dynamic, 1 ) &
-          !$omp reduction( +:kernelSDDBMemory)     &
-          !$omp private( kernelMatrixMemory )      &
-          !$omp private( inputSmoothing )
-          do n = 1, nDelta
-            inputSmoothing(:) = 0
-            inputSmoothing( this%idDim1 ) = hOverLambda(n)
-            ! X 
-            call this%kernelSDXDatabase( n )%Initialize(& 
-                this%binSize, matrixRange=localKernelSDRange, dimensionMask=this%dimensionMask )
-            call this%kernelSDXDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
-            kernelMatrixMemory = sizeof( this%kernelSDXDatabase( n )%matrix )/1d6
-            kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
-          end do
-          !$omp end parallel do
-
-        end if 
-
-
-        ! 2D or 3D (temporary)
-        if ( (nDim .eq. 2 ) .or. ( nDim .eq. 3 ) )  then 
-
-                print *, ' KERNEL DATABASE FOR NDIM: ', nDim
-                print *, ' DIMENSION MASK          : ', this%dimensionMask
-
-                ! LOGGER 
-                print *, '## GPKDE: flat kernel db sizes:', nDelta, nDelta*nDelta*( nDelta + 1 )/2
-
-
-                ! Allocate kernel databases
-                allocate( this%kernelDatabaseFlat( nDelta*( nDelta + 1 )/2, nDelta ) )
-                allocate( this%kernelSDXDatabase( nDelta ) )
-                allocate( this%kernelSDYDatabase( nDelta ) )
-                allocate( this%kernelSDZDatabase( nDelta ) )
-
-                ! TIC
-                call system_clock(clockCountStart, clockCountRate, clockCountMax)
-                print *, '## GPKDE: Computing W kernels database'
-                ! Kernel database
-                !$omp parallel do schedule( dynamic, 1 )  &
-                !$omp private( n, m, dbi )    &
-                !$omp reduction( +:kernelDBMemory)  &
-                !$omp private( kernelMatrixMemory ) &
-                !$omp private( inputSmoothing )
-                do o = 1, nDelta
-                    do n = 1, nDelta
-                        do m = 1, min( n, nDelta )
-                           dbi = n*( n - 1 )/2 + m
-                           inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
-                           call this%kernelDatabaseFlat( dbi, o )%Initialize( & 
-                               this%binSize, matrixRange=localKernelRange )
-                           call this%kernelDatabaseFlat( dbi, o )%SetupMatrix( inputSmoothing*this%binSize )
-                           kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( dbi, o )%matrix )/1d6
-                           kernelDBMemory    = kernelDBMemory + kernelMatrixMemory
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-
-                ! TOC
-                call system_clock(clockCountStop, clockCountRate, clockCountMax)
-                elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-                print *, '## GPKDE Computing W kernel database took ', elapsedTime, ' seconds'
-                print *, '## GPKDE W Kernel database size GB', kernelDBMemory/1d3
-                
-
-                kernelMatrixMemory = 0d0
-                ! TIC
-                call system_clock(clockCountStart, clockCountRate, clockCountMax)
-                print *, '## GPKDE: Computing SD kernels database'
-                ! Second derivatives
-                !$omp parallel do schedule( dynamic, 1 ) &
-                !$omp reduction( +:kernelSDDBMemory)     &
-                !$omp private( kernelMatrixMemory )      &
-                !$omp private( inputSmoothing )
-                do n = 1, nDelta
-                    inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
-
-                    ! X 
-                    call this%kernelSDXDatabase( n )%Initialize(& 
-                        this%binSize, matrixRange=localKernelSDRange )
-                    call this%kernelSDXDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
-
-                    kernelMatrixMemory = sizeof( this%kernelSDXDatabase( n )%matrix )/1d6
-                    kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
-
-                    ! Y
-                    call this%kernelSDYDatabase( n )%Initialize(& 
-                        this%binSize, matrixRange=localKernelSDRange )
-                    call this%kernelSDYDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
-
-                    kernelMatrixMemory = sizeof( this%kernelSDYDatabase( n )%matrix )/1d6
-                    kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
-
-                    ! Z
-                    call this%kernelSDZDatabase( n )%Initialize(& 
-                        this%binSize, matrixRange=localKernelSDRange )
-                    call this%kernelSDZDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
-
-                    kernelMatrixMemory = sizeof( this%kernelSDZDatabase( n )%matrix )/1d6
-                    kernelSDDBMemory    = kernelSDDBMemory + kernelMatrixMemory
-                end do
-                !$omp end parallel do
-
-        end if 
-
-
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        ! Kernel database
+        kernelMatrixMemory = 0d0
+        kernelDBMemory = 0d0
+        !$omp parallel do schedule( dynamic, 1 ) &
+        !$omp default( none )                    &
+        !$omp shared( this )                     &
+        !$omp shared( hOverLambda )              &
+        !$omp shared( localKernelRange )         &
+        !$omp reduction( +:kernelDBMemory )      &
+        !$omp private( kernelMatrixMemory )      &
+        !$omp private( inputSmoothing )
+        do n = 1, nDelta
+          inputSmoothing(:) = 0
+          inputSmoothing( this%idDim1 ) = hOverLambda(n)
+          call this%kernelDatabaseFlat( n, 1 )%Initialize( &
+            this%binSize, matrixRange=localKernelRange, dimensionMask=this%dimensionMask )
+          call this%kernelDatabaseFlat( n, 1 )%SetupMatrix( inputSmoothing*this%binSize )
+          kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( n, 1 )%matrix )/1d6
+          kernelDBMemory     = kernelDBMemory + kernelMatrixMemory
+        end do
+        !$omp end parallel do
         ! TOC
         call system_clock(clockCountStop, clockCountRate, clockCountMax)
         elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-        print *, '## GPKDE Computing SD kernel database took ', elapsedTime, ' seconds'
-        print *, '## GPKDE SD Kernel database size GB', kernelSDDBMemory/1d3
+        
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        ! Second derivatives
+        kernelMatrixMemory = 0d0
+        kernelSDDBMemory = 0d0
+        !$omp parallel do schedule( dynamic, 1 ) &
+        !$omp default( none )                    &
+        !$omp shared( this )                     &
+        !$omp shared( hOverLambda )              &
+        !$omp shared( localKernelSDRange )       &
+        !$omp reduction( +:kernelSDDBMemory )    &
+        !$omp private( kernelMatrixMemory )      &
+        !$omp private( inputSmoothing )
+        do n = 1, nDelta
+          inputSmoothing(:) = 0
+          inputSmoothing( this%idDim1 ) = hOverLambda(n)
+          ! 1 
+          call this%kernelSDDatabase1( n )%Initialize(& 
+              this%binSize, matrixRange=localKernelSDRange, dimensionMask=this%dimensionMask )
+          call this%kernelSDDatabase1( n )%SetupMatrix( inputSmoothing*this%binSize )
+          kernelMatrixMemory = sizeof( this%kernelSDDatabase1( n )%matrix )/1d6
+          kernelSDDBMemory   = kernelSDDBMemory + kernelMatrixMemory
+        end do
+        !$omp end parallel do
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
 
-        ! Done
-        return
+      ! 2D
+      case(2)
+        print *, ' KERNEL DATABASE FOR NDIM: ', nDim
+        print *, ' DIMENSION MASK          : ', this%dimensionMask
+        print *, '## GPKDE: flat kernel db sizes:', nDelta, nDelta*( nDelta + 1 )/2
+
+        allocate( this%kernelDatabaseFlat( nDelta*( nDelta + 1 )/2, 1 ) )
+
+        ! Assign kernelSD db pointers according 
+        ! to determined directions
+        select case(this%idDim1) 
+          case (1)
+            allocate( this%kernelSDXDatabase( nDelta ) )
+            this%kernelSDDatabase1 => this%kernelSDXDatabase
+          case (2)
+            allocate( this%kernelSDYDatabase( nDelta ) )
+            this%kernelSDDatabase1 => this%kernelSDYDatabase
+          case (3)
+            allocate( this%kernelSDZDatabase( nDelta ) )
+            this%kernelSDDatabase1 => this%kernelSDZDatabase
+        end select   
+        select case(this%idDim2) 
+          case (1)
+            ! This should not be the case, x is always the first
+            allocate( this%kernelSDXDatabase( nDelta ) )
+            this%kernelSDDatabase2 => this%kernelSDXDatabase
+          case (2)
+            allocate( this%kernelSDYDatabase( nDelta ) )
+            this%kernelSDDatabase2 => this%kernelSDYDatabase
+          case (3)
+            allocate( this%kernelSDZDatabase( nDelta ) )
+            this%kernelSDDatabase2 => this%kernelSDZDatabase
+        end select   
+
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        ! Kernel database
+        kernelMatrixMemory = 0d0
+        kernelDBMemory = 0d0
+        !$omp parallel do schedule( dynamic, 1 ) &
+        !$omp default( none )                    &
+        !$omp shared( this )                     &
+        !$omp shared( hOverLambda )              &
+        !$omp shared( nDelta )                   &
+        !$omp shared( localKernelRange )         &
+        !$omp private( m, dbi )                  &
+        !$omp reduction( +:kernelDBMemory )      &
+        !$omp private( kernelMatrixMemory )      &
+        !$omp private( inputSmoothing )
+        do n = 1, nDelta
+          do m = 1, min( n, nDelta )
+            dbi = n*( n - 1 )/2 + m
+            inputSmoothing(:) = 0d0
+            inputSmoothing( this%idDim1 ) =  hOverLambda(n)
+            inputSmoothing( this%idDim2 ) =  hOverLambda(m)
+            call this%kernelDatabaseFlat( dbi, 1 )%Initialize( & 
+                this%binSize, matrixRange=localKernelRange )
+            call this%kernelDatabaseFlat( dbi, 1 )%SetupMatrix( inputSmoothing*this%binSize )
+            kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( dbi, 1 )%matrix )/1d6
+            kernelDBMemory = kernelDBMemory + kernelMatrixMemory
+          end do
+        end do
+        !$omp end parallel do
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+
+
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        ! Second derivatives
+        kernelMatrixMemory = 0d0
+        kernelSDDBMemory = 0d0
+        !$omp parallel do schedule( dynamic, 1 ) &
+        !$omp default( none )                    &
+        !$omp shared( this )                     &
+        !$omp shared( hOverLambda )              &
+        !$omp shared( localKernelSDRange )       &
+        !$omp reduction( +:kernelSDDBMemory )    &
+        !$omp private( kernelMatrixMemory )      &
+        !$omp private( inputSmoothing )
+        do n = 1, nDelta
+          inputSmoothing(:) = 0
+          inputSmoothing( this%idDim1 ) = hOverLambda(n)
+          inputSmoothing( this%idDim2 ) = hOverLambda(n)
+          ! 1 
+          call this%kernelSDDatabase1( n )%Initialize(& 
+              this%binSize, matrixRange=localKernelSDRange, dimensionMask=this%dimensionMask )
+          call this%kernelSDDatabase1( n )%SetupMatrix( inputSmoothing*this%binSize )
+          kernelMatrixMemory = sizeof( this%kernelSDDatabase1( n )%matrix )/1d6
+          kernelSDDBMemory   = kernelSDDBMemory + kernelMatrixMemory
+          ! 2 
+          call this%kernelSDDatabase2( n )%Initialize(& 
+              this%binSize, matrixRange=localKernelSDRange, dimensionMask=this%dimensionMask )
+          call this%kernelSDDatabase2( n )%SetupMatrix( inputSmoothing*this%binSize )
+          kernelMatrixMemory = sizeof( this%kernelSDDatabase1( n )%matrix )/1d6
+          kernelSDDBMemory   = kernelSDDBMemory + kernelMatrixMemory
+        end do
+        !$omp end parallel do
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+
+      ! 3D
+      case(3)
+
+        ! Allocate kernel databases
+        allocate( this%kernelDatabaseFlat( nDelta*( nDelta + 1 )/2, nDelta ) )
+        allocate( this%kernelSDXDatabase( nDelta ) )
+        allocate( this%kernelSDYDatabase( nDelta ) )
+        allocate( this%kernelSDZDatabase( nDelta ) )
+
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        ! Kernel database
+        kernelMatrixMemory = 0d0
+        kernelDBMemory = 0d0
+        !$omp parallel do schedule( dynamic, 1 )  &
+        !$omp private( n, m, dbi )    &
+        !$omp reduction( +:kernelDBMemory)  &
+        !$omp private( kernelMatrixMemory ) &
+        !$omp private( inputSmoothing )
+        do o = 1, nDelta
+          do n = 1, nDelta
+            do m = 1, min( n, nDelta )
+              dbi = n*( n - 1 )/2 + m
+              inputSmoothing = (/ hOverLambda(n), hOverLambda(m), hOverLambda(o) /) 
+              call this%kernelDatabaseFlat( dbi, o )%Initialize( & 
+                      this%binSize, matrixRange=localKernelRange )
+              call this%kernelDatabaseFlat( dbi, o )%SetupMatrix( inputSmoothing*this%binSize )
+              kernelMatrixMemory = sizeof( this%kernelDatabaseFlat( dbi, o )%matrix )/1d6
+              kernelDBMemory = kernelDBMemory + kernelMatrixMemory
+            end do
+          end do
+        end do
+        !$omp end parallel do
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        
+
+        ! TIC
+        call system_clock(clockCountStart, clockCountRate, clockCountMax)
+        ! Second derivatives
+        kernelMatrixMemory = 0d0
+        kernelSDDBMemory = 0d0
+        !$omp parallel do schedule( dynamic, 1 ) &
+        !$omp reduction( +:kernelSDDBMemory )    &
+        !$omp private( kernelMatrixMemory )      &
+        !$omp private( inputSmoothing )
+        do n = 1, nDelta
+          inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
+          ! X 
+          call this%kernelSDXDatabase( n )%Initialize(& 
+              this%binSize, matrixRange=localKernelSDRange )
+          call this%kernelSDXDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+          kernelMatrixMemory = sizeof( this%kernelSDXDatabase( n )%matrix )/1d6
+          kernelSDDBMemory = kernelSDDBMemory + kernelMatrixMemory
+          ! Y
+          call this%kernelSDYDatabase( n )%Initialize(& 
+              this%binSize, matrixRange=localKernelSDRange )
+          call this%kernelSDYDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+          kernelMatrixMemory = sizeof( this%kernelSDYDatabase( n )%matrix )/1d6
+          kernelSDDBMemory = kernelSDDBMemory + kernelMatrixMemory
+          ! Z
+          call this%kernelSDZDatabase( n )%Initialize(& 
+              this%binSize, matrixRange=localKernelSDRange )
+          call this%kernelSDZDatabase( n )%SetupMatrix( inputSmoothing*this%binSize )
+          kernelMatrixMemory = sizeof( this%kernelSDZDatabase( n )%matrix )/1d6
+          kernelSDDBMemory = kernelSDDBMemory + kernelMatrixMemory
+        end do
+        !$omp end parallel do
+        ! TOC
+        call system_clock(clockCountStop, clockCountRate, clockCountMax)
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+
+      end select
+
+      ! Done
+      return
 
 
     end subroutine prInitializeKernelDatabaseFlat
-
 
     
     subroutine prDropKernelDatabase( this )
@@ -2162,9 +2176,9 @@ module GridProjectedKDEModule
 
         if ( allocated( this%kernelDatabase     ) ) deallocate( this%kernelDatabase )
         if ( allocated( this%kernelDatabaseFlat ) ) deallocate( this%kernelDatabaseFlat )
-        deallocate( this%kernelSDXDatabase )
-        deallocate( this%kernelSDYDatabase )
-        deallocate( this%kernelSDZDatabase )
+        if ( allocated( this%kernelSDXDatabase  ) ) deallocate( this%kernelSDXDatabase )
+        if ( allocated( this%kernelSDYDatabase  ) ) deallocate( this%kernelSDYDatabase )
+        if ( allocated( this%kernelSDZDatabase  ) ) deallocate( this%kernelSDZDatabase )
 
         ! Dropping database does not mean 
         ! that parameters are resetted
@@ -3837,63 +3851,83 @@ module GridProjectedKDEModule
 
 
     subroutine prComputeKernelDatabaseFlatIndexesLog( this, smoothing, flatDBIndexes, transposeKernel )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
-        integer, dimension(2), intent(inout)      :: flatDBIndexes
-        logical, intent(inout)                    :: transposeKernel
-        ! local 
-        integer, dimension(3) :: indexes 
-        integer :: nd 
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ) :: this
+      doubleprecision, dimension(3), intent(in) :: smoothing
+      integer, dimension(2), intent(inout)      :: flatDBIndexes
+      logical, intent(inout)                    :: transposeKernel
+      ! local 
+      integer, dimension(3) :: indexes 
+      integer :: nd
+      ! A more robust function would be good 
+      !------------------------------------------------------------------------------
 
-        ! Initialize indexes 
-        indexes = 1
+      ! Initialize indexes 
+      indexes = 1
 
-        ! Compute index value if required 
-        ! because active dimension
-        do nd = 1, 3
-            if ( smoothing( nd ) .le. 0d0 ) cycle
-            indexes(nd) = min(&
-                max(&
-                    floor(&
-                        log( smoothing(nd)/this%binSize(nd)/this%minHOverLambda(nd) )/this%deltaHOverLambda(nd)&
-                    ) + 1, 1 &
-                ), &
-            this%nDeltaHOverLambda(nd)  )
-        end do 
-       
-
-        ! 1D
-        if ( nDim .eq. 1 ) then 
-                flatDBIndexes(1) = maxval(indexes)
-                flatDBIndexes(2) = 1 
-                ! Done 
-                return
-        end if 
-
-
-        ! 2D/3D 
-        ! Will work properly as long nDeltaHOverLambda
-        ! has the same value for each axis. 
-        ! This is linked to database initialization function.
-        if ( indexes(1) < indexes(2) ) then
-            transposeKernel  = .true.
-            flatDBIndexes(1) = indexes(2)*( indexes(2) - 1 )/2 + indexes(1)
-            flatDBIndexes(2) = indexes(3)
-        else
-            transposeKernel  = .false.
-            flatDBIndexes(1) = indexes(1)*( indexes(1) - 1 )/2 + indexes(2)
-            flatDBIndexes(2) = indexes(3)
-        end if     
-
-
+      ! Compute index value if required 
+      ! because active dimension
+      do nd = 1, 3
+        if ( smoothing( nd ) .le. 0d0 ) cycle
+        indexes(nd) = min(&
+          max(&
+              floor(&
+                  log( smoothing(nd)/this%binSize(nd)/this%minHOverLambda(nd) )/this%deltaHOverLambda(nd)&
+              ) + 1, 1 &
+          ), &
+        this%nDeltaHOverLambda(nd)  )
+      end do 
+      
+      ! 1D
+      if ( nDim .eq. 1 ) then 
+        flatDBIndexes(1) = maxval(indexes)
+        flatDBIndexes(2) = 1 
+        ! Done 
         return
+      end if 
+
+      ! 2D
+      ! Will work properly as long nDeltaHOverLambda
+      ! has the same value for each axis. 
+      ! This is linked to database initialization function.
+      if ( nDim .eq. 2 ) then
+
+        if ( indexes(this%idDim1) < indexes(this%idDim2) ) then
+          transposeKernel  = .true.
+          flatDBIndexes(1) = indexes(this%idDim2)*( indexes(this%idDim2) - 1 )/2 + indexes(this%idDim1)
+          flatDBIndexes(2) = 1
+        else
+          transposeKernel  = .false.
+          flatDBIndexes(1) = indexes(this%idDim1)*( indexes(this%idDim1) - 1 )/2 + indexes(this%idDim2)
+          flatDBIndexes(2) = 1
+        end if
+
+        ! Done 
+        return
+
+      end if 
+
+      ! 3D 
+      ! Will work properly as long nDeltaHOverLambda
+      ! has the same value for each axis. 
+      ! This is linked to database initialization function.
+      if ( indexes(1) < indexes(2) ) then
+        transposeKernel  = .true.
+        flatDBIndexes(1) = indexes(2)*( indexes(2) - 1 )/2 + indexes(1)
+        flatDBIndexes(2) = indexes(3)
+      else
+        transposeKernel  = .false.
+        flatDBIndexes(1) = indexes(1)*( indexes(1) - 1 )/2 + indexes(2)
+        flatDBIndexes(2) = indexes(3)
+      end if     
+
+
+      return
 
 
     end subroutine prComputeKernelDatabaseFlatIndexesLog
@@ -3939,10 +3973,8 @@ module GridProjectedKDEModule
         ! For boundaries 
         gridCell%kernelMatrix = kernel%bmatrix
 
-
         ! Done
         return
-
 
     end subroutine prSetKernelFromDatabase
 
