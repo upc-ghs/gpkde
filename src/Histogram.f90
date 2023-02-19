@@ -63,21 +63,21 @@ contains
 
         ! Stop if all bin sizes are wrong
         if ( all( binSize .lt. 0d0 ) ) then 
-          print *, 'Error while initializing Histogram, all binSizes are .lt. 0d0. Stop.'
-          call exit(0)
+          write(*,*)'Error while initializing Histogram, all binSizes are .lt. 0d0. Stop.'
+          stop 
         end if 
 
         ! Stop if any nBins .lt. 1
         if ( any( nBins .lt. 1 ) ) then 
-          print *, 'Error while initializing Histogram, some nBins .lt. 1. Stop.'
-          call exit(0)
+          write(*,*)'Error while initializing Histogram, some nBins .lt. 1. Stop.'
+          stop
         end if
 
         ! dimensionMask
         if( present(dimensionMask) ) then 
-            locDimensionMask = dimensionMask
+          locDimensionMask = dimensionMask
         else
-            locDimensionMask = (/1,1,1/)
+          locDimensionMask = (/1,1,1/)
         end if
 
 
@@ -85,8 +85,8 @@ contains
         !this%nDim = sum(dimensionMask, mask=(locDimensionMask.eq.1))
         this%nDim = sum((/1,1,1/), mask=(binSize.gt.0d0))
         if ( this%nDim .le. 0 ) then 
-          print *, 'Error while initializing Histogram. nDim .le. 0. Stop.'
-          call exit(0)
+          write(*,*)'Error while initializing Histogram, nDim .le. 0. Stop.'
+          stop
         end if 
 
         ! Save dim mask into dimensions
@@ -108,9 +108,9 @@ contains
 
         ! domainOrigin
         if ( present( domainOrigin ) ) then 
-            this%domainOrigin = domainOrigin
+          this%domainOrigin = domainOrigin
         else 
-            this%domainOrigin = 0 
+          this%domainOrigin = 0 
         end if
 
 
@@ -156,7 +156,7 @@ contains
 
 
 
-    subroutine prComputeCounts( this, dataPoints )
+    subroutine prComputeCounts( this, dataPoints, exact )
         !------------------------------------------------------------------------------
         ! 
         !
@@ -166,11 +166,18 @@ contains
         implicit none 
         class(HistogramType) :: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
+        logical, intent(in), optional      :: exact 
         integer, dimension(2)              :: nPointsShape
         integer                            :: np, nd, did
         integer, dimension(3)              :: gridIndexes
         logical :: inside
+        integer :: exactIndex 
         !------------------------------------------------------------------------------
+
+        exactIndex = 1
+        if( present(exact) ) then 
+          if ( exact ) exactIndex = 0
+        end if
 
         ! Reset counts
         this%counts  = 0
@@ -187,7 +194,7 @@ contains
             ! binSize is non zero.
             do nd = 1,this%nDim
               did = this%dimensions(nd)
-              gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + 1
+              gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + exactIndex
               if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
                   (gridIndexes(did) .le. 0) ) then
                 inside = .false. 
@@ -205,7 +212,7 @@ contains
     end subroutine prComputeCounts
 
 
-    subroutine prComputeCountsWeighted( this, dataPoints, weights )
+    subroutine prComputeCountsWeighted( this, dataPoints, weights, exact )
         !------------------------------------------------------------------------------
         ! 
         !------------------------------------------------------------------------------
@@ -215,11 +222,18 @@ contains
         class(HistogramType) :: this
         doubleprecision, dimension(:,:), intent(in) :: dataPoints
         doubleprecision, dimension(:), intent(in)   :: weights
+        logical, intent(in), optional      :: exact 
         integer, dimension(2)              :: nPointsShape
         integer                            :: np, nd, did
         integer, dimension(3)              :: gridIndexes
         logical :: inside
+        integer :: exactIndex 
         !------------------------------------------------------------------------------
+
+        exactIndex = 1
+        if( present(exact) ) then 
+          if ( exact ) exactIndex = 0
+        end if
 
         ! Reset counts
         this%counts  = 0
@@ -236,7 +250,7 @@ contains
             ! binSize is non zero.
             do nd = 1,this%nDim
               did = this%dimensions(nd)
-              gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + 1
+              gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + exactIndex
               if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
                   (gridIndexes(did) .le. 0) ) then
                 inside = .false. 

@@ -2201,7 +2201,7 @@ module GridProjectedKDEModule
                                      skipErrorConvergence, unitVolume, &
                                 scalingFactor, histogramScalingFactor, &
                                                     computeRawDensity, &
-                            weightedHistogram, weights, onlyHistogram  ) 
+                weightedHistogram, weights, onlyHistogram, exactPoint  ) 
         !------------------------------------------------------------------------------
         ! 
         !------------------------------------------------------------------------------
@@ -2225,6 +2225,7 @@ module GridProjectedKDEModule
         logical, intent(in), optional                       :: computeRawDensity
         logical, intent(in), optional                       :: weightedHistogram
         logical, intent(in), optional                       :: onlyHistogram
+        logical, intent(in), optional                       :: exactPoint
         doubleprecision, dimension(:), intent(in), optional :: weights
         ! local 
         logical               :: persistKDB
@@ -2237,6 +2238,7 @@ module GridProjectedKDEModule
         doubleprecision       :: locHistogramScalingFactor
         logical               :: locWeightedHistogram
         logical               :: locOnlyHistogram 
+        logical               :: locExactPoint 
         integer               :: localNOptimizationLoops
         integer, dimension(2) :: dataPointsShape
 
@@ -2265,6 +2267,7 @@ module GridProjectedKDEModule
         locHistogramScalingFactor = 1d0
         locWeightedHistogram = .false.
         locOnlyHistogram = .false.
+        locExactPoint = .false.
         localNOptimizationLoops = this%nOptimizationLoops
 
         ! Process them
@@ -2302,6 +2305,9 @@ module GridProjectedKDEModule
         if ( present( weightedHistogram ) ) then
           locWeightedHistogram = weightedHistogram
         end if
+        if ( present( exactPoint ) ) then
+          locExactPoint = exactPoint
+        end if
         if ( (locWeightedHistogram).and.(.not.present(weights)) ) then 
           write(*,*) 'ERROR: weightedHistogram requires weights and were not given. Stop.'
           stop
@@ -2315,10 +2321,10 @@ module GridProjectedKDEModule
 
         if ( locWeightedHistogram ) then 
           ! Cummulative histogram-like quantities
-          call this%histogram%ComputeCountsWeighted( dataPoints, weights )
+          call this%histogram%ComputeCountsWeighted( dataPoints, weights, locExactPoint )
         else
           ! Histogram quantities
-          call this%histogram%ComputeCounts( dataPoints )
+          call this%histogram%ComputeCounts( dataPoints, locExactPoint )
         end if
 
         ! If only histogram, leave
@@ -2701,6 +2707,7 @@ module GridProjectedKDEModule
           call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
           ! Compute estimate, using rawDensity
+          ! Notice division by volume after the loop
           nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
               this%histogram%counts(&
                   gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
@@ -2719,24 +2726,11 @@ module GridProjectedKDEModule
       nEstimateGrid  = nEstimateGrid/this%histogram%binVolume
       nEstimateArray = nEstimateArray/this%histogram%binVolume
 
-
-      !! Limit roughnesses based on limit smoothing
-      !! Default, nDensityScale = 1d0
-      !! Consider only left as user parameter
-      !nDensityScale = this%densityScale
-      !maxHRoughness = maxval( this%maxHOverLambda*this%binSize )
-      !this%minLimitRoughness = maxval( (/this%minLimitRoughness, &
-      !    nDim*nDensityScale/( ( maxHRoughness**(nDim + 4d0) )*(4d0*pi)**(0.5*nDim) ) /) )
-      !minHRoughness = minval( this%minHOverLambda*this%binSize )
-      !this%maxLimitRoughness = minval( (/ nDim*nDensityScale/( ( minHRoughness**(nDim + 4d0) )*(4d0*pi)**(0.5*nDim) ), &
-      !    this%maxLimitRoughness /) )
-
       ! Initialize variables
       !curvatureBandwidth = kernelSmoothing
       curvatureBandwidth = kernelSigmaSupport
       kernelSmoothingOld = kernelSmoothing
       kernelSmoothingScaleOld = kernelSmoothingScale
-
       ! Initial roughness
       call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
