@@ -1931,6 +1931,7 @@ module GridProjectedKDEModule
         !$omp shared( hOverLambda )              &
         !$omp shared( nDelta )                   &
         !$omp shared( localKernelRange )         &
+        !$omp shared( nDelta )                   &
         !$omp reduction( +:kernelDBMemory )      &
         !$omp private( kernelMatrixMemory )      &
         !$omp private( inputSmoothing )
@@ -1959,6 +1960,7 @@ module GridProjectedKDEModule
         !$omp shared( hOverLambda )              &
         !$omp shared( nDelta )                   &
         !$omp shared( localKernelSDRange )       &
+        !$omp shared( nDelta )                   &
         !$omp reduction( +:kernelSDDBMemory )    &
         !$omp private( kernelMatrixMemory )      &
         !$omp private( inputSmoothing )
@@ -2051,6 +2053,7 @@ module GridProjectedKDEModule
         !$omp shared( hOverLambda )              &
         !$omp shared( nDelta )                   &
         !$omp shared( localKernelSDRange )       &
+        !$omp shared( nDelta )                   &
         !$omp reduction( +:kernelSDDBMemory )    &
         !$omp private( kernelMatrixMemory )      &
         !$omp private( inputSmoothing )
