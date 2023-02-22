@@ -1929,6 +1929,7 @@ module GridProjectedKDEModule
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( hOverLambda )              &
+        !$omp shared( nDelta )                   &
         !$omp shared( localKernelRange )         &
         !$omp reduction( +:kernelDBMemory )      &
         !$omp private( kernelMatrixMemory )      &
@@ -1956,6 +1957,7 @@ module GridProjectedKDEModule
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( hOverLambda )              &
+        !$omp shared( nDelta )                   &
         !$omp shared( localKernelSDRange )       &
         !$omp reduction( +:kernelSDDBMemory )    &
         !$omp private( kernelMatrixMemory )      &
@@ -2047,6 +2049,7 @@ module GridProjectedKDEModule
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( hOverLambda )              &
+        !$omp shared( nDelta )                   &
         !$omp shared( localKernelSDRange )       &
         !$omp reduction( +:kernelSDDBMemory )    &
         !$omp private( kernelMatrixMemory )      &
@@ -2124,6 +2127,7 @@ module GridProjectedKDEModule
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( hOverLambda )              &
+        !$omp shared( nDelta )                   &
         !$omp shared( localKernelSDRange )       &
         !$omp reduction( +:kernelSDDBMemory )    &
         !$omp private( kernelMatrixMemory )      &
@@ -3116,7 +3120,7 @@ module GridProjectedKDEModule
               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
               !print *, '!! DENSITY CONVERGENCE !!'
               if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es10.4e2)' ) '    - Density convergence ', errorMetric
+              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
               end if 
               ! Break
               exit
@@ -3129,7 +3133,7 @@ module GridProjectedKDEModule
               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
               !print *, '!! SMOOTHING CONVERGENCE !!'
               if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es10.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
               end if
               ! Break
               exit
@@ -3151,7 +3155,7 @@ module GridProjectedKDEModule
               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
               !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
               if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
+              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
               end if 
               ! Break
               exit
@@ -4586,12 +4590,6 @@ module GridProjectedKDEModule
 
 
     end subroutine prWriteErrorMetricsRecord
-
-
-
-
-
-    
 
 
 end module GridProjectedKDEModule
