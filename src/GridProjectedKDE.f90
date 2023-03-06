@@ -34,10 +34,8 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 2d0
+    doubleprecision :: defaultInitialSmoothingFactor = 1d0
     doubleprecision :: defaultDensityScale           = 1d0
-    !doubleprecision :: defaultMinLimitRoughness      = 1d-4
-    !doubleprecision :: defaultMaxLimitRoughness      = 1d4
     doubleprecision :: defaultMinLimitRoughness      = 1d-40
     doubleprecision :: defaultMaxLimitRoughness      = 1d40
     doubleprecision :: defaultMaxSmoothingGrowth     = 10d0
@@ -363,7 +361,8 @@ module GridProjectedKDEModule
 
       ! Initialize reconstruction grid 
       where( binSize .ne. 0d0 ) 
-        this%nBins = ceiling( domainSize/binSize )
+        !this%nBins = ceiling( domainSize/binSize )
+        this%nBins = int( domainSize/binSize + 0.5 )
       elsewhere
         this%nBins = 1
       end where
@@ -592,18 +591,60 @@ module GridProjectedKDEModule
       !------------------------------------------------------------------------------
 
       call this%histogram%Reset()
-      !call this%kernel%Reset()
+
+      ! Default configuration module level params
+      defaultInitialSmoothingFactor = 10d0
+      defaultDensityScale           = 1d0
+      defaultMinLimitRoughness      = 1d-40
+      defaultMaxLimitRoughness      = 1d40
+      defaultMaxSmoothingGrowth     = 10d0
+      defaultMaxKernelShape         = 10d0
+      defaultMinKernelShape         = 5d-1
+      dimensionMask                 = (/1,1,1/)
+
+      if ( allocated(  nEstimateGrid           )) deallocate(  nEstimateGrid           )
+      if ( allocated(  kernelSmoothing         )) deallocate(  kernelSmoothing         )
+      if ( allocated(  kernelSmoothingScale    )) deallocate(  kernelSmoothingScale    )
+      if ( allocated(  kernelSmoothingShape    )) deallocate(  kernelSmoothingShape    )
+      if ( allocated(  kernelSigmaSupport      )) deallocate(  kernelSigmaSupport      )
+      if ( allocated(  kernelSigmaSupportScale )) deallocate(  kernelSigmaSupportScale )
+      if ( allocated(  curvatureBandwidth      )) deallocate(  curvatureBandwidth      )
+      if ( allocated(  relativeSmoothingChange )) deallocate(  relativeSmoothingChange )
+      if ( allocated(  relativeDensityChange   )) deallocate(  relativeDensityChange   )
+      if ( allocated(  densityEstimateArray    )) deallocate(  densityEstimateArray    )
+      if ( allocated(  nEstimateArray          )) deallocate(  nEstimateArray          )
+      if ( allocated(  roughnessXXArray        )) deallocate(  roughnessXXArray        )
+      if ( allocated(  roughnessYYArray        )) deallocate(  roughnessYYArray        )
+      if ( allocated(  roughnessZZArray        )) deallocate(  roughnessZZArray        )
+      if ( allocated(  netRoughnessArray       )) deallocate(  netRoughnessArray       )
+      if ( allocated( activeGridCellsMod       )) deallocate( activeGridCellsMod       )
+
+      if ( allocated( this%kernelDatabase     ) )deallocate( this%kernelDatabase     )
+      if ( allocated( this%kernelDatabaseFlat ) )deallocate( this%kernelDatabaseFlat )
+      if ( allocated( this%kernelSDXDatabase  ) )deallocate( this%kernelSDXDatabase  ) 
+      if ( allocated( this%kernelSDYDatabase  ) )deallocate( this%kernelSDYDatabase  )
+      if ( allocated( this%kernelSDZDatabase  ) )deallocate( this%kernelSDZDatabase  ) 
 
 
-      ! MAYBE HERE
-      !deallocate( kernelSmoothing )
-      !deallocate( kernelSigmaSupport )
+      this%kernelSDDatabase1 => null()
+      this%kernelSDDatabase2 => null()
+      if( allocated( this%densityEstimate        ) )deallocate( this%densityEstimate        )
+      if( allocated( this%densityEstimateGrid    ) )deallocate( this%densityEstimateGrid    )
+      if( allocated( this%rawDensityEstimateGrid ) )deallocate( this%rawDensityEstimateGrid )
+      if( allocated( this%kernelSmoothing        ) )deallocate( this%kernelSmoothing        )
+      if( allocated( this%kernelSigmaSupport     ) )deallocate( this%kernelSigmaSupport     ) 
+      if( allocated( this%curvatureBandwidth     ) )deallocate( this%curvatureBandwidth     ) 
+      if( allocated(this%outputBinIds) ) deallocate( this%outputBinIds )
 
-      !deallocate( densityEstimateActiveBins )
-      !deallocate( nEstimateActiveBins )
+      this%ComputeKernelDatabaseIndexes      => null()
+      this%ComputeKernelDatabaseFlatIndexes  => null()
+      this%ComputeNetRoughnessEstimate       => null()
+      this%SetKernel => null()
+      this%SetKernelSigma => null()
+      this%SetKernelSD    => null()
+      this%SetKernelSD2D  => null()
+      this%SetKernelSD3D  => null()
 
-      !deallocate( densityGridEstimate )
-      !deallocate( nGridEstimate )
 
     end subroutine prReset
 
@@ -1929,8 +1970,8 @@ module GridProjectedKDEModule
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( hOverLambda )              &
-        !$omp shared( localKernelRange )         &
         !$omp shared( nDelta )                   &
+        !$omp shared( localKernelRange )         &
         !$omp reduction( +:kernelDBMemory )      &
         !$omp private( kernelMatrixMemory )      &
         !$omp private( inputSmoothing )
@@ -1957,8 +1998,8 @@ module GridProjectedKDEModule
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( hOverLambda )              &
-        !$omp shared( localKernelSDRange )       &
         !$omp shared( nDelta )                   &
+        !$omp shared( localKernelSDRange )       &
         !$omp reduction( +:kernelSDDBMemory )    &
         !$omp private( kernelMatrixMemory )      &
         !$omp private( inputSmoothing )
@@ -2049,8 +2090,8 @@ module GridProjectedKDEModule
         !$omp default( none )                    &
         !$omp shared( this )                     &
         !$omp shared( hOverLambda )              &
-        !$omp shared( localKernelSDRange )       &
         !$omp shared( nDelta )                   &
+        !$omp shared( localKernelSDRange )       &
         !$omp reduction( +:kernelSDDBMemory )    &
         !$omp private( kernelMatrixMemory )      &
         !$omp private( inputSmoothing )
@@ -2333,6 +2374,10 @@ module GridProjectedKDEModule
 
         ! If only histogram, leave
         if ( locOnlyHistogram ) then 
+          if( locWeightedHistogram ) then
+            ! Restore histogram to mass
+            this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
+          end if
           if ( locComputeRawDensity ) then 
             this%histogram%counts = this%histogram%counts/this%histogram%binVolume
           end if 
@@ -3120,7 +3165,7 @@ module GridProjectedKDEModule
               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
               !print *, '!! DENSITY CONVERGENCE !!'
               if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es10.4e2)' ) '    - Density convergence ', errorMetric
+              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
               end if 
               ! Break
               exit
@@ -3133,7 +3178,7 @@ module GridProjectedKDEModule
               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
               !print *, '!! SMOOTHING CONVERGENCE !!'
               if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es10.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
               end if
               ! Break
               exit
@@ -3155,7 +3200,7 @@ module GridProjectedKDEModule
               this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
               !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
               if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
+              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
               end if 
               ! Break
               exit
@@ -3261,7 +3306,13 @@ module GridProjectedKDEModule
                 roughnessYYArray, roughnessZZArray, netRoughnessArray, &
                          relativeDensityChange, relativeRoughnessChange )
 
+          end if
+
+          if ( this%reportToOutUnit ) then 
+          write( this%outFileUnit, "(I3,3es18.9e3)" ) m, & 
+            sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binDistance,errorALMISEProxy, errorRMSE
           end if 
+
 
       end do
       ! End optimization loop ! 
@@ -3274,6 +3325,64 @@ module GridProjectedKDEModule
       if ( exportLoopError ) then
         close( errorOutputUnit )
       end if 
+
+
+      ! Fix histogram
+      this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
+
+      ! Update density
+      densityEstimateGrid = 0d0
+      !$omp parallel do schedule( dynamic, 1 )  &
+      !$omp default( none )                     &
+      !$omp shared( this )                      &
+      !$omp shared( activeGridCells )           & 
+      !$omp shared( kernelSmoothing )           & 
+      !$omp reduction( +: densityEstimateGrid ) & 
+      !$omp firstprivate( kernel )              & 
+      !$omp private( gc )                        
+      do n = 1, this%nComputeBins
+
+        ! Any smoothing < 0 or NaN, skip
+        if ( ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) .or.             &
+            ( any( kernelSmoothing( :, n ) /= kernelSmoothing( :, n ) ) ) ) then
+          cycle
+        end if
+
+        ! Assign pointer 
+        gc => activeGridCells(n)
+
+        ! Set kernel
+        call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
+
+        ! Compute estimate
+        densityEstimateGrid(                         &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) = densityEstimateGrid(                   &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) + this%histogram%counts(                 &
+              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                   gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
+                   gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
+                   gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
+          )
+
+        !! Cannot be done here ! Reduction !
+        ! Assign into array   
+        !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+      end do
+      !$omp end parallel do
+      densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
+
+
+
+
+
+
+
 
       ! Clean
       call kernel%Reset()
@@ -3292,6 +3401,8 @@ module GridProjectedKDEModule
           call activeGridCellsMod(n)%Reset()
       end do
       !$omp end parallel do
+
+
 
       ! Probably more to be deallocated !
       
@@ -4590,12 +4701,6 @@ module GridProjectedKDEModule
 
 
     end subroutine prWriteErrorMetricsRecord
-
-
-
-
-
-    
 
 
 end module GridProjectedKDEModule
