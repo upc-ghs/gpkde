@@ -1,5 +1,4 @@
-# makefile created on 2017-12-20 13:16:47.325722
-# by pymake (version 1.1.0)
+# makefile created on 03-2023
 # using the gfortran fortran and gcc c/c++ compilers.
 
 # Define the directories for the object and module files,
@@ -18,7 +17,11 @@ ${SOURCEDIR1}
 
 # Define the Fortran compile flags
 FC = gfortran
-FFLAGS = -O2 -fbacktrace -fopenmp
+FFLAGS = -O2 -fopenmp -fbacktrace -ffpe-summary=overflow -ffpe-trap=overflow,zero,invalid -fall-intrinsics -Wtabs -Wline-truncation -Wunused-label -Wunused-variable -pedantic -std=f2008 -Wcharacter-truncation -cpp
+#DEBUG
+#FFLAGS = -g -Og -Wall -fcheck=all -fopenmp -fbacktrace -ffpe-summary=overflow -ffpe-trap=overflow,zero,invalid -fall-intrinsics -Wtabs -Wline-truncation -Wunused-label -Wunused-variable -pedantic -std=f2008 -Wcharacter-truncation -cpp
+
+
 
 # Define the C compile flags
 CC = gcc
@@ -32,7 +35,11 @@ $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridCell.o \
 $(OBJDIR)/GridProjectedKDE.o \
-$(OBJDIR)/test2d.o
+$(OBJDIR)/compilerversion.o \
+$(OBJDIR)/openspec.o \
+$(OBJDIR)/utl7.o \
+$(OBJDIR)/utl8.o \
+$(OBJDIR)/GPKDE.o
 
 
 # Define task functions
