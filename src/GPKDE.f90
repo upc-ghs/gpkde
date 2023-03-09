@@ -1,17 +1,17 @@
 ! GPKDE.f90
 program GPKDE
   use GridProjectedKDEModule, only: GridProjectedKDEType
-  use UTL8MODULE,only : ustop
+  use UTL8MODULE,only : urword, ustop
   use CompilerVersion,only : get_compiler_txt
   use omp_lib ! OpenMP
   !-----------------------------------------------
   implicit none
-  type(GridProjectedKDEType), allocatable      :: gpkde 
+  type(GridProjectedKDEType), allocatable      :: gpkdeObj 
   doubleprecision, dimension(:,:), allocatable :: dataCarrier
   doubleprecision, dimension(:), allocatable   :: weightsCarrier
   logical :: parallel = .false.
-  character(len=200) :: simFile, logFile
-  integer            :: logUnit, logType
+  character(len=200) :: simFile, logFile, dataFile
+  integer            :: simUnit, dataUnit, logUnit, logType
   character(len=20)  :: version
   character(len=100) :: terminationMessage
   character(len=90)  :: compilerVersionText
@@ -19,8 +19,16 @@ program GPKDE
   integer            :: clockCountStart, clockCountStop
   integer            :: clockCountRate, clockCountMax
   doubleprecision    :: elapsedTime
+  integer            :: icol,istart,istop,n
+  doubleprecision    :: r
+  character(len=200) :: line
+  logical            :: exists
+  integer            :: nlines, io
+  integer            :: inputDataFormat
   !-----------------------------------------------
-  logUnit = 911
+  simUnit  = 111
+  logUnit  = 911
+  dataUnit = 112 
   !-----------------------------------------------
   ! Set version
   version = '0.0.1'
@@ -40,6 +48,19 @@ program GPKDE
   ! Open the log file (unless -nolog option)
   if (logType /= 0) then
     open(unit=logUnit, file=logFile, status='replace', form='formatted', access='sequential')
+    write(logUnit, '(1x/a,a)') 'GPKDE Version ', version
+    write(logUnit, '(a)') compilerVersionText
+    write(logUnit, *)
+    write(logUnit, '(a)') 'This program has been developed and published by the Hydrogeology'
+    write(logUnit, '(a)') 'Group (GHS), Universitat Politècnica de Catalunya (UPC). It is free'
+    write(logUnit, '(a)') 'to use and modify under the condition that neither the GHS nor UPC'
+    write(logUnit, '(a)') 'shall be considered legally responsible for any wrongdoing or damages'
+    write(logUnit, '(a)') 'derived from its use.'
+    write(logUnit, *)
+    write(logUnit, '(a)') 'For bug reports and updates, follow:                                  '
+    write(logUnit, '(a)') '  https://github.com/upc-ghs/gpkde                                    '
+    write(logUnit, '(a)') '----------------------------------------------------------------------'
+    write(logUnit, *)
   else
     logUnit = -logUnit
   end if
@@ -50,166 +71,255 @@ program GPKDE
     ompNumThreads = 1
   end if
   !-----------------------------------------------
-  
-  ! Needs to read an input file 
-  ! Read gpkde output file
-  read(gpkdeUnit, '(a)') this%TrackingOptions%gpkdeOutputFile
-  icol = 1
-  call urword(this%TrackingOptions%gpkdeOutputFile,icol,istart,istop,0,n,r,0,0)
-  this%TrackingOptions%gpkdeOutputFile = this%TrackingOptions%gpkdeOutputFile(istart:istop)
 
-  ! Extract and initialize parameters
-  ! Read domainOrigin
-  read(gpkdeUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeDomainOrigin(1) = r
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeDomainOrigin(2) = r
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeDomainOrigin(3) = r
-  
-  ! Read domainSize
-  read(gpkdeUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeDomainSize(1) = r
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeDomainSize(2) = r
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeDomainSize(3) = r
-  
-  ! Read binSize
-  read(gpkdeUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeBinSize(1) = r
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeBinSize(2) = r
-  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  this%TrackingOptions%gpkdeBinSize(3) = r
-  
-  ! Health control
-  if ( any(this%TrackingOptions%gpkdeBinSize.lt.0d0) ) then 
-    write(outUnit,'(A)') 'One of the GPKDE binSizes is negative. They should be positive.'
-    call ustop('One of the GPKDE binSizes is negative. They should be positive. Stop.')
-  end if 
-  if ( all(this%TrackingOptions%gpkdeBinSize.eq.0d0) ) then
-    ! No gpkde 
-    write(outUnit,'(A)') 'GPKDE binSizes are zero, will disable spatial reconstruction. They should be positive.'
-    write(outUnit,'(A)') 'GPKDE reconstruction is disabled'
-    this%TrackingOptions%GPKDEReconstruction = .false.
-    return
+  ! Open the simulation input file 
+  open(unit=simUnit, file=simFile, status='old', form='formatted', access='sequential')
+
+  if ( logUnit .gt. 0 ) then 
+    write(logUnit, *)
+    write(logUnit, '(1x,a)') ' Read data file '
+    write(logUnit, '(1x,a)') '----------------'
   end if 
 
-  ! Read nOptimizationLoops
-  read(gpkdeUnit, '(a)') line
+  ! Read an input format
+  ! 0: x,y,z
+  ! 1: x, y, z, m 
+  read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  this%TrackingOptions%gpkdeNOptLoops = n
-  
-  ! Read reconstruction method
-  ! 0: without kernel database, brute force
-  ! 1: with kernel database and read parameters
-  read(gpkdeUnit, '(a)') line
-  icol = 1
+  inputDataFormat = n 
+  select case(inputDataFormat)
+  case(0)
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'Input data expected to be specified as (x,y,z).' 
+    end if  
+  case(1)
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'Input data expected to be specified as (x,y,z,weight).' 
+    end if 
+  case default
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'Input data format not available. Stop.' 
+    end if 
+    call ustop('Input data format not available. Stop.') 
+  end select
+  ! number of lines  
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  if (n.eq.0) then 
-    this%TrackingOptions%gpkdeKernelDatabase = .false.
+  nlines = 0
+  if ( n.eq.0 ) then
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'No number of points was specified, will infer from the input file.' 
+    end if 
   else
-    this%TrackingOptions%gpkdeKernelDatabase = .true.
+    nlines = n  
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a,I10)') 'File will be read until line: ', nlines 
+    end if 
+  end if 
+
+  ! Read the input file name
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 0, n, r, 0, 0)
+  dataFile = line
+  ! Check existence 
+  exists = .false.
+  inquire (file=dataFile, exist=exists)
+  if(.not. exists) then
+    call ustop('Specified data file was not found. Stop.')
+  else
+    if ( logType .gt. 0 ) then 
+      write( logUnit, '(a,a)') 'Input data file name: ', dataFile
+    end if
   end if
-  
-  if ( this%TrackingOptions%gpkdeKernelDatabase ) then 
-    write(outUnit,'(A)') 'GPKDE reconstruction with kernel database'
-    ! Read kernel database params
-    ! - min   h/lambda
-    ! - delta h/lambda
-    ! - max   h/lambda
-    read(gpkdeUnit, '(a)') line
-    icol = 1
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    this%TrackingOptions%gpkdeKDBParams(1) = r
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    this%TrackingOptions%gpkdeKDBParams(2) = r
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    this%TrackingOptions%gpkdeKDBParams(3) = r
-  else
-    write(outUnit,'(A)') 'GPKDE reconstruction with brute force, no kernel database'
-    this%TrackingOptions%gpkdeKernelDatabase = .false.
-    ! Read kernel params
-    ! - min   h/lambda
-    ! - max   h/lambda
-    read(gpkdeUnit, '(a)') line
-    icol = 1
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    this%TrackingOptions%gpkdeKDBParams(1) = r
-    this%TrackingOptions%gpkdeKDBParams(2) = 0d0 ! NOT USED
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    this%TrackingOptions%gpkdeKDBParams(3) = r
-  end if 
-  
-  ! Read kind of reconstruction output
-  ! 0: as total mass density. Smoothed phi*R*c_r
-  ! 1: as resident concentration
-  read(gpkdeUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  if (n.eq.0) then 
-    write(outUnit,'(A)') 'GPKDE output is expressed as smoothed total mass density.'
-    this%TrackingOptions%gpkdeAsConcentration = .false.
-    this%TrackingOptions%gpkdeScalingFactor =&
-      1d0/(this%TrackingOptions%gpkdeBinVolume)
-  else
+  dataFile = trim(dataFile)
+
+  ! Open data file
+  open(dataUnit, file=dataFile,access='sequential',form="formatted")
+  if ( nlines.eq.0 ) then 
+    ! Infer number of lines from file
+    rewind(dataUnit)
+    do
+      read(dataUnit,*,iostat=io)
+      if (io/=0) exit
+      nlines = nlines + 1
+    end do
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a,I10)') 'Detected number of lines in data file: ', nlines
+    end if 
+  end if
+
+  ! The number of lines needed in order to allocate arrays 
+  !call exit(0) 
 
 
-  ! Initialize gpkde 
-  allocate( gpkde )
-  ! Initialization should be performed once grid properties are known.
-  call gpkde%Initialize(& 
-      simulationData%TrackingOptions%gpkdeDomainSize,                          &
-      simulationData%TrackingOptions%gpkdeBinSize,                             &
-      domainOrigin=simulationData%TrackingOptions%gpkdeDomainOrigin,           &
-      nOptimizationLoops=simulationData%TrackingOptions%gpkdeNOptLoops,        &
-      databaseOptimization=simulationData%TrackingOptions%gpkdeKernelDatabase, &
-      minHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(1),         &
-      deltaHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(2),       &
-      maxHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(3),         &
-      outFileName=mplistFile &
-  )
-  ! Initialize output unit/file
-  open(unit=simulationData%TrackingOptions%gpkdeOutputUnit, &
-       file=simulationData%TrackingOptions%gpkdeOutputFile, &
-     status='replace', form='formatted', access='sequential')
 
 
-  ! Reconstruction
-  ! GPKDE
-  ! Compute density for the particles linked to a given 
-  ! solute. These may have different mass
-  call gpkde%ComputeDensity(                                                  &
-   activeParticleCoordinates,                                                 &
-   outputFileUnit    = simulationData%TrackingOptions%gpkdeOutputUnit,        &
-   outputDataId      = nt,                                                    & 
-   particleGroupId   = solute%id,                                             &
-   unitVolume        = .true.,                                                &
-   weightedHistogram = .true.,                                                &
-   weights           = activeParticleMasses,                                  &
-   scalingFactor     = simulationData%TrackingOptions%gpkdeScalingFactor,     &
-   histogramScalingFactor = simulationData%TrackingOptions%gpkdeScalingFactor &
-  )
+
+  !! Needs to read an input file 
+  !! Read gpkde output file
+  !read(gpkdeUnit, '(a)') this%TrackingOptions%gpkdeOutputFile
+  !icol = 1
+  !call urword(this%TrackingOptions%gpkdeOutputFile,icol,istart,istop,0,n,r,0,0)
+  !this%TrackingOptions%gpkdeOutputFile = this%TrackingOptions%gpkdeOutputFile(istart:istop)
+
+  !! Extract and initialize parameters
+  !! Read domainOrigin
+  !read(gpkdeUnit, '(a)') line
+  !icol = 1
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeDomainOrigin(1) = r
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeDomainOrigin(2) = r
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeDomainOrigin(3) = r
+  !
+  !! Read domainSize
+  !read(gpkdeUnit, '(a)') line
+  !icol = 1
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeDomainSize(1) = r
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeDomainSize(2) = r
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeDomainSize(3) = r
+  !
+  !! Read binSize
+  !read(gpkdeUnit, '(a)') line
+  !icol = 1
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeBinSize(1) = r
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeBinSize(2) = r
+  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeBinSize(3) = r
+  !
+  !! Health control
+  !if ( any(this%TrackingOptions%gpkdeBinSize.lt.0d0) ) then 
+  !  write(outUnit,'(A)') 'One of the GPKDE binSizes is negative. They should be positive.'
+  !  call ustop('One of the GPKDE binSizes is negative. They should be positive. Stop.')
+  !end if 
+  !if ( all(this%TrackingOptions%gpkdeBinSize.eq.0d0) ) then
+  !  ! No gpkde 
+  !  write(outUnit,'(A)') 'GPKDE binSizes are zero, will disable spatial reconstruction. They should be positive.'
+  !  write(outUnit,'(A)') 'GPKDE reconstruction is disabled'
+  !  this%TrackingOptions%GPKDEReconstruction = .false.
+  !  return
+  !end if 
+
+  !! Read nOptimizationLoops
+  !read(gpkdeUnit, '(a)') line
+  !icol = 1
+  !call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  !this%TrackingOptions%gpkdeNOptLoops = n
+  !
+  !! Read reconstruction method
+  !! 0: without kernel database, brute force
+  !! 1: with kernel database and read parameters
+  !read(gpkdeUnit, '(a)') line
+  !icol = 1
+  !call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  !if (n.eq.0) then 
+  !  this%TrackingOptions%gpkdeKernelDatabase = .false.
+  !else
+  !  this%TrackingOptions%gpkdeKernelDatabase = .true.
+  !end if
+  !
+  !if ( this%TrackingOptions%gpkdeKernelDatabase ) then 
+  !  write(outUnit,'(A)') 'GPKDE reconstruction with kernel database'
+  !  ! Read kernel database params
+  !  ! - min   h/lambda
+  !  ! - delta h/lambda
+  !  ! - max   h/lambda
+  !  read(gpkdeUnit, '(a)') line
+  !  icol = 1
+  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !  this%TrackingOptions%gpkdeKDBParams(1) = r
+  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !  this%TrackingOptions%gpkdeKDBParams(2) = r
+  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !  this%TrackingOptions%gpkdeKDBParams(3) = r
+  !else
+  !  write(outUnit,'(A)') 'GPKDE reconstruction with brute force, no kernel database'
+  !  this%TrackingOptions%gpkdeKernelDatabase = .false.
+  !  ! Read kernel params
+  !  ! - min   h/lambda
+  !  ! - max   h/lambda
+  !  read(gpkdeUnit, '(a)') line
+  !  icol = 1
+  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !  this%TrackingOptions%gpkdeKDBParams(1) = r
+  !  this%TrackingOptions%gpkdeKDBParams(2) = 0d0 ! NOT USED
+  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  !  this%TrackingOptions%gpkdeKDBParams(3) = r
+  !end if 
+  !
+  !! Read kind of reconstruction output
+  !! 0: as total mass density. Smoothed phi*R*c_r
+  !! 1: as resident concentration
+  !read(gpkdeUnit, '(a)') line
+  !icol = 1
+  !call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  !if (n.eq.0) then 
+  !  write(outUnit,'(A)') 'GPKDE output is expressed as smoothed total mass density.'
+  !  this%TrackingOptions%gpkdeAsConcentration = .false.
+  !  this%TrackingOptions%gpkdeScalingFactor =&
+  !    1d0/(this%TrackingOptions%gpkdeBinVolume)
+  !else
 
 
-  ! Deallocate
-  if ( allocated( gpkde ) ) deallocate( gpkde )
+  !! Initialize gpkde 
+  !allocate( gpkde )
+  !! Initialization should be performed once grid properties are known.
+  !call gpkde%Initialize(& 
+  !    simulationData%TrackingOptions%gpkdeDomainSize,                          &
+  !    simulationData%TrackingOptions%gpkdeBinSize,                             &
+  !    domainOrigin=simulationData%TrackingOptions%gpkdeDomainOrigin,           &
+  !    nOptimizationLoops=simulationData%TrackingOptions%gpkdeNOptLoops,        &
+  !    databaseOptimization=simulationData%TrackingOptions%gpkdeKernelDatabase, &
+  !    minHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(1),         &
+  !    deltaHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(2),       &
+  !    maxHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(3),         &
+  !    outFileName=mplistFile &
+  !)
+  !! Initialize output unit/file
+  !open(unit=simulationData%TrackingOptions%gpkdeOutputUnit, &
+  !     file=simulationData%TrackingOptions%gpkdeOutputFile, &
+  !   status='replace', form='formatted', access='sequential')
 
-  ! Exit 
-  !close(mplistUnit)
-  !write(*, '(a)') terminationMessage
-  !elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-  !write(mplistUnit, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
-  !if (logType /= 0) close(logUnit)
 
+  !! Reconstruction
+  !! GPKDE
+  !! Compute density for the particles linked to a given 
+  !! solute. These may have different mass
+  !call gpkde%ComputeDensity(                                                  &
+  ! activeParticleCoordinates,                                                 &
+  ! outputFileUnit    = simulationData%TrackingOptions%gpkdeOutputUnit,        &
+  ! outputDataId      = nt,                                                    & 
+  ! particleGroupId   = solute%id,                                             &
+  ! unitVolume        = .true.,                                                &
+  ! weightedHistogram = .true.,                                                &
+  ! weights           = activeParticleMasses,                                  &
+  ! scalingFactor     = simulationData%TrackingOptions%gpkdeScalingFactor,     &
+  ! histogramScalingFactor = simulationData%TrackingOptions%gpkdeScalingFactor &
+  !)
+
+
+  !! Deallocate
+  !if ( allocated( gpkde ) ) deallocate( gpkde )
+
+  !! Exit 
+  !!close(mplistUnit)
+  !!write(*, '(a)') terminationMessage
+  !!elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+  !!write(mplistUnit, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
+  !!if (logType /= 0) close(logUnit)
+
+  write(*, '(a)') terminationMessage
+  close( simUnit ) 
+  if ( logType .gt. 0 ) close( logUnit ) 
+
+  stop
 
 contains
 
