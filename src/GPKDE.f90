@@ -23,11 +23,14 @@ program GPKDE
   doubleprecision    :: r
   character(len=200) :: line
   logical            :: exists
+  logical            :: kernelDatabase
   integer            :: nlines, io, id
   integer            :: inputDataFormat
+  integer            :: nOptLoops
   doubleprecision, dimension(3) :: domainSize  
   doubleprecision, dimension(3) :: binSize     
   doubleprecision, dimension(3) :: domainOrigin
+  doubleprecision, dimension(3) :: kernelParams
   !-----------------------------------------------
   simUnit    = 111
   logUnit    = 911
@@ -172,10 +175,10 @@ program GPKDE
     write( logUnit, '(a,a)') 'Reconstruction output will be written to file: ', adjustl(trim(outputFile))
   end if 
 
+  ! Read grid parameters
   if ( logUnit .gt. 0 ) then 
     write( logUnit, '(a)') 'Will read reconstruction grid parameters. '
   end if 
-  ! Read grid parameters
   ! domainOrigin
   read(simUnit, '(a)') line
   icol = 1
@@ -234,14 +237,74 @@ program GPKDE
     write(logUnit,'(a)') 'Succesfully read reconstruction grid data.'
   end if 
 
-  call exit(0)
+  ! Read the max number of optimization loops
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  if (n.lt.1) then
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Given number of optimization loops is less than 1. It should be at least 1. Stop.'
+    end if 
+    call ustop('Given number of optimization loops is less than 1. It should be at least 1. Stop.')
+  end if
+  nOptLoops = n
+  if ( logUnit .gt. 0 ) then
+    write(logUnit,'(a,I4)') 'Optimization will consider the maximum number of loops: ', nOptLoops
+  end if
 
 
-  !! KDB LOG
-  !doubleprecision, dimension(3)             :: domainSize         = [ 1000.0, 200.0, 1.0 ] 
-  !doubleprecision, dimension(3)             :: binSize            = [ 1.0   , 1.0  , 1.0 ]
-  !!doubleprecision, dimension(3)             :: binSize            = [ 1.0   , 200.0  , 1.0 ]
-  !doubleprecision, dimension(3)             :: domainOrigin       = [ 0.0   , 0.0  , 0.0 ]
+  ! Employ raw kernel computation or 
+  ! kernel database ?
+  ! 0: without kernel database, brute force
+  ! 1: with kernel database and read parameters
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    kernelDatabase = .false.
+  case(1)
+    kernelDatabase = .true.
+  case default
+     call ustop('Kernel specification kind not available. It should be 0 or 1 . Stop.')
+  end select
+
+  if ( kernelDatabase ) then
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'GPKDE will employ a kernel database.'
+    end if
+    ! Read kernel database params
+    ! - min   h/lambda
+    ! - delta h/lambda
+    ! - max   h/lambda
+    read(simUnit, '(a)') line
+    icol = 1
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    kernelParams(1) = r
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    kernelParams(2) = r
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    kernelParams(3) = r
+  else
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'GPKDE will compute raw kernels.'
+    end if
+    ! Read kernel params
+    ! - min   h/lambda
+    ! - max   h/lambda
+    read(simUnit, '(a)') line
+    icol = 1
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    kernelParams(1) = r
+    kernelParams(2) = 0d0 ! NOT USED
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    kernelParams(3) = r
+  end if 
+
+
+
+  !call exit(0)
+
   !maxHOverLambda     = 20.0
   !minHOverLambda     = 1
   !deltaHOverLambda   = 0.0001
@@ -277,72 +340,6 @@ program GPKDE
     end do
   end select
 
-
-
-
-
-call exit(0)
-
-  !
-  !! Health control
-  !if ( any(this%TrackingOptions%gpkdeBinSize.lt.0d0) ) then 
-  !  write(outUnit,'(A)') 'One of the GPKDE binSizes is negative. They should be positive.'
-  !  call ustop('One of the GPKDE binSizes is negative. They should be positive. Stop.')
-  !end if 
-  !if ( all(this%TrackingOptions%gpkdeBinSize.eq.0d0) ) then
-  !  ! No gpkde 
-  !  write(outUnit,'(A)') 'GPKDE binSizes are zero, will disable spatial reconstruction. They should be positive.'
-  !  write(outUnit,'(A)') 'GPKDE reconstruction is disabled'
-  !  this%TrackingOptions%GPKDEReconstruction = .false.
-  !  return
-  !end if 
-
-  !! Read nOptimizationLoops
-  !read(gpkdeUnit, '(a)') line
-  !icol = 1
-  !call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeNOptLoops = n
-  !
-  !! Read reconstruction method
-  !! 0: without kernel database, brute force
-  !! 1: with kernel database and read parameters
-  !read(gpkdeUnit, '(a)') line
-  !icol = 1
-  !call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  !if (n.eq.0) then 
-  !  this%TrackingOptions%gpkdeKernelDatabase = .false.
-  !else
-  !  this%TrackingOptions%gpkdeKernelDatabase = .true.
-  !end if
-  !
-  !if ( this%TrackingOptions%gpkdeKernelDatabase ) then 
-  !  write(outUnit,'(A)') 'GPKDE reconstruction with kernel database'
-  !  ! Read kernel database params
-  !  ! - min   h/lambda
-  !  ! - delta h/lambda
-  !  ! - max   h/lambda
-  !  read(gpkdeUnit, '(a)') line
-  !  icol = 1
-  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !  this%TrackingOptions%gpkdeKDBParams(1) = r
-  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !  this%TrackingOptions%gpkdeKDBParams(2) = r
-  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !  this%TrackingOptions%gpkdeKDBParams(3) = r
-  !else
-  !  write(outUnit,'(A)') 'GPKDE reconstruction with brute force, no kernel database'
-  !  this%TrackingOptions%gpkdeKernelDatabase = .false.
-  !  ! Read kernel params
-  !  ! - min   h/lambda
-  !  ! - max   h/lambda
-  !  read(gpkdeUnit, '(a)') line
-  !  icol = 1
-  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !  this%TrackingOptions%gpkdeKDBParams(1) = r
-  !  this%TrackingOptions%gpkdeKDBParams(2) = 0d0 ! NOT USED
-  !  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !  this%TrackingOptions%gpkdeKDBParams(3) = r
-  !end if 
   !
   !! Read kind of reconstruction output
   !! 0: as total mass density. Smoothed phi*R*c_r
