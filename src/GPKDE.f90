@@ -301,29 +301,16 @@ program GPKDE
     kernelParams(3) = r
   end if 
 
-
-
-  !call exit(0)
-
-  !maxHOverLambda     = 20.0
-  !minHOverLambda     = 1
-  !deltaHOverLambda   = 0.0001
-  !nOptimizationLoops = 5
   !maxSmoothingGrowth = 5d-1
   !densityRelativeConvergence = 0.01
-  !minHOverLambda          = minHOverLambda,     & 
-  !maxHOverLambda          = maxHOverLambda,     & 
-  !deltaHOverLambda        = deltaHOverLambda,   &
   !databaseOptimization    = .false.,            & 
   !bruteOptimization       = .false.,            & 
-  !anisotropicSigmaSupport = .false.,            &
-  !nOptimizationLoops      = nOptimizationLoops, & 
-  !domainOrigin            = domainOrigin,       & 
   !densityRelativeConvergence = densityRelativeConvergence &
 
-
-
   ! Read data into arrays for reconstruction
+  if ( logUnit.gt.0 ) then 
+    write(logUnit,'(a)') 'GPKDE will load data into arrays.'
+  end if
   select case(inputDataFormat)
   case(0)
     ! x,y,z 
@@ -339,61 +326,58 @@ program GPKDE
       read(dataUnit,*) dataCarrier( id, : ), weightsCarrier(id)
     end do
   end select
+  if ( logUnit.gt.0 ) then 
+    write(logUnit,'(a)') 'Loaded data into arrays.'
+  end if
 
-  !
-  !! Read kind of reconstruction output
-  !! 0: as total mass density. Smoothed phi*R*c_r
-  !! 1: as resident concentration
-  !read(gpkdeUnit, '(a)') line
-  !icol = 1
-  !call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  !if (n.eq.0) then 
-  !  write(outUnit,'(A)') 'GPKDE output is expressed as smoothed total mass density.'
-  !  this%TrackingOptions%gpkdeAsConcentration = .false.
-  !  this%TrackingOptions%gpkdeScalingFactor =&
-  !    1d0/(this%TrackingOptions%gpkdeBinVolume)
-  !else
+  ! Initialize gpkde 
+  allocate( gpkdeObj )
+  if (logUnit.gt.0) then
+    call gpkdeObj%Initialize(& 
+        domainSize, binSize,                   &
+        domainOrigin         = domainOrigin,   & 
+        nOptimizationLoops   = nOptLoops,      &
+        databaseOptimization = kernelDatabase, &
+        minHOverLambda       = kernelParams(1),&
+        deltaHOverLambda     = kernelParams(2),&
+        maxHOverLambda       = kernelParams(3),&
+        outFileName          = logFile         &
+    )
+    write(logUnit,'(a)') 'GPKDE Initialized. '
+  else
+    ! Initialization should be performed once grid properties are known.
+    call gpkdeObj%Initialize(& 
+        domainSize, binSize,                   &
+        domainOrigin         = domainOrigin,   & 
+        nOptimizationLoops   = nOptLoops,      &
+        databaseOptimization = kernelDatabase, &
+        minHOverLambda       = kernelParams(1),&
+        deltaHOverLambda     = kernelParams(2),&
+        maxHOverLambda       = kernelParams(3) &
+    )
+  end if
 
+  ! Initialize output unit/file
+  open(unit=outputUnit, &
+       file=outputFile, &
+     status='replace', form='formatted', access='sequential')
+  if ( logUnit .gt. 0 ) then
+    write(logUnit,'(a)') 'Opened output unit for reconstruction. '
+  end if
 
-  !! Initialize gpkde 
-  !allocate( gpkde )
-  !! Initialization should be performed once grid properties are known.
-  !call gpkde%Initialize(& 
-  !    simulationData%TrackingOptions%gpkdeDomainSize,                          &
-  !    simulationData%TrackingOptions%gpkdeBinSize,                             &
-  !    domainOrigin=simulationData%TrackingOptions%gpkdeDomainOrigin,           &
-  !    nOptimizationLoops=simulationData%TrackingOptions%gpkdeNOptLoops,        &
-  !    databaseOptimization=simulationData%TrackingOptions%gpkdeKernelDatabase, &
-  !    minHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(1),         &
-  !    deltaHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(2),       &
-  !    maxHOverLambda=simulationData%TrackingOptions%gpkdeKDBParams(3),         &
-  !    outFileName=mplistFile &
-  !)
-  !! Initialize output unit/file
-  !open(unit=simulationData%TrackingOptions%gpkdeOutputUnit, &
-  !     file=simulationData%TrackingOptions%gpkdeOutputFile, &
-  !   status='replace', form='formatted', access='sequential')
+  ! Compute density
+  if ( logUnit .gt. 0 ) then
+    write(logUnit,'(a)') 'Will perform density reconstruction.'
+  end if
+  call gpkdeObj%ComputeDensity(       &
+   dataCarrier,                       &
+   outputFileUnit    = outputUnit     &
+   !weightedHistogram = .true.,        &
+   !weights           = weightsCarrier,&
+  )
 
-
-  !! Reconstruction
-  !! GPKDE
-  !! Compute density for the particles linked to a given 
-  !! solute. These may have different mass
-  !call gpkde%ComputeDensity(                                                  &
-  ! activeParticleCoordinates,                                                 &
-  ! outputFileUnit    = simulationData%TrackingOptions%gpkdeOutputUnit,        &
-  ! outputDataId      = nt,                                                    & 
-  ! particleGroupId   = solute%id,                                             &
-  ! unitVolume        = .true.,                                                &
-  ! weightedHistogram = .true.,                                                &
-  ! weights           = activeParticleMasses,                                  &
-  ! scalingFactor     = simulationData%TrackingOptions%gpkdeScalingFactor,     &
-  ! histogramScalingFactor = simulationData%TrackingOptions%gpkdeScalingFactor &
-  !)
-
-
-  !! Deallocate
-  !if ( allocated( gpkde ) ) deallocate( gpkde )
+  ! Deallocate
+  if ( allocated( gpkdeObj ) ) deallocate( gpkdeObj )
 
   !! Exit 
   !!close(mplistUnit)
