@@ -10,8 +10,8 @@ program GPKDE
   doubleprecision, dimension(:,:), allocatable :: dataCarrier
   doubleprecision, dimension(:), allocatable   :: weightsCarrier
   logical :: parallel = .false.
-  character(len=200) :: simFile, logFile, dataFile
-  integer            :: simUnit, dataUnit, logUnit, logType
+  character(len=200) :: simFile, logFile, dataFile, outputFile
+  integer            :: simUnit, dataUnit, logUnit, logType, outputUnit
   character(len=20)  :: version
   character(len=100) :: terminationMessage
   character(len=90)  :: compilerVersionText
@@ -23,12 +23,16 @@ program GPKDE
   doubleprecision    :: r
   character(len=200) :: line
   logical            :: exists
-  integer            :: nlines, io
+  integer            :: nlines, io, id
   integer            :: inputDataFormat
+  doubleprecision, dimension(3) :: domainSize  
+  doubleprecision, dimension(3) :: binSize     
+  doubleprecision, dimension(3) :: domainOrigin
   !-----------------------------------------------
-  simUnit  = 111
-  logUnit  = 911
-  dataUnit = 112 
+  simUnit    = 111
+  logUnit    = 911
+  dataUnit   = 112
+  outputUnit = 113 
   !-----------------------------------------------
   ! Set version
   version = '0.0.1'
@@ -129,7 +133,7 @@ program GPKDE
     call ustop('Specified data file was not found. Stop.')
   else
     if ( logType .gt. 0 ) then 
-      write( logUnit, '(a,a)') 'Input data file name: ', dataFile
+      write( logUnit, '(a,a)') 'Input data file name: ', adjustl(trim(dataFile))
     end if
   end if
   dataFile = trim(dataFile)
@@ -138,6 +142,7 @@ program GPKDE
   open(dataUnit, file=dataFile,access='sequential',form="formatted")
   if ( nlines.eq.0 ) then 
     ! Infer number of lines from file
+    ! The number of lines is needed to allocate arrays
     rewind(dataUnit)
     do
       read(dataUnit,*,iostat=io)
@@ -147,52 +152,137 @@ program GPKDE
     if ( logUnit .gt. 0 ) then 
       write(logUnit, '(a,I10)') 'Detected number of lines in data file: ', nlines
     end if 
+    rewind(dataUnit)
   end if
+  if ( nlines.lt.1 ) then 
+    call ustop('Data file does not have entries. Stop.')
+  end if 
 
-  ! The number of lines needed in order to allocate arrays 
-  !call exit(0) 
+  ! Before loading the data, read the 
+  ! reconstruction parameters and perform 
+  ! some health checks to throw out fast 
+  ! in case of any inconsistencies.
+
+  ! Read the outputFile
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 0, n, r, 0, 0)
+  outputFile = line
+  if ( logUnit .gt. 0 ) then 
+    write( logUnit, '(a,a)') 'Reconstruction output will be written to file: ', adjustl(trim(outputFile))
+  end if 
+
+  if ( logUnit .gt. 0 ) then 
+    write( logUnit, '(a)') 'Will read reconstruction grid parameters. '
+  end if 
+  ! Read grid parameters
+  ! domainOrigin
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  domainOrigin(1) = r
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  domainOrigin(2) = r
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  domainOrigin(3) = r
+  
+  ! Read domainSize
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  domainSize(1) = r
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  domainSize(2) = r
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  domainSize(3) = r
+
+  ! Read binSize
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  binSize(1) = r
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  binSize(2) = r
+  call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+  binSize(3) = r
+  ! Health control
+  if ( any(binSize.lt.0d0) ) then
+    if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'One of the binSizes is negative. They should be positive. Stop.'
+    end if 
+    call ustop('One of the binSizes is negative. They should be positive. Stop.')
+  end if 
+  if ( all(binSize.lt.0d0) ) then
+    if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'All binSizes are less than zero. They should be positive. Stop.'
+    end if 
+    call ustop('All binSizes are less than zero. They should be positive. Stop.')
+  end if 
+  if ( any(domainSize.lt.0d0) ) then
+    if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'One of the domainSizes is negative. They should be positive. Stop.'
+    end if 
+    call ustop('One of the domainSizes is negative. They should be positive. Stop.')
+  end if 
+  if ( all(domainSize.lt.0d0) ) then
+    if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'All domainSizes are less than zero. They should be positive. Stop.'
+    end if 
+    call ustop('All domainSizes are less than zero. They should be positive. Stop.')
+  end if 
+  if ( logUnit.gt.0 ) then 
+    write(logUnit,'(a)') 'Succesfully read reconstruction grid data.'
+  end if 
+
+  call exit(0)
+
+
+  !! KDB LOG
+  !doubleprecision, dimension(3)             :: domainSize         = [ 1000.0, 200.0, 1.0 ] 
+  !doubleprecision, dimension(3)             :: binSize            = [ 1.0   , 1.0  , 1.0 ]
+  !!doubleprecision, dimension(3)             :: binSize            = [ 1.0   , 200.0  , 1.0 ]
+  !doubleprecision, dimension(3)             :: domainOrigin       = [ 0.0   , 0.0  , 0.0 ]
+  !maxHOverLambda     = 20.0
+  !minHOverLambda     = 1
+  !deltaHOverLambda   = 0.0001
+  !nOptimizationLoops = 5
+  !maxSmoothingGrowth = 5d-1
+  !densityRelativeConvergence = 0.01
+  !minHOverLambda          = minHOverLambda,     & 
+  !maxHOverLambda          = maxHOverLambda,     & 
+  !deltaHOverLambda        = deltaHOverLambda,   &
+  !databaseOptimization    = .false.,            & 
+  !bruteOptimization       = .false.,            & 
+  !anisotropicSigmaSupport = .false.,            &
+  !nOptimizationLoops      = nOptimizationLoops, & 
+  !domainOrigin            = domainOrigin,       & 
+  !densityRelativeConvergence = densityRelativeConvergence &
+
+
+
+  ! Read data into arrays for reconstruction
+  select case(inputDataFormat)
+  case(0)
+    ! x,y,z 
+    allocate( dataCarrier( nlines, 3 ) )
+    do id = 1, nlines
+      read(dataUnit,*) dataCarrier( id, : )
+    end do
+  case(1)
+    ! x,y,z,m 
+    allocate( dataCarrier( nlines, 3 ) )
+    allocate( weightsCarrier( nlines ) )
+    do id = 1, nlines
+      read(dataUnit,*) dataCarrier( id, : ), weightsCarrier(id)
+    end do
+  end select
 
 
 
 
 
-  !! Needs to read an input file 
-  !! Read gpkde output file
-  !read(gpkdeUnit, '(a)') this%TrackingOptions%gpkdeOutputFile
-  !icol = 1
-  !call urword(this%TrackingOptions%gpkdeOutputFile,icol,istart,istop,0,n,r,0,0)
-  !this%TrackingOptions%gpkdeOutputFile = this%TrackingOptions%gpkdeOutputFile(istart:istop)
+call exit(0)
 
-  !! Extract and initialize parameters
-  !! Read domainOrigin
-  !read(gpkdeUnit, '(a)') line
-  !icol = 1
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeDomainOrigin(1) = r
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeDomainOrigin(2) = r
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeDomainOrigin(3) = r
-  !
-  !! Read domainSize
-  !read(gpkdeUnit, '(a)') line
-  !icol = 1
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeDomainSize(1) = r
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeDomainSize(2) = r
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeDomainSize(3) = r
-  !
-  !! Read binSize
-  !read(gpkdeUnit, '(a)') line
-  !icol = 1
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeBinSize(1) = r
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeBinSize(2) = r
-  !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-  !this%TrackingOptions%gpkdeBinSize(3) = r
   !
   !! Health control
   !if ( any(this%TrackingOptions%gpkdeBinSize.lt.0d0) ) then 

@@ -34,7 +34,7 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 1d0
+    doubleprecision :: defaultInitialSmoothingFactor = 0.1
     doubleprecision :: defaultDensityScale           = 1d0
     doubleprecision :: defaultMinLimitRoughness      = 1d-40
     doubleprecision :: defaultMaxLimitRoughness      = 1d40
@@ -3326,9 +3326,8 @@ module GridProjectedKDEModule
         close( errorOutputUnit )
       end if 
 
-
       ! Fix histogram
-      this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
+      !this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
 
       ! Update density
       densityEstimateGrid = 0d0
@@ -4468,8 +4467,7 @@ module GridProjectedKDEModule
             do iy = 1, this%nBins(2)
                 do ix = 1, this%nBins(1)
                     if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-                    ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-                    !write(outputUnit,"(I8,I8,I8,es18.9e3,I8)") ix, iy, iz, & 
+                    ! cellids, density, histogram
                     write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
                       this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
                 end do
