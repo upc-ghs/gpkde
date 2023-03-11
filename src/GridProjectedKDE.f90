@@ -3308,7 +3308,12 @@ module GridProjectedKDEModule
           end if
 
           if ( this%reportToOutUnit ) then 
-          write( this%outFileUnit, "(I3,3es18.9e3)" ) m, & 
+          if ( m .eq. 1 ) then
+          write( this%outFileUnit, "(a)" )       '|-----------------------------------------------------------|'
+          write( this%outFileUnit, "(a,a,a,a)" ) '| Loop |', '  hHatOverLambda |', '     ALMISE      |', '      RMSE      |'
+          write( this%outFileUnit, "(a)" )       '|-----------------------------------------------------------|'
+          end if 
+          write( this%outFileUnit, "(I6,3es18.9e3)" ) m, & 
             sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binDistance,errorALMISEProxy, errorRMSE
           end if 
 

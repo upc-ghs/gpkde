@@ -369,23 +369,23 @@ program GPKDE
   if ( logUnit .gt. 0 ) then
     write(logUnit,'(a)') 'Will perform density reconstruction.'
   end if
+  call system_clock(clockCountStart, clockCountRate, clockCountMax)
   call gpkdeObj%ComputeDensity(       &
    dataCarrier,                       &
-   outputFileUnit    = outputUnit     &
+   outputFileUnit    = outputUnit,    &
+   computeRawDensity = .true.         &
    !weightedHistogram = .true.,        &
    !weights           = weightsCarrier,&
   )
+  call system_clock(clockCountStop, clockCountRate, clockCountMax)
 
   ! Deallocate
   if ( allocated( gpkdeObj ) ) deallocate( gpkdeObj )
 
-  !! Exit 
-  !!close(mplistUnit)
-  !!write(*, '(a)') terminationMessage
-  !!elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-  !!write(mplistUnit, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
-  !!if (logType /= 0) close(logUnit)
-
+  ! Exit 
+  elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+  if ( logUnit.gt.0 ) write(logUnit, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
+  write(*, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
   write(*, '(a)') terminationMessage
   close( simUnit ) 
   if ( logType .gt. 0 ) close( logUnit ) 
