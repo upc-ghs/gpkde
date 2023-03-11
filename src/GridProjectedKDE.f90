@@ -2533,22 +2533,21 @@ module GridProjectedKDEModule
         end if
 
         if ( locScaleHistogram ) then
-            ! Apply histogramScalingFactor to histogram
-            this%histogram%counts = this%histogram%counts*locHistogramScalingFactor
+          ! Apply histogramScalingFactor to histogram
+          this%histogram%counts = this%histogram%counts*locHistogramScalingFactor
         end if 
-
 
         ! Write output files !
         if ( present( outputFileUnit ) .and. present( outputDataId ) .and. present( particleGroupId )) then
-            call this%ExportDensityUnit( outputFileUnit, outputDataId, particleGroupId )
+          call this%ExportDensityUnit( outputFileUnit, outputDataId, particleGroupId )
+        else if ( present( outputFileUnit ) ) then
+          call this%ExportDensityUnit( outputFileUnit )
         else if ( present( outputFileName ) ) then  
-            call this%ExportDensity( outputFileName )
+          call this%ExportDensity( outputFileName )
         end if
-      
 
         ! Done
         return
-
 
     end subroutine prComputeDensity 
     
@@ -4490,32 +4489,63 @@ module GridProjectedKDEModule
       implicit none 
       class(GridProjectedKDEType) :: this
       integer, intent(in) :: outputUnit
-      integer, intent(in) :: outputDataId
-      integer, intent(in) :: particleGroupId
+      integer, optional, intent(in) :: outputDataId
+      integer, optional, intent(in) :: particleGroupId
       integer :: ix, iy, iz
       integer :: countNonZero, counter
+      integer :: dataId
       !------------------------------------------------------------------------------
 
-      counter      = 0
-      countNonZero = count(this%densityEstimateGrid /=0d0)
-      if( allocated( this%outputBinIds ) ) deallocate( this%outputBinIds )
-      allocate( this%outputBinIds(countNonZero,3) )
-       
-      ! Following column-major nesting
-      do iz = 1, this%nBins(3)
-        do iy = 1, this%nBins(2)
-          do ix = 1, this%nBins(1)
-            if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-            ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES/COLUMNS
-            ! write(outputUnit,"(I8,I8,I8,I8,I6,es18.9e3,I8)") outputDataId, particleGroupId, &
-            write(outputUnit,"(I8,I8,I8,I8,I6,2es18.9e3)") outputDataId, particleGroupId, &
-                ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
-                               this%histogram%counts( ix, iy, iz ) 
-            counter = counter + 1 
-            this%outputBinIds(counter,:) = (/ix,iy,iz/)
+      ! Not being used
+      !counter      = 0
+      !countNonZero = count(this%densityEstimateGrid /=0d0)
+      !if( allocated( this%outputBinIds ) ) deallocate( this%outputBinIds )
+      !allocate( this%outputBinIds(countNonZero,3) )
+      
+      if ( present( outputDataId ) .and. present( particleGroupId ) ) then
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
+              write(outputUnit,"(5I8,2es18.9e3)") outputDataId, particleGroupId, &
+                  ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
+                                 this%histogram%counts( ix, iy, iz ) 
+              !counter = counter + 1 
+              !this%outputBinIds(counter,:) = (/ix,iy,iz/)
+            end do
           end do
         end do
-      end do
+      else if ( present( outputDataId ) .or. present( particleGroupId ) ) then
+        if( present(outputDataId) ) then
+          dataId = outputDataId
+        else
+          dataId = particleGroupId
+        end if
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
+              write(outputUnit,"(4I8,2es18.9e3)") dataId, ix, iy, iz, &
+                              this%densityEstimateGrid( ix, iy, iz ), &
+                                  this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      else
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
+              write(outputUnit,"(3I8,2es18.9e3)") ix, iy, iz, &
+                      this%densityEstimateGrid( ix, iy, iz ), &
+                          this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      end if 
 
 
     end subroutine prExportDensityUnit
