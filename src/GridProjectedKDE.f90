@@ -34,7 +34,7 @@ module GridProjectedKDEModule
     logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
 
     ! Optimization
-    doubleprecision :: defaultInitialSmoothingFactor = 0.1
+    doubleprecision :: defaultInitialSmoothingFactor = 5
     doubleprecision :: defaultDensityScale           = 1d0
     doubleprecision :: defaultMinLimitRoughness      = 1d-40
     doubleprecision :: defaultMaxLimitRoughness      = 1d40
@@ -889,259 +889,258 @@ module GridProjectedKDEModule
                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                             netRoughnessArray, kernelSigmaSupport, &
                                                    kernelSDX, kernelSDY, kernelSDZ ) 
-        !------------------------------------------------------------------------------
-        ! Net roughness in 1D
-        ! 
-        !  - Eq. 13a in Sole-Mari et al. (2019)
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        !input
-        class( GridProjectedKDEType ), target                   :: this
-        type( GridCellType ), dimension(:), intent(in), target  :: activeGridCells
-        doubleprecision, dimension(:,:), intent(in)             :: curvatureBandwidth
-        doubleprecision, dimension(:,:), intent(in)             :: kernelSigmaSupport
-        type( KernelSecondDerivativeXType ), intent(inout)      :: kernelSDX
-        type( KernelSecondDerivativeYType ), intent(inout)      :: kernelSDY
-        type( KernelSecondDerivativeZType ), intent(inout)      :: kernelSDZ
-        ! out
-        doubleprecision, dimension(:), intent(inout), target :: roughnessXXArray
-        doubleprecision, dimension(:), intent(inout), target :: roughnessYYArray
-        doubleprecision, dimension(:), intent(inout), target :: roughnessZZArray
-        doubleprecision, dimension(:), intent(inout)         :: netRoughnessArray
-        ! local 
-        type( GridCellType ), pointer :: gc => null()
-        doubleprecision, dimension(:), pointer :: roughness11Array
-        doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
-        doubleprecision, dimension(:,:,:), allocatable, target :: curvature11
-        doubleprecision, dimension(:,:,:), allocatable, target :: roughness11
-        integer :: n
-        integer :: iX, iY, iZ
-        type( KernelMultiGaussianType ) :: kernelSigma
-        !------------------------------------------------------------------------------
-        allocate( curvature1(  this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        allocate( curvature11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        allocate( roughness11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! Net roughness in 1D
+      ! 
+      !  - Eq. 13a in Sole-Mari et al. (2019)
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      !input
+      class( GridProjectedKDEType ), target                   :: this
+      type( GridCellType ), dimension(:), intent(in), target  :: activeGridCells
+      doubleprecision, dimension(:,:), intent(in)             :: curvatureBandwidth
+      doubleprecision, dimension(:,:), intent(in)             :: kernelSigmaSupport
+      type( KernelSecondDerivativeXType ), intent(inout)      :: kernelSDX
+      type( KernelSecondDerivativeYType ), intent(inout)      :: kernelSDY
+      type( KernelSecondDerivativeZType ), intent(inout)      :: kernelSDZ
+      ! out
+      doubleprecision, dimension(:), intent(inout), target :: roughnessXXArray
+      doubleprecision, dimension(:), intent(inout), target :: roughnessYYArray
+      doubleprecision, dimension(:), intent(inout), target :: roughnessZZArray
+      doubleprecision, dimension(:), intent(inout)         :: netRoughnessArray
+      ! local 
+      type( GridCellType ), pointer :: gc => null()
+      doubleprecision, dimension(:), pointer :: roughness11Array
+      doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
+      doubleprecision, dimension(:,:,:), allocatable, target :: curvature11
+      doubleprecision, dimension(:,:,:), allocatable, target :: roughness11
+      integer :: n
+      integer :: iX, iY, iZ
+      type( KernelMultiGaussianType ) :: kernelSigma
+      !------------------------------------------------------------------------------
+      allocate( curvature1(  this%nBins(1), this%nBins(2), this%nBins(3) )) 
+      allocate( curvature11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
+      allocate( roughness11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
+      !------------------------------------------------------------------------------
    
+      ! Initialize
+      curvature1  = 0d0
+      roughness11 = 0d0
 
-        ! Initialize
-        curvature1  = 0d0
-        roughness11 = 0d0
+      ! Assign dimension pointers
+      select case( this%idDim1 ) 
+        case (1)
+          roughness11Array => roughnessXXArray
 
-        ! Assign dimension pointers
-        select case( this%idDim1 ) 
-          case (1)
-            roughness11Array => roughnessXXArray
-
-            !$omp parallel do schedule( dynamic, 1 ) & 
-            !$omp default( none )                    &
-            !$omp shared( this )                     &
-            !$omp shared( activeGridCells )          &
-            !$omp shared( curvatureBandwidth )       &
-            !$omp reduction( +:curvature1 )          &
-            !$omp firstprivate( kernelSDX )          &
-            !$omp private( gc )                       
-            do n = 1, this%nComputeBins
+          !$omp parallel do schedule( dynamic, 1 ) & 
+          !$omp default( none )                    &
+          !$omp shared( this )                     &
+          !$omp shared( activeGridCells )          &
+          !$omp shared( curvatureBandwidth )       &
+          !$omp reduction( +:curvature1 )          &
+          !$omp firstprivate( kernelSDX )          &
+          !$omp private( gc )                       
+          do n = 1, this%nComputeBins
     
-                ! Assign gc pointer 
-                gc => activeGridCells(n)
-  
-                if ( ( curvatureBandwidth(this%idDim1,n) .lt. 0d0 ) .or. & 
-                     ( curvatureBandwidth(this%idDim1,n) /= curvatureBandwidth(this%idDim1,n) ) ) cycle
-
-                ! Set kernel
-                call this%SetKernelSD( gc, kernelSDX, curvatureBandwidth(:,n) )
-
-                ! Compute curvature
-                curvature1( &
-                        gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
-                        gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
-                        gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
-                    ) = curvature1( &
-                        gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
-                        gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
-                        gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                         gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
-                                gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
-                                gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
-                                gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
-                         )
-
-            end do
-            !$omp end parallel do
-
-          case (2)
-            roughness11Array => roughnessYYArray
-
-            !$omp parallel do schedule( dynamic, 1 ) & 
-            !$omp default( none )                    &
-            !$omp shared( this )                     &
-            !$omp shared( activeGridCells )          &
-            !$omp shared( curvatureBandwidth )       &
-            !$omp reduction( +:curvature1 )          &
-            !$omp firstprivate( kernelSDY )          &
-            !$omp private( gc )                       
-            do n = 1, this%nComputeBins
-    
-                ! Assign gc pointer 
-                gc => activeGridCells(n)
-  
-                if ( ( curvatureBandwidth(this%idDim1,n) .lt. 0d0 ) .or. & 
-                     ( curvatureBandwidth(this%idDim1,n) /= curvatureBandwidth(this%idDim1,n) ) ) cycle
-
-                ! Set kernel
-                call this%SetKernelSD( gc, kernelSDY, curvatureBandwidth(:,n) )
-
-                ! Compute curvature
-                curvature1( &
-                        gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
-                        gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
-                        gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
-                    ) = curvature1( &
-                        gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
-                        gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
-                        gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                         gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
-                                gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
-                                gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
-                                gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
-                         )
-
-            end do
-            !$omp end parallel do
-
-          case (3)
-            roughness11Array => roughnessZZArray
-
-            !$omp parallel do schedule( dynamic, 1 ) & 
-            !$omp default( none )                    &
-            !$omp shared( this )                     &
-            !$omp shared( activeGridCells )          &
-            !$omp shared( curvatureBandwidth )       &
-            !$omp reduction( +:curvature1 )          &
-            !$omp firstprivate( kernelSDZ )          &
-            !$omp private( gc )                       
-            do n = 1, this%nComputeBins
-    
-                ! Assign gc pointer 
-                gc => activeGridCells(n)
-  
-                if ( ( curvatureBandwidth(this%idDim1,n) .lt. 0d0 ) .or. & 
-                     ( curvatureBandwidth(this%idDim1,n) /= curvatureBandwidth(this%idDim1,n) ) ) cycle
-
-                ! Set kernel
-                call this%SetKernelSD( gc, kernelSDZ, curvatureBandwidth(:,n) )
-
-                ! Compute curvature
-                curvature1( &
-                        gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
-                        gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
-                        gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
-                    ) = curvature1( &
-                        gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
-                        gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
-                        gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
-                    ) + this%histogram%counts(                             &
-                         gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
-                                gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
-                                gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
-                                gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
-                         )
-
-            end do
-            !$omp end parallel do
-
-        end select
-        curvature1 = curvature1/this%histogram%binVolume
-        ! Matrix from curvature kernels is lambda**2*KernelVMatrix
-        curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
-
-
-        ! Product curvatures, roughness
-        curvature11 = curvature1*curvature1
-
-
-        ! kernelSigma was already computed ? 
-        call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange   )
-
-
-        ! 11
-        !$omp parallel do schedule( dynamic, 1 ) &
-        !$omp default( none )                    &
-        !$omp shared( this )                     &
-        !$omp shared( activeGridCells )          &
-        !$omp shared( curvature11 )              &
-        !$omp shared( roughness11 )              & 
-        !$omp shared( kernelSigmaSupport )       & 
-        !$omp firstprivate( kernelSigma )        &
-        !$omp private( gc )
-        do n = 1, this%nComputeBins
-
-            ! Assign pointer 
+            ! Assign gc pointer 
             gc => activeGridCells(n)
+  
+            if ( ( curvatureBandwidth(this%idDim1,n) .lt. 0d0 ) .or. & 
+                 ( curvatureBandwidth(this%idDim1,n) /= curvatureBandwidth(this%idDim1,n) ) ) cycle
 
-            call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
+            ! Set kernel
+            call this%SetKernelSD( gc, kernelSDX, curvatureBandwidth(:,n) )
 
-            ! Compute roughness grid estimates
-            roughness11( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
-                curvature11(&
-                    gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-                    gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-                    gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-                )*gc%kernelSigmaMatrix(&
-                    gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-                    gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                    gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+            ! Compute curvature
+            curvature1( &
+                    gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+                    gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+                    gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+                ) = curvature1( &
+                    gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+                    gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+                    gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+                ) + this%histogram%counts(                             &
+                     gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
+                            gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
+                            gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
+                            gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
+                     )
 
-        end do
-        !$omp end parallel do 
+          end do
+          !$omp end parallel do
 
+        case (2)
+          roughness11Array => roughnessYYArray
 
-        ! Net roughness
-        roughness11Array  = 0d0 
-        netRoughnessArray = 0d0
-        !$omp parallel do schedule( dynamic, 1 ) &
-        !$omp default( none )                    &
-        !$omp shared( this )                     &
-        !$omp shared( activeGridCells )          &
-        !$omp shared( roughness11 )              &
-        !$omp shared( roughness11Array )         &
-        !$omp shared( netRoughnessArray )        &
-        !$omp private( gc )                      & 
-        !$omp private( iX, iY, iZ )  
-        do n = 1, this%nComputeBins
-
-            ! Assign pointer 
+          !$omp parallel do schedule( dynamic, 1 ) & 
+          !$omp default( none )                    &
+          !$omp shared( this )                     &
+          !$omp shared( activeGridCells )          &
+          !$omp shared( curvatureBandwidth )       &
+          !$omp reduction( +:curvature1 )          &
+          !$omp firstprivate( kernelSDY )          &
+          !$omp private( gc )                       
+          do n = 1, this%nComputeBins
+    
+            ! Assign gc pointer 
             gc => activeGridCells(n)
+  
+            if ( ( curvatureBandwidth(this%idDim1,n) .lt. 0d0 ) .or. & 
+                 ( curvatureBandwidth(this%idDim1,n) /= curvatureBandwidth(this%idDim1,n) ) ) cycle
 
-            if ( gc%skipKernelSigma ) cycle
+            ! Set kernel
+            call this%SetKernelSD( gc, kernelSDY, curvatureBandwidth(:,n) )
 
-            iX = gc%id(1)
-            iY = gc%id(2)
-            iZ = gc%id(3)
+            ! Compute curvature
+            curvature1( &
+                    gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+                    gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+                    gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+                ) = curvature1( &
+                    gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+                    gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+                    gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+                ) + this%histogram%counts(                             &
+                     gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
+                            gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
+                            gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
+                            gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
+                     )
 
-            ! Assign info for needed arrays 
-            roughness11Array( n ) = roughness11(iX,iY,iZ)
+          end do
+          !$omp end parallel do
 
-            ! Compute net roughness
-            ! 1D
-            netRoughnessArray( n ) = roughness11(iX,iY,iZ)
+        case (3)
+          roughness11Array => roughnessZZArray
 
-        end do
-        !$omp end parallel do
-        
+          !$omp parallel do schedule( dynamic, 1 ) & 
+          !$omp default( none )                    &
+          !$omp shared( this )                     &
+          !$omp shared( activeGridCells )          &
+          !$omp shared( curvatureBandwidth )       &
+          !$omp reduction( +:curvature1 )          &
+          !$omp firstprivate( kernelSDZ )          &
+          !$omp private( gc )                       
+          do n = 1, this%nComputeBins
+    
+            ! Assign gc pointer 
+            gc => activeGridCells(n)
+  
+            if ( ( curvatureBandwidth(this%idDim1,n) .lt. 0d0 ) .or. & 
+                 ( curvatureBandwidth(this%idDim1,n) /= curvatureBandwidth(this%idDim1,n) ) ) cycle
 
-        ! Deallocate
-        deallocate( curvature1  ) 
-        deallocate( curvature11 ) 
-        deallocate( roughness11 ) 
+            ! Set kernel
+            call this%SetKernelSD( gc, kernelSDZ, curvatureBandwidth(:,n) )
+
+            ! Compute curvature
+            curvature1( &
+                    gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+                    gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+                    gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+                ) = curvature1( &
+                    gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+                    gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+                    gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+                ) + this%histogram%counts(                             &
+                     gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
+                            gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
+                            gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
+                            gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
+                     )
+
+          end do
+          !$omp end parallel do
+
+      end select
+      curvature1 = curvature1/this%histogram%binVolume
+      ! Matrix from curvature kernels is lambda**2*KernelVMatrix
+      curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
 
 
-        return
+      ! Product curvatures, roughness
+      curvature11 = curvature1*curvature1
+
+
+      ! kernelSigma was already computed ? 
+      call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange   )
+
+
+      ! 11
+      !$omp parallel do schedule( dynamic, 1 ) &
+      !$omp default( none )                    &
+      !$omp shared( this )                     &
+      !$omp shared( activeGridCells )          &
+      !$omp shared( curvature11 )              &
+      !$omp shared( roughness11 )              & 
+      !$omp shared( kernelSigmaSupport )       & 
+      !$omp firstprivate( kernelSigma )        &
+      !$omp private( gc )
+      do n = 1, this%nComputeBins
+
+        ! Assign pointer 
+        gc => activeGridCells(n)
+
+        call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
+
+        ! Compute roughness grid estimates
+        roughness11( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+            curvature11(&
+                gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+                gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+                gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+            )*gc%kernelSigmaMatrix(&
+                gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+                gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+
+      end do
+      !$omp end parallel do 
+
+
+      ! Net roughness
+      roughness11Array  = 0d0 
+      netRoughnessArray = 0d0
+      !$omp parallel do schedule( dynamic, 1 ) &
+      !$omp default( none )                    &
+      !$omp shared( this )                     &
+      !$omp shared( activeGridCells )          &
+      !$omp shared( roughness11 )              &
+      !$omp shared( roughness11Array )         &
+      !$omp shared( netRoughnessArray )        &
+      !$omp private( gc )                      & 
+      !$omp private( iX, iY, iZ )  
+      do n = 1, this%nComputeBins
+
+        ! Assign pointer 
+        gc => activeGridCells(n)
+
+        if ( gc%skipKernelSigma ) cycle
+
+        iX = gc%id(1)
+        iY = gc%id(2)
+        iZ = gc%id(3)
+
+        ! Assign info for needed arrays 
+        roughness11Array( n ) = roughness11(iX,iY,iZ)
+
+        ! Compute net roughness
+        ! 1D
+        netRoughnessArray( n ) = roughness11(iX,iY,iZ)
+
+      end do
+      !$omp end parallel do
+      
+
+      ! Deallocate
+      deallocate( curvature1  ) 
+      deallocate( curvature11 ) 
+      deallocate( roughness11 ) 
+
+
+      return
 
 
     end subroutine prComputeNetRoughness1D
@@ -2321,6 +2320,8 @@ module GridProjectedKDEModule
         end if 
         if ( present( outputFileName ) ) then 
           this%outputFileName = outputFileName
+        else
+          this%outputFileName = 'gpkde.out'
         end if
         if ( present( persistentKernelDatabase ) ) then
           persistKDB = persistentKernelDatabase
@@ -2856,14 +2857,14 @@ module GridProjectedKDEModule
       end do
 
       ! Error monitoring
-      squareDensityDiff = (densityEstimateArray - rawDensity)**2
+      squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
       errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
 
       ! Initialize error metric 
       errorMetricArray = 0d0
       where ( kernelSmoothingScale .ne. 0d0 ) 
-        errorMetricArray = nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
-        0.25*netRoughnessArray*kernelSmoothingScale**4d0
+        errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
+        0.25*netRoughnessArray*kernelSmoothingScale**4d0)/(this%histogram%nPoints**2)
       end where
       errorALMISEProxy = sqrt(sum(errorMetricArray**2)/this%nComputeBins)
 
@@ -2882,6 +2883,13 @@ module GridProjectedKDEModule
       errorMetricSmoothing = sqrt(sum(relativeSmoothingChange**2)/this%nComputeBins)
       nFractionSmoothing = real(nSmoothingConvergence)/real(this%nComputeBins)
 
+      if ( this%reportToOutUnit ) then 
+        write( this%outFileUnit, "(a)" )       '|-----------------------------------------------------------|'
+        write( this%outFileUnit, "(a,a,a,a)" ) '| Loop |', '  hHatOverLambda |', '     ALMISE      |', '      RMSE      |'
+        write( this%outFileUnit, "(a)" )       '|-----------------------------------------------------------|'
+        write( this%outFileUnit, "(I6,3es18.9e3)" ) 0, & 
+          sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binDistance,errorALMISEProxy, errorRMSE
+      end if 
 
       ! Write error variables to output file
       if ( (exportLoopError) ) then
@@ -3142,13 +3150,13 @@ module GridProjectedKDEModule
           ! A proxy to error: an estimate of ALIMISE
           errorMetricArray = 0d0
           where ( kernelSmoothingScale .ne. 0d0 ) 
-              errorMetricArray = nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
-              0.25*netRoughnessArray*kernelSmoothingScale**4d0
+              errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
+              0.25*netRoughnessArray*kernelSmoothingScale**4d0)/(this%histogram%nPoints**2)
           end where
           errorALMISEProxy = sqrt(sum(errorMetricArray**2)/this%nComputeBins)
 
           ! A proxy to error: RMSE versus histogram density
-          squareDensityDiff = (densityEstimateArray - rawDensity)**2
+          squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
           errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
 
           ! Error analysis:
@@ -3298,25 +3306,24 @@ module GridProjectedKDEModule
             !call prExportOptimizationVariables( this, varsOutputFileName, & 
             !    densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
             !    curvatureBandwidth, nEstimateArray, netRoughnessArray )
-            call prExportOptimizationVariablesExtendedError( this, varsOutputFileName, & 
-                densityEstimateArray, kernelSmoothing, kernelSmoothingScale,kernelSmoothingShape,  & 
-                kernelSigmaSupportScale, &
-                curvatureBandwidth, nEstimateArray, roughnessXXArray, &
-                roughnessYYArray, roughnessZZArray, netRoughnessArray, &
-                         relativeDensityChange, relativeRoughnessChange )
+            !call prExportOptimizationVariablesExtendedError( this, varsOutputFileName, & 
+            !    densityEstimateArray, kernelSmoothing, kernelSmoothingScale,kernelSmoothingShape,  & 
+            !    kernelSigmaSupportScale, &
+            !    curvatureBandwidth, nEstimateArray, roughnessXXArray, &
+            !    roughnessYYArray, roughnessZZArray, netRoughnessArray, &
+            !             relativeDensityChange, relativeRoughnessChange )
+            call prExportOptimizationVariablesExtended( this, varsOutputFileName, & 
+                     densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
+                                   kernelSmoothingShape, kernelSigmaSupportScale, &
+                            curvatureBandwidth, nEstimateArray, roughnessXXArray, &
+                            roughnessYYArray, roughnessZZArray, netRoughnessArray )
 
           end if
 
           if ( this%reportToOutUnit ) then 
-          if ( m .eq. 1 ) then
-          write( this%outFileUnit, "(a)" )       '|-----------------------------------------------------------|'
-          write( this%outFileUnit, "(a,a,a,a)" ) '| Loop |', '  hHatOverLambda |', '     ALMISE      |', '      RMSE      |'
-          write( this%outFileUnit, "(a)" )       '|-----------------------------------------------------------|'
-          end if 
           write( this%outFileUnit, "(I6,3es18.9e3)" ) m, & 
             sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binDistance,errorALMISEProxy, errorRMSE
           end if 
-
 
       end do
       ! End optimization loop ! 
@@ -3485,30 +3492,6 @@ module GridProjectedKDEModule
                        ( ( 4d0*densityEstimate )**0.25 )*this%supportDimensionConstant
       end where
 
-      ! Force minimun sigma scale in relation to kernel scale
-      where ( ( kernelSigmaSupportScale .gt. 3d0*kernelSmoothingScale ) .or. ( &
-        densityEstimate .eq. 0d0 )  ) 
-        kernelSigmaSupportScale = 3d0*kernelSmoothingScale
-      end where 
-
-      !! Limit the maximum/minimum value
-      !do nd =1, 3
-      !    if ( this%dimensionMask(nd) .eq. 1 ) then 
-      !        where ( kernelSigmaSupportScale/this%binSize(nd) .gt. 3d0*this%maxHOverLambda(nd) )
-      !            kernelSigmaSupportScale = 3d0*this%binSize(nd)*this%maxHOverLambda(nd) 
-      !        end where
-      !        !where ( kernelSigmaSupportScale/this%binSize(nd) .lt. this%minHOverLambda(nd) )
-      !        !    kernelSigmaSupportScale = this%binSize(nd)*this%minHOverLambda(nd) 
-      !        !end where
-      !    end if 
-      !end do
-      !where ( kernelSigmaSupportScale .gt. 3d0*kernelSmoothingScale )
-      !    kernelSigmaSupportScale =  3d0*kernelSmoothingScale
-      !end where
-      !where ( kernelSigmaSupportScale/this%binSize(1) .gt. this%maxHOverLambda(1) )
-      !    kernelSigmaSupportScale = this%binSize(1)*this%maxHOverLambda(1) 
-      !end where
-
       ! Done
       return
 
@@ -3551,14 +3534,12 @@ module GridProjectedKDEModule
       allocate( shapeTermSum(  nActiveBins ) )
       allocate( nVirtualPowerBeta( nActiveBins ) )
 
-
       ! Compute virtual particle cloud size
       nVirtualPowerBeta = 0d0
       where ( densityEstimate .gt. 0d0 )  
         nVirtualPowerBeta = ( ( sqrtEightPi*kernelSigmaSupportScale )**nDim*&
             nEstimate**2d0/densityEstimate )**this%betaDimensionConstant
       end where
-
 
       ! Compute shape dependent terms
       curvatureBandwidth = 0d0
@@ -3570,40 +3551,30 @@ module GridProjectedKDEModule
           ! Compute sum for shape term
           shapeTermSum = 0d0
           do n =1,3
-              if ( this%dimensionMask(n) .eq. 1 ) then
-                  where( kernelSmoothingShape(n,:) .ne. 0d0 ) 
-                      shapeTermSum = shapeTermSum + shapeTermNums(n)/( kernelSmoothingShape(n,:)**2 ) 
-                  end where
-              end if
+            if ( this%dimensionMask(n) .eq. 1 ) then
+              where( kernelSmoothingShape(n,:) .ne. 0d0 ) 
+                shapeTermSum = shapeTermSum + shapeTermNums(n)/( kernelSmoothingShape(n,:)**2 ) 
+              end where
+            end if
           end do 
           where( kernelSmoothingShape(nd,:) .ne. 0d0 ) 
-              shapeTerm( nd, : ) = (                                           &
-                  ( 1d0/( nDim + 4d0 )/( kernelSmoothingShape( nd, : )**4d0 ) )*   &
-                      (                                                        &
-                          shapeTermSum                                         &
-                      )                                                        &
-                  )**( -1d0/( nDim + 6d0 ) )
+            shapeTerm( nd, : ) = (                                           &
+              ( 1d0/( nDim + 4d0 )/( kernelSmoothingShape( nd, : )**4d0 ) )* &
+                  (                                                          &
+                      shapeTermSum                                           &
+                  )                                                          &
+              )**( -1d0/( nDim + 6d0 ) )
           end where
           curvatureBandwidth( nd, : ) = &
-              this%alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( nd, : )*kernelSmoothingScale
-
-          ! Limit the maximum/minimum value
-          !where ( curvatureBandwidth( nd, : )/this%binSize(nd) .gt. 3d0*this%maxHOverLambda(nd) )
-          !    curvatureBandwidth( nd, : ) = 3d0*this%binSize(nd)*this%maxHOverLambda(nd) 
-          !end where
-          !where ( curvatureBandwidth( nd, : )/this%binSize(nd) .lt. this%minHOverLambda(nd) )
-          !    curvatureBandwidth( nd, : ) = & 
-          !        this%alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( nd, : )*this%binSize(nd)*this%minHOverLambda(nd) 
-          !end where
-
+            this%alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( nd, : )*kernelSmoothingScale
         end if
       end do 
 
       deallocate( shapeTerm )
       deallocate( nVirtualPowerBeta )
-  
-      return
 
+      ! Done
+      return
 
     end subroutine prComputeCurvatureKernelBandwidth
 
@@ -3614,156 +3585,129 @@ module GridProjectedKDEModule
                                             kernelSmoothing, kernelSmoothingOld, & 
                                   kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                            kernelSmoothingShape  )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType) :: this
-        doubleprecision, dimension(:), intent(in)      :: nEstimate 
-        doubleprecision, dimension(:), intent(in)      :: netRoughness 
-        doubleprecision, dimension(:), intent(in)      :: roughnessXXActive 
-        doubleprecision, dimension(:), intent(in)      :: roughnessYYActive 
-        doubleprecision, dimension(:), intent(in)      :: roughnessZZActive 
-        doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothing
-        doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingOld
-        doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScale
-        doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScaleOld
-        doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingShape
-        doubleprecision, dimension(:), allocatable     :: roughnessScale
-        integer :: nd
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType) :: this
+      doubleprecision, dimension(:), intent(in)      :: nEstimate 
+      doubleprecision, dimension(:), intent(in)      :: netRoughness 
+      doubleprecision, dimension(:), intent(in)      :: roughnessXXActive 
+      doubleprecision, dimension(:), intent(in)      :: roughnessYYActive 
+      doubleprecision, dimension(:), intent(in)      :: roughnessZZActive 
+      doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothing
+      doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingOld
+      doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScale
+      doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScaleOld
+      doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingShape
+      doubleprecision, dimension(:), allocatable     :: roughnessScale
+      integer :: nd
+      !------------------------------------------------------------------------------
 
-        allocate( roughnessScale( this%nComputeBins ) )
+      allocate( roughnessScale( this%nComputeBins ) )
       
-        ! Compute smoothing scale. 
-        ! For the cases of really low roghness, use the limit
-        ! value to keep bound the smoothing scale
-        kernelSmoothingScale = 0d0
-        where (abs( netRoughness ) .gt. this%minLimitRoughness )
-            kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( 1d0/( nDim + 4d0 ) )
-        elsewhere
-            ! Estimate a scale based on minLimitRoughness
-            kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( 1d0/( nDim + 4d0 ) )
-        end where
+      ! Compute smoothing scale. 
+      ! For the cases of really low roughness, use the limit
+      ! value to keep bound the smoothing scale
+      kernelSmoothingScale = 0d0
+      where (abs( netRoughness ) .gt. this%minLimitRoughness )
+        kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( 1d0/( nDim + 4d0 ) )
+      elsewhere
+        ! Estimate a scale based on minLimitRoughness
+        kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( 1d0/( nDim + 4d0 ) )
+      end where
 
-        ! Bounded
-        ! FIX ! 
-        where( kernelSmoothingScale .gt. this%maxHOverLambda(1)*this%binSize(1) )
-            kernelSmoothingScale = this%maxHOverLambda(1)*this%binSize(1)
-        end where
-         
+      ! Bounded
+      ! FIX ! 
+      where( kernelSmoothingScale .gt. this%maxHOverLambda(1)*this%binSize(1) )
+        kernelSmoothingScale = this%maxHOverLambda(1)*this%binSize(1)
+      end where
+       
+      ! Compute roughness scale, even better: set as netRoughness
+      ! Replaces Eq. 20b in Sole-Mari et al. (2019)
+      roughnessScale = netRoughness
+      !roughnessScale = 1d0
+      !do nd=1,3
+      !    if ( this%dimensionMask(nd) .eq. 1 ) then
+      !        select case (nd) 
+      !            case (1)  
+      !                roughnessScale = roughnessScale*roughnessXXActive
+      !            case (2) 
+      !                roughnessScale = roughnessScale*roughnessYYActive
+      !            case (3) 
+      !                roughnessScale = roughnessScale*roughnessZZActive
+      !        end select
+      !    end if
+      !end do
+      !roughnessScale = roughnessScale**( 1d0/nDim )
 
-        ! Compute roughness scale,
-        ! Even better: set as netRoughness
-        roughnessScale = netRoughness
-        ! Limit roughness max roughness scale ?
-        where ( roughnessScale .gt. this%maxLimitRoughness ) 
-            roughnessScale = this%maxLimitRoughness
-        end where 
-        !roughnessScale = 1d0
-        !do nd=1,3
-        !    if ( this%dimensionMask(nd) .eq. 1 ) then
-        !        select case (nd) 
-        !            case (1)  
-        !                roughnessScale = roughnessScale*roughnessXXActive
-        !            case (2) 
-        !                roughnessScale = roughnessScale*roughnessYYActive
-        !            case (3) 
-        !                roughnessScale = roughnessScale*roughnessZZActive
-        !        end select
-        !    end if
-        !end do
-        !roughnessScale = roughnessScale**( 1d0/nDim )
+      ! Limit roughness max roughness scale ?
+      where ( roughnessScale .gt. this%maxLimitRoughness ) 
+        roughnessScale = this%maxLimitRoughness
+      end where 
 
-        ! The fact that roughnessScale can be zero
-        ! indicate that one or more kernel dimensions 
-        ! where compressed
+      ! The fact that roughnessScale can be zero
+      ! indicate that one or more kernel dimensions 
+      ! where compressed
 
-        ! Compute shape factors and kernelSmoothing
-        kernelSmoothing = 0d0
-        kernelSmoothingShape = 0d0
-        do nd=1,3
-            if ( this%dimensionMask(nd) .eq. 1 ) then
-                ! For anisotropic kernels
-                select case (nd) 
-                    case (1)   
-                        where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
-                            kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
-                        end where
-                    case (2) 
-                        where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
-                            kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
-                        end where
-                    case (3) 
-                        where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
-                            kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
-                        end where
-                end select
+      ! Compute shape factors and kernelSmoothing
+      kernelSmoothing = 0d0
+      kernelSmoothingShape = 0d0
+      do nd=1,3
+        if ( this%dimensionMask(nd) .eq. 1 ) then
+          ! For anisotropic kernels
+          select case (nd) 
+            case (1)   
+              where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
+                kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
+              end where
+            case (2) 
+              where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
+                kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
+              end where
+            case (3) 
+              where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
+                kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
+              end where
+          end select
 
+          ! Minimum roughness sets transition to isotropic
+          ! Verify ! 
+          where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
+            kernelSmoothingShape(nd,:) = this%minKernelShape
+          end where
+          where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
+            kernelSmoothingShape(nd,:) = this%maxKernelShape
+          end where
+          kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
 
-                ! Minimum roughness sets transition to isotropic        
-                !where ( abs(netRoughness) .lt. this%minLimitRoughness ) 
-                !    kernelSmoothingShape( nd, : ) = 1d0
-                !end where
-                where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
-                    kernelSmoothingShape(nd,:) = this%minKernelShape
-                end where
-                where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
-                    kernelSmoothingShape(nd,:) = this%maxKernelShape
-                end where
-                kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
+          ! Limit the maximum/minimum value
+          ! Verify ! 
+          where ( kernelSmoothing( nd, : )/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
+            kernelSmoothing( nd, : ) = this%binSize(nd)*this%maxHOverLambda(nd) 
+          end where
+          !where ( kernelSmoothing( nd, : )/this%binSize(nd) .lt. this%minHOverLambda(nd) )
+          !    kernelSmoothing( nd, : ) = this%binSize(nd)*this%minHOverLambda(nd) 
+          !end where
 
+          where ( kernelSmoothingScale .gt. 0d0 ) 
+            kernelSmoothingShape(nd,:) = kernelSmoothing(nd,:)/kernelSmoothingScale
+          end where  
 
-                ! Limit the growth for maximum/minimum values
-                ! What if previous was zero ?
-                where ( ( kernelSmoothing(nd,:) .gt. (1d0 + this%maxSmoothingGrowth)*kernelSmoothingOld(nd,:) ) .and. &
-                        ( kernelSmoothingOld(nd,:) .ne. 0d0 ) )
-                    kernelSmoothing(nd,:) = (1d0 + this%maxSmoothingGrowth)*kernelSmoothingOld(nd,:)
-                end where
-                !where ( (kernelSmoothing(nd,:) .lt. kernelSmoothingOld(nd,:)/( 1d0 + this%maxSmoothingGrowth ) ) &
-                !        .and. ( kernelSmoothing(nd,:) .ne. 0d0 ) )
-                !    kernelSmoothing( nd, : ) = kernelSmoothingOld(nd,:)/( 1d0 + this%maxSmoothingGrowth )
-                !end where
+        end if
+      end do
+     
 
-                ! Limit the maximum/minimum value
-                where ( kernelSmoothing( nd, : )/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
-                    kernelSmoothing( nd, : ) = this%binSize(nd)*this%maxHOverLambda(nd) 
-                end where
-                where ( kernelSmoothing( nd, : )/this%binSize(nd) .lt. this%minHOverLambda(nd) )
-                    kernelSmoothing( nd, : ) = this%binSize(nd)*this%minHOverLambda(nd) 
-                end where
-                !where ( kernelSmoothing( nd,:) .lt. this%binSize(nd)*this%minHOverLambda(nd) ) 
-                !where ( abs(roughnessScale) .lt. 1d-2 ) 
-                !where ( abs(netRoughness) .lt. this%minLimitRoughness ) 
-                !    !kernelSmoothing(nd,:) = kernelSmoothingOld(nd,:)
-                !    kernelSmoothing(nd,:) = 0d0 
-                !end where
-
-                where ( kernelSmoothingScale .gt. 0d0 ) 
-                    kernelSmoothingShape(nd,:) = kernelSmoothing(nd,:)/kernelSmoothingScale
-                end where  
-
-                !where ( abs(netRoughness) .lt. this%minLimitRoughness ) 
-                !    kernelSmoothingShape(nd,:) = 0d0
-                !end where
-
-
-            end if
-        end do
+      deallocate( roughnessScale )
       
-
-        ! Should deallocate ?
-        deallocate( roughnessScale )
-
-      
-        return
+      ! Done 
+      return
 
 
     end subroutine prComputeOptimalSmoothingAndShape
-
 
 
     subroutine prComputeKernelDatabaseFlatIndexesLog( this, smoothing, flatDBIndexes, transposeKernel )
@@ -4450,36 +4394,36 @@ module GridProjectedKDEModule
 
     ! Utils output files
     subroutine prExportDensity( this, outputFileName )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(GridProjectedKDEType) :: this
-        character(len=*), intent(in) :: outputFileName
-        integer :: ix, iy, iz
-        integer :: outputUnit = 555
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none 
+      class(GridProjectedKDEType) :: this
+      character(len=*), intent(in) :: outputFileName
+      integer :: ix, iy, iz
+      integer :: outputUnit = 555
+      !------------------------------------------------------------------------------
 
-        ! Write the output file name
-        ! Add some default
-        open( outputUnit, file=outputFileName, status='replace' )
+      ! Write the output file name
+      ! Add some default
+      open( outputUnit, file=outputFileName, status='replace' )
 
-        ! Following column-major nesting
-        do iz = 1, this%nBins(3)
-            do iy = 1, this%nBins(2)
-                do ix = 1, this%nBins(1)
-                    if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-                    ! cellids, density, histogram
-                    write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
-                      this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
-                end do
-            end do
-        end do
+      ! Following column-major nesting
+      do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+              do ix = 1, this%nBins(1)
+                  if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
+                  ! cellids, density, histogram
+                  write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
+                    this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+              end do
+          end do
+      end do
 
-        ! Finished
-        close(outputUnit)
+      ! Finished
+      close(outputUnit)
 
 
     end subroutine prExportDensity
@@ -4497,7 +4441,7 @@ module GridProjectedKDEModule
       integer, optional, intent(in) :: outputDataId
       integer, optional, intent(in) :: particleGroupId
       integer :: ix, iy, iz
-      integer :: countNonZero, counter
+      !integer :: countNonZero, counter
       integer :: dataId
       !------------------------------------------------------------------------------
 
@@ -4556,55 +4500,53 @@ module GridProjectedKDEModule
     end subroutine prExportDensityUnit
 
 
-    subroutine prExportOptimizationVariables( this, outputFileName, &
-        densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
-        curvatureBandwidth, nEstimate, netRoughness )
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(GridProjectedKDEType) :: this
-        character(len=500), intent(in) :: outputFileName
-        doubleprecision, dimension(:)  ,intent(in) :: densityEstimateArray
-        doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
-        doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
-        doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
-        doubleprecision, dimension(:)  ,intent(in) :: nEstimate
-        doubleprecision, dimension(:)  ,intent(in) :: netRoughness
-        integer :: ix, iy, iz, n
-        integer :: outputUnit = 555
-        !------------------------------------------------------------------------------
+    subroutine prExportOptimizationVariables( this, outputFileName  , &
+      densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
+      curvatureBandwidth, nEstimate, netRoughness )
+      !------------------------------------------------------------------------------
+      implicit none 
+      class(GridProjectedKDEType) :: this
+      character(len=500), intent(in) :: outputFileName
+      doubleprecision, dimension(:)  ,intent(in) :: densityEstimateArray
+      doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
+      doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
+      doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
+      doubleprecision, dimension(:)  ,intent(in) :: nEstimate
+      doubleprecision, dimension(:)  ,intent(in) :: netRoughness
+      integer :: ix, iy, iz, n
+      integer :: outputUnit = 555
+      !------------------------------------------------------------------------------
 
-        ! Write the output file name
-        ! Add some default
-        open( outputUnit, file=outputFileName, status='replace' )
+      ! Write the output file name
+      ! Add some default
+      open( outputUnit, file=outputFileName, status='replace' )
 
+      do n = 1, this%nComputeBins
+          ix = this%computeBinIds( 1, n )
+          iy = this%computeBinIds( 2, n )
+          iz = this%computeBinIds( 3, n )
+          ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
+          write(outputUnit,&
+              "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
+              ix, iy, iz,& 
+              densityEstimateArray( n ),& 
+              kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
+              kernelSigmaSupportScale(n), &
+              curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
+              nEstimate(n), netRoughness(n)
+      end do
 
-        do n = 1, this%nComputeBins
-            ix = this%computeBinIds( 1, n )
-            iy = this%computeBinIds( 2, n )
-            iz = this%computeBinIds( 3, n )
-            ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-            write(outputUnit,&
-                "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
-                ix, iy, iz,& 
-                densityEstimateArray( n ),& 
-                kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
-                kernelSigmaSupportScale(n), &
-                curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
-                nEstimate(n), netRoughness(n)
-        end do
-
-        ! Finished
-        close(outputUnit)
-
+      ! Finished
+      close(outputUnit)
 
     end subroutine prExportOptimizationVariables
 
 
     subroutine prExportOptimizationVariablesExtended( this, outputFileName, &
-      densityEstimateArray, kernelSmoothing, kernelSmoothingScale,        & 
-                           kernelSmoothingShape, kernelSigmaSupportScale, &
-      curvatureBandwidth, nEstimate, roughnessXXArray, roughnessYYArray, &
-                                           roughnessZZArray, netRoughness )
+               densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
+                             kernelSmoothingShape, kernelSigmaSupportScale, &
+         curvatureBandwidth, nEstimate, roughnessXXArray, roughnessYYArray, &
+                                             roughnessZZArray, netRoughness )
       !------------------------------------------------------------------------------
       implicit none 
       class(GridProjectedKDEType) :: this
@@ -4632,8 +4574,6 @@ module GridProjectedKDEModule
         ix = this%computeBinIds( 1, n )
         iy = this%computeBinIds( 2, n )
         iz = this%computeBinIds( 3, n )
-        !"(I6,I6,I6,es18.9e3,3es18.9e3,3es18.9e3,es18.9e3,es18.9e3,3es18.9e3,es18.9e3, & 
-        !  3es18.9e3,es18.9e3)")  &
         write(outputUnit,"(3I6,17es18.9e3)") ix, iy, iz,& 
           densityEstimateArray( n ),& 
           kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
@@ -4652,58 +4592,53 @@ module GridProjectedKDEModule
 
 
     subroutine prExportOptimizationVariablesExtendedError( this, outputFileName, &
-        densityEstimateArray, kernelSmoothing, kernelSmoothingScale,        & 
-                             kernelSmoothingShape, kernelSigmaSupportScale, &
-        curvatureBandwidth, nEstimate, roughnessXXArray, roughnessYYArray, &
-                                             roughnessZZArray, netRoughness, &
-                                relativeDensityChange, relativeRoughnessChange )
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(GridProjectedKDEType) :: this
-        character(len=500), intent(in) :: outputFileName
-        doubleprecision, dimension(:)  ,intent(in) :: densityEstimateArray
-        doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
-        doubleprecision, dimension(:)  ,intent(in) :: kernelSmoothingScale
-        doubleprecision, dimension(:,:),intent(in) :: kernelSmoothingShape
-        doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
-        doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
-        doubleprecision, dimension(:)  ,intent(in) :: nEstimate
-        doubleprecision, dimension(:)  ,intent(in) :: netRoughness
-        doubleprecision, dimension(:)  ,intent(in) :: roughnessXXArray   
-        doubleprecision, dimension(:)  ,intent(in) :: roughnessYYArray
-        doubleprecision, dimension(:)  ,intent(in) :: roughnessZZArray
-        doubleprecision, dimension(:)  ,intent(in) :: relativeDensityChange
-        doubleprecision, dimension(:)  ,intent(in) :: relativeRoughnessChange
-        integer :: ix, iy, iz, n
-        integer :: outputUnit = 555
-        !------------------------------------------------------------------------------
+                    densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
+                                  kernelSmoothingShape, kernelSigmaSupportScale, &
+              curvatureBandwidth, nEstimate, roughnessXXArray, roughnessYYArray, &
+                                                 roughnessZZArray, netRoughness, &
+                                  relativeDensityChange, relativeRoughnessChange )
+      !------------------------------------------------------------------------------
+      implicit none 
+      class(GridProjectedKDEType) :: this
+      character(len=500), intent(in) :: outputFileName
+      doubleprecision, dimension(:)  ,intent(in) :: densityEstimateArray
+      doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
+      doubleprecision, dimension(:)  ,intent(in) :: kernelSmoothingScale
+      doubleprecision, dimension(:,:),intent(in) :: kernelSmoothingShape
+      doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
+      doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
+      doubleprecision, dimension(:)  ,intent(in) :: nEstimate
+      doubleprecision, dimension(:)  ,intent(in) :: netRoughness
+      doubleprecision, dimension(:)  ,intent(in) :: roughnessXXArray   
+      doubleprecision, dimension(:)  ,intent(in) :: roughnessYYArray
+      doubleprecision, dimension(:)  ,intent(in) :: roughnessZZArray
+      doubleprecision, dimension(:)  ,intent(in) :: relativeDensityChange
+      doubleprecision, dimension(:)  ,intent(in) :: relativeRoughnessChange
+      integer :: ix, iy, iz, n
+      integer :: outputUnit = 555
+      !------------------------------------------------------------------------------
 
-        ! Write the output file name
-        ! Add some default
-        open( outputUnit, file=outputFileName, status='replace' )
+      ! Write the output file name
+      ! Add some default
+      open( outputUnit, file=outputFileName, status='replace' )
 
+      do n = 1, this%nComputeBins
+        ix = this%computeBinIds( 1, n )
+        iy = this%computeBinIds( 2, n )
+        iz = this%computeBinIds( 3, n )
+        write(outputUnit,"(3I6,19es18.9e3)") ix, iy, iz, & 
+          densityEstimateArray( n ),& 
+          kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
+          kernelSmoothingShape(1,n), kernelSmoothingShape(2,n), kernelSmoothingShape(3,n),& 
+          kernelSmoothingScale(n), kernelSigmaSupportScale(n), &
+          curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
+          nEstimate(n), roughnessXXArray(n), roughnessYYArray(n), &
+          roughnessZZArray(n), netRoughness(n), relativeDensityChange(n),&
+          relativeRoughnessChange(n)
+      end do
 
-        do n = 1, this%nComputeBins
-            ix = this%computeBinIds( 1, n )
-            iy = this%computeBinIds( 2, n )
-            iz = this%computeBinIds( 3, n )
-            !    "(I6,I6,I6,es18.9e3,3es18.9e3,3es18.9e3,& 
-            !      es18.9e3,es18.9e3,3es18.9e3,es18.9e3, & 
-            !      3es18.9e3,es18.9e3,es18.9e3,es18.9e3)")  &
-            write(outputUnit,"(3I6,19es18.9e3)") ix, iy, iz, & 
-                densityEstimateArray( n ),& 
-                kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
-                kernelSmoothingShape(1,n), kernelSmoothingShape(2,n), kernelSmoothingShape(3,n),& 
-                kernelSmoothingScale(n), kernelSigmaSupportScale(n), &
-                curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
-                nEstimate(n), roughnessXXArray(n), roughnessYYArray(n), &
-                roughnessZZArray(n), netRoughness(n), relativeDensityChange(n),&
-                relativeRoughnessChange(n)
-        end do
-
-        ! Finished
-        close(outputUnit)
-
+      ! Finished
+      close(outputUnit)
 
     end subroutine prExportOptimizationVariablesExtendedError
 

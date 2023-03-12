@@ -13,8 +13,8 @@ module HistogramModule
 
         ! Properties
         doubleprecision, dimension(:,:,:), allocatable :: counts 
-        integer, dimension(:,:,:), allocatable     :: ncounts 
-        doubleprecision, dimension(:,:,:), allocatable     :: avgmbin
+        integer, dimension(:,:,:), allocatable         :: ncounts 
+        doubleprecision, dimension(:,:,:), allocatable :: avgmbin
         integer, dimension(3)                      :: nBins
         doubleprecision, dimension(3)              :: binSize
         doubleprecision                            :: binVolume
@@ -26,6 +26,7 @@ module HistogramModule
         doubleprecision, dimension(3)              :: domainOrigin ! of the reconstruction grid 
         integer, dimension(:), allocatable         :: dimensions
         integer                                    :: nDim
+        integer                                    :: nPoints 
 
     contains
 
@@ -213,7 +214,11 @@ contains
                 this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1d0
 
         end do 
-       
+     
+
+        this%nPoints = int(sum(this%counts))
+
+
     end subroutine prComputeCounts
 
 
@@ -280,6 +285,10 @@ contains
         where (this%avgmbin.ne.0)  
           this%counts = this%counts/this%avgmbin
         end where
+
+
+        this%nPoints = int(sum(this%ncounts))
+
 
     end subroutine prComputeCountsWeighted
 
