@@ -3337,62 +3337,57 @@ module GridProjectedKDEModule
         close( errorOutputUnit )
       end if 
 
-      ! Fix histogram
-      !this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
+      if ( this%histogram%isWeighted ) then 
+        ! Fix histogram
+        this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
 
-      ! Update density
-      densityEstimateGrid = 0d0
-      !$omp parallel do schedule( dynamic, 1 )  &
-      !$omp default( none )                     &
-      !$omp shared( this )                      &
-      !$omp shared( activeGridCells )           & 
-      !$omp shared( kernelSmoothing )           & 
-      !$omp reduction( +: densityEstimateGrid ) & 
-      !$omp firstprivate( kernel )              & 
-      !$omp private( gc )                        
-      do n = 1, this%nComputeBins
+        ! Update density
+        densityEstimateGrid = 0d0
+        !$omp parallel do schedule( dynamic, 1 )  &
+        !$omp default( none )                     &
+        !$omp shared( this )                      &
+        !$omp shared( activeGridCells )           & 
+        !$omp shared( kernelSmoothing )           & 
+        !$omp reduction( +: densityEstimateGrid ) & 
+        !$omp firstprivate( kernel )              & 
+        !$omp private( gc )                        
+        do n = 1, this%nComputeBins
 
-        ! Any smoothing < 0 or NaN, skip
-        if ( ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) .or.             &
-            ( any( kernelSmoothing( :, n ) /= kernelSmoothing( :, n ) ) ) ) then
-          cycle
-        end if
+          ! Any smoothing < 0 or NaN, skip
+          if ( ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) .or.             &
+              ( any( kernelSmoothing( :, n ) /= kernelSmoothing( :, n ) ) ) ) then
+            cycle
+          end if
 
-        ! Assign pointer 
-        gc => activeGridCells(n)
+          ! Assign pointer 
+          gc => activeGridCells(n)
 
-        ! Set kernel
-        call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
+          ! Set kernel
+          call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
 
-        ! Compute estimate
-        densityEstimateGrid(                         &
-              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-          ) = densityEstimateGrid(                   &
-              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-          ) + this%histogram%counts(                 &
-              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                   gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                   gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                   gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
-          )
+          ! Compute estimate
+          densityEstimateGrid(                         &
+                gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+                gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+                gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+            ) = densityEstimateGrid(                   &
+                gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+                gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+                gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+            ) + this%histogram%counts(                 &
+                gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                     gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
+                     gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
+                     gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
+            )
 
-        !! Cannot be done here ! Reduction !
-        ! Assign into array   
-        !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-      end do
-      !$omp end parallel do
-      densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
-
-
-
-
-
-
-
+          !! Cannot be done here ! Reduction !
+          ! Assign into array   
+          !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+        end do
+        !$omp end parallel do
+        densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
+      end if 
 
       ! Clean
       call kernel%Reset()

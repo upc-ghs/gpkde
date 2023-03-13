@@ -27,6 +27,7 @@ module HistogramModule
         integer, dimension(:), allocatable         :: dimensions
         integer                                    :: nDim
         integer                                    :: nPoints 
+        logical                                    :: isWeighted
 
     contains
 
@@ -217,7 +218,7 @@ contains
      
 
         this%nPoints = int(sum(this%counts))
-
+        this%isWeighted = .false.
 
     end subroutine prComputeCounts
 
@@ -247,8 +248,8 @@ contains
 
         ! Reset counts
         this%counts  = 0
-        this%ncounts  = 0
-        this%avgmbin  = 0
+        this%ncounts = 0
+        this%avgmbin = 0
         nPointsShape = shape(dataPoints)
 
         ! This could be done with OpenMP (?) 
@@ -286,9 +287,8 @@ contains
           this%counts = this%counts/this%avgmbin
         end where
 
-
         this%nPoints = int(sum(this%ncounts))
-
+        this%isWeighted = .true.
 
     end subroutine prComputeCountsWeighted
 

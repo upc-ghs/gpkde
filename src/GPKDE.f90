@@ -370,13 +370,28 @@ program GPKDE
     write(logUnit,'(a)') 'Will perform density reconstruction.'
   end if
   call system_clock(clockCountStart, clockCountRate, clockCountMax)
-  call gpkdeObj%ComputeDensity(       &
-   dataCarrier,                       &
-   outputFileUnit    = outputUnit,    &
-   computeRawDensity = .true.         &
-   !weightedHistogram = .true.,        &
-   !weights           = weightsCarrier,&
-  )
+  select case(inputDataFormat)
+  case(0)
+    ! Not weighted reconstruction
+    call gpkdeObj%ComputeDensity(       &
+     dataCarrier,                       &
+     outputFileUnit    = outputUnit,    &
+     skipErrorConvergence = .true.,     &
+     computeRawDensity = .true.         &
+     !weightedHistogram = .true.,        &
+     !weights           = weightsCarrier,&
+    )
+  case(1)
+    ! Weighted reconstruction
+    call gpkdeObj%ComputeDensity(       &
+     dataCarrier,                       &
+     outputFileUnit    = outputUnit,    &
+     skipErrorConvergence = .true.,     &
+     computeRawDensity = .true.,        &
+     weightedHistogram = .true.,        &
+     weights           = weightsCarrier &
+    )
+  end select
   call system_clock(clockCountStop, clockCountRate, clockCountMax)
 
   ! Deallocate
