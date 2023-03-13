@@ -498,7 +498,8 @@ module GridProjectedKDEModule
       else
         ! The initial estimate could be improved
         this%initialSmoothing = defaultInitialSmoothingFactor*this%histogram%binDistance
-      end if 
+      end if
+
       ! Fix to be consistent with dimensions 
       do n =1,3
         if ( dimensionMask(n) .eq. 0 ) then 
@@ -2788,7 +2789,6 @@ module GridProjectedKDEModule
       nEstimateArray = nEstimateArray/this%histogram%binVolume
 
       ! Initialize variables
-      !curvatureBandwidth = kernelSmoothing
       curvatureBandwidth = kernelSigmaSupport
       kernelSmoothingOld = kernelSmoothing
       kernelSmoothingScaleOld = kernelSmoothingScale
@@ -3386,7 +3386,8 @@ module GridProjectedKDEModule
           !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
         !$omp end parallel do
-        densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
+        densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
+
       end if 
 
       ! Clean
@@ -3418,43 +3419,42 @@ module GridProjectedKDEModule
     end subroutine prComputeDensityOptimization
 
 
-
     subroutine prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(:,:), intent(in)   :: kernelSmoothing
-        doubleprecision, dimension(:), intent(inout)  :: kernelSmoothingScale
-        integer :: nd
-        integer, dimension(:), allocatable :: dimCorrected
-        !------------------------------------------------------------------------------
-        
-        allocate( dimCorrected(this%nComputeBins) )
-        dimCorrected = nDim
-        kernelSmoothingScale = 1d0
-        do nd = 1, 3
-            if ( this%dimensionMask(nd) .eq. 1 ) then
-                where( kernelSmoothing(nd,:) .ne. 0d0 )  
-                    kernelSmoothingScale = kernelSmoothingScale*kernelSmoothing(nd,:) 
-                elsewhere
-                    dimCorrected = dimCorrected - 1  
-                end where
-            end if 
-        end do
-        where (dimCorrected .ne. 0 )
-            kernelSmoothingScale = ( kernelSmoothingScale )**( 1d0/nDim )
-        elsewhere
-            kernelSmoothingScale = 0d0
-        end where
-        deallocate( dimCorrected )
+      !------------------------------------------------------------------------------
+      ! 
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ) :: this
+      doubleprecision, dimension(:,:), intent(in)   :: kernelSmoothing
+      doubleprecision, dimension(:), intent(inout)  :: kernelSmoothingScale
+      integer :: nd
+      integer, dimension(:), allocatable :: dimCorrected
+      !------------------------------------------------------------------------------
+      
+      allocate( dimCorrected(this%nComputeBins) )
+      dimCorrected = nDim
+      kernelSmoothingScale = 1d0
+      do nd = 1, 3
+        if ( this%dimensionMask(nd) .eq. 1 ) then
+          where( kernelSmoothing(nd,:) .ne. 0d0 )  
+            kernelSmoothingScale = kernelSmoothingScale*kernelSmoothing(nd,:) 
+          elsewhere
+            dimCorrected = dimCorrected - 1  
+          end where
+        end if 
+      end do
+      where (dimCorrected .ne. 0 )
+        kernelSmoothingScale = ( kernelSmoothingScale )**( 1d0/nDim )
+      elsewhere
+        kernelSmoothingScale = 0d0
+      end where
+      deallocate( dimCorrected )
 
-        ! Done
-        return
+      ! Done
+      return
 
     end subroutine prComputeKernelSmoothingScale
 
@@ -3617,9 +3617,9 @@ module GridProjectedKDEModule
 
       ! Bounded
       ! FIX ! 
-      where( kernelSmoothingScale .gt. this%maxHOverLambda(1)*this%binSize(1) )
-        kernelSmoothingScale = this%maxHOverLambda(1)*this%binSize(1)
-      end where
+      !where( kernelSmoothingScale .gt. this%maxHOverLambda(1)*this%binSize(1) )
+      !  kernelSmoothingScale = this%maxHOverLambda(1)*this%binSize(1)
+      !end where
        
       ! Compute roughness scale, even better: set as netRoughness
       ! Replaces Eq. 20b in Sole-Mari et al. (2019)
@@ -3681,9 +3681,9 @@ module GridProjectedKDEModule
 
           ! Limit the maximum/minimum value
           ! Verify ! 
-          where ( kernelSmoothing( nd, : )/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
-            kernelSmoothing( nd, : ) = this%binSize(nd)*this%maxHOverLambda(nd) 
-          end where
+          !where ( kernelSmoothing( nd, : )/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
+          !  kernelSmoothing( nd, : ) = this%binSize(nd)*this%maxHOverLambda(nd) 
+          !end where
           !where ( kernelSmoothing( nd, : )/this%binSize(nd) .lt. this%minHOverLambda(nd) )
           !    kernelSmoothing( nd, : ) = this%binSize(nd)*this%minHOverLambda(nd) 
           !end where
