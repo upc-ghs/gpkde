@@ -3631,16 +3631,16 @@ module GridProjectedKDEModule
       roughnessScale = netRoughness
       !roughnessScale = 1d0
       !do nd=1,3
-      !    if ( this%dimensionMask(nd) .eq. 1 ) then
-      !        select case (nd) 
-      !            case (1)  
-      !                roughnessScale = roughnessScale*roughnessXXActive
-      !            case (2) 
-      !                roughnessScale = roughnessScale*roughnessYYActive
-      !            case (3) 
-      !                roughnessScale = roughnessScale*roughnessZZActive
-      !        end select
-      !    end if
+      !  if ( this%dimensionMask(nd) .eq. 1 ) then
+      !    select case (nd) 
+      !      case (1)  
+      !        roughnessScale = roughnessScale*roughnessXXActive
+      !      case (2) 
+      !        roughnessScale = roughnessScale*roughnessYYActive
+      !      case (3) 
+      !        roughnessScale = roughnessScale*roughnessZZActive
+      !    end select
+      !  end if
       !end do
       !roughnessScale = roughnessScale**( 1d0/nDim )
 
