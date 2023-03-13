@@ -3339,7 +3339,8 @@ module GridProjectedKDEModule
 
       if ( this%histogram%isWeighted ) then 
         ! Fix histogram
-        this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
+        !this%histogram%counts = this%histogram%counts*this%histogram%avgmbin
+        this%histogram%counts = this%histogram%counts*this%histogram%effectiveMass
 
         ! Update density
         densityEstimateGrid = 0d0

@@ -27,6 +27,8 @@ module HistogramModule
         integer, dimension(:), allocatable         :: dimensions
         integer                                    :: nDim
         integer                                    :: nPoints 
+        doubleprecision                            :: nEffective 
+        doubleprecision                            :: totalMass, effectiveMass 
         logical                                    :: isWeighted
 
     contains
@@ -214,11 +216,14 @@ contains
             this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
                 this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1d0
 
-        end do 
-     
+        end do
 
-        this%nPoints = int(sum(this%counts))
-        this%isWeighted = .false.
+        this%totalMass     = sum(this%counts)
+        this%nPoints       = int(this%totalMass)
+        this%nEffective    = this%nPoints
+        this%effectiveMass = 1d0
+        this%isWeighted    = .false.
+
 
     end subroutine prComputeCounts
 
@@ -275,20 +280,27 @@ contains
             ! Increase counter
             this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
                 this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)
-            this%ncounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
-                this%ncounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1
+            !this%ncounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+            !    this%ncounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1
 
         end do 
-      
-        where (this%ncounts.ne.0)  
-          this%avgmbin = this%counts/this%ncounts
-        end where
-        where (this%avgmbin.ne.0)  
-          this%counts = this%counts/this%avgmbin
-        end where
+     
+        this%totalMass     = sum(weights)
+        this%nEffective    = this%totalMass**2/sum(weights**2)
+        this%effectiveMass = this%totalMass/this%nEffective
 
-        this%nPoints = int(sum(this%ncounts))
+        ! Tranform mass counts into n counts
+        this%counts     = this%counts/this%effectiveMass
+        this%nPoints    = size(weights)
         this%isWeighted = .true.
+
+        !where (this%ncounts.ne.0)  
+        !  this%avgmbin = this%counts/this%ncounts
+        !end where
+        !where (this%avgmbin.ne.0)  
+        !  this%counts = this%counts/this%avgmbin
+        !end where
+
 
     end subroutine prComputeCountsWeighted
 
