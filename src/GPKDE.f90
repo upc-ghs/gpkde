@@ -16,17 +16,21 @@ program GPKDE
   character(len=100) :: terminationMessage
   character(len=90)  :: compilerVersionText
   integer            :: ompNumThreads
-  integer            :: clockCountStart, clockCountStop
-  integer            :: clockCountRate, clockCountMax
-  doubleprecision    :: elapsedTime
-  integer            :: icol,istart,istop,n
-  doubleprecision    :: r
-  character(len=200) :: line
+  doubleprecision    :: relativeErrorConvergence
   logical            :: exists
   logical            :: kernelDatabase
+  logical            :: skipErrorConvergence
   integer            :: nlines, io, id
   integer            :: inputDataFormat
   integer            :: nOptLoops
+  ! urword
+  character(len=200) :: line
+  integer            :: icol,istart,istop,n
+  doubleprecision    :: r
+  ! clock
+  doubleprecision    :: elapsedTime
+  integer            :: clockCountStart, clockCountStop
+  integer            :: clockCountRate, clockCountMax
   doubleprecision, dimension(3) :: domainSize  
   doubleprecision, dimension(3) :: binSize     
   doubleprecision, dimension(3) :: domainOrigin
@@ -252,7 +256,6 @@ program GPKDE
     write(logUnit,'(a,I4)') 'Optimization will consider the maximum number of loops: ', nOptLoops
   end if
 
-
   ! Employ raw kernel computation or 
   ! kernel database ?
   ! 0: without kernel database, brute force
@@ -289,23 +292,46 @@ program GPKDE
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'GPKDE will compute raw kernels.'
     end if
-    ! Read kernel params
-    ! - min   h/lambda
-    ! - max   h/lambda
-    read(simUnit, '(a)') line
-    icol = 1
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    kernelParams(1) = r
-    kernelParams(2) = 0d0 ! NOT USED
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    kernelParams(3) = r
+    !! Read kernel params
+    !! - min   h/lambda
+    !! - max   h/lambda
+    !read(simUnit, '(a)') line
+    !icol = 1
+    !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    !kernelParams(1) = r
+    !kernelParams(2) = 0d0 ! NOT USED
+    !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    !kernelParams(3) = r
+    kernelParams(:) = 0d0
   end if 
 
-  !maxSmoothingGrowth = 5d-1
-  !densityRelativeConvergence = 0.01
-  !databaseOptimization    = .false.,            & 
-  !bruteOptimization       = .false.,            & 
-  !densityRelativeConvergence = densityRelativeConvergence &
+
+  ! Skip error convergence ?
+  ! 0: Break if convergence criteria is met 
+  ! 1: Skip and run nOptLoops optimization loops 
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    skipErrorConvergence = .false.
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'GPKDE will break once convergence is satisfied.'
+    end if
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    relativeErrorConvergence = r
+    if ( (logUnit.gt.0).and.(relativeErrorConvergence.gt.0d0) ) then 
+      write(logUnit,'(a,es18.9e3)') 'Relative error convergence set to: ', relativeErrorConvergence
+    end if
+  case(1)
+    skipErrorConvergence = .true.
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'GPKDE run until the maximum number of optimization loops.'
+    end if
+  case default
+     call ustop('Skip error convergence parameter not valid. Should be 0 or 1. Stop.')
+  end select
+
 
   ! Read data into arrays for reconstruction
   if ( logUnit.gt.0 ) then 
@@ -330,6 +356,7 @@ program GPKDE
     write(logUnit,'(a)') 'Loaded data into arrays.'
   end if
 
+
   ! Initialize gpkde 
   allocate( gpkdeObj )
   if (logUnit.gt.0) then
@@ -343,9 +370,8 @@ program GPKDE
         maxHOverLambda       = kernelParams(3),&
         outFileName          = logFile         &
     )
-    write(logUnit,'(a)') 'GPKDE Initialized. '
+    write(logUnit,'(a)') 'GPKDE is initialized. '
   else
-    ! Initialization should be performed once grid properties are known.
     call gpkdeObj%Initialize(& 
         domainSize, binSize,                   &
         domainOrigin         = domainOrigin,   & 
@@ -357,6 +383,7 @@ program GPKDE
     )
   end if
 
+
   ! Initialize output unit/file
   open(unit=outputUnit, &
        file=outputFile, &
@@ -364,6 +391,7 @@ program GPKDE
   if ( logUnit .gt. 0 ) then
     write(logUnit,'(a)') 'Opened output unit for reconstruction. '
   end if
+
 
   ! Compute density
   if ( logUnit .gt. 0 ) then
@@ -376,26 +404,28 @@ program GPKDE
     call gpkdeObj%ComputeDensity(       &
      dataCarrier,                       &
      outputFileUnit    = outputUnit,    &
-     skipErrorConvergence = .true.,     &
-     computeRawDensity = .true.         &
-     !weightedHistogram = .true.,        &
-     !weights           = weightsCarrier,&
+     computeRawDensity = .true.,        &
+     skipErrorConvergence = skipErrorConvergence, &
+     relativeErrorConvergence = relativeErrorConvergence &
     )
   case(1)
     ! Weighted reconstruction
     call gpkdeObj%ComputeDensity(       &
      dataCarrier,                       &
      outputFileUnit    = outputUnit,    &
-     skipErrorConvergence = .true.,     &
      computeRawDensity = .true.,        &
      weightedHistogram = .true.,        &
-     weights           = weightsCarrier &
+     weights           = weightsCarrier,&
+     skipErrorConvergence = skipErrorConvergence, &
+     relativeErrorConvergence = relativeErrorConvergence &
     )
   end select
   call system_clock(clockCountStop, clockCountRate, clockCountMax)
 
+
   ! Deallocate
   if ( allocated( gpkdeObj ) ) deallocate( gpkdeObj )
+
 
   ! Exit 
   elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
@@ -408,7 +438,6 @@ program GPKDE
   stop
 
 contains
-
 
   subroutine ParseCommandLine(simFile, logFile, logType, parallel)
   !---------------------------------------------------------------------------------

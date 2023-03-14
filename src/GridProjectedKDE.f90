@@ -43,6 +43,9 @@ module GridProjectedKDEModule
     doubleprecision :: defaultMinKernelShape         = 5d-1
 
 
+    doubleprecision, parameter :: defaultRelativeErrorConvergence = 0.001
+
+
     ! Numerical Parameters
     doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
     doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
@@ -2244,7 +2247,8 @@ module GridProjectedKDEModule
                                      skipErrorConvergence, unitVolume, &
                                 scalingFactor, histogramScalingFactor, &
                                                     computeRawDensity, &
-                weightedHistogram, weights, onlyHistogram, exactPoint  ) 
+                weightedHistogram, weights, onlyHistogram, exactPoint, &
+                                             relativeErrorConvergence  ) 
         !------------------------------------------------------------------------------
         ! 
         !------------------------------------------------------------------------------
@@ -2270,6 +2274,8 @@ module GridProjectedKDEModule
         logical, intent(in), optional                       :: onlyHistogram
         logical, intent(in), optional                       :: exactPoint
         doubleprecision, dimension(:), intent(in), optional :: weights
+        doubleprecision, intent(in), optional               :: relativeErrorConvergence
+
         ! local 
         logical               :: persistKDB
         logical               :: locExportOptimizationVariables
@@ -2284,6 +2290,7 @@ module GridProjectedKDEModule
         logical               :: locExactPoint 
         integer               :: localNOptimizationLoops
         integer, dimension(2) :: dataPointsShape
+        doubleprecision       :: locRelativeErrorConvergence
         character(len=16)     :: timeChar
         character(len=16)     :: spcChar
 
@@ -2355,11 +2362,16 @@ module GridProjectedKDEModule
         if ( present( exactPoint ) ) then
           locExactPoint = exactPoint
         end if
+        if ( present( relativeErrorConvergence ) ) then
+          locRelativeErrorConvergence = relativeErrorConvergence
+        else
+          locRelativeErrorConvergence = defaultRelativeErrorConvergence
+        end if
+
         if ( (locWeightedHistogram).and.(.not.present(weights)) ) then 
           write(*,*) 'ERROR: weightedHistogram requires weights and were not given. Stop.'
           stop
         end if 
-
         dataPointsShape = shape(dataPoints)
         if ( (locWeightedHistogram).and.(size(weights).ne.dataPointsShape(1)) ) then 
           write(*,*) 'ERROR: given weights are not the same length than datapoints. Stop.'
@@ -2392,59 +2404,57 @@ module GridProjectedKDEModule
         ! Not in use !
         if ( useBoundingBox ) then 
 
-            ! Compute bounding box
-            call this%histogram%ComputeBoundingBox()
+          ! Compute bounding box
+          call this%histogram%ComputeBoundingBox()
         
-            ! Initialize filterKernel
-            call filterKernel%Initialize(  this%binSize, matrixRange=defaultKernelRange )
+          ! Initialize filterKernel
+          call filterKernel%Initialize(  this%binSize, matrixRange=defaultKernelRange )
 
-            ! This could be a factor times the initial smoothing, needs elegance
-            call filterKernel%SetupMatrix( 0.5*this%initialSmoothing ) 
-            
-            ! Allocate the identifier 
-            allocate( computeThisBin( this%histogram%nBBoxBins ) )
-            computeThisBin = .false.
+          ! This could be a factor times the initial smoothing, needs elegance
+          call filterKernel%SetupMatrix( 0.5*this%initialSmoothing ) 
+          
+          ! Allocate the identifier 
+          allocate( computeThisBin( this%histogram%nBBoxBins ) )
+          computeThisBin = .false.
 
-            ! Now loop over the cells within the bounding box,
-            ! and count how many bins will be computed.
-            !$omp parallel do                                &
-            !$omp firstprivate( filterKernel )               &
-            !$omp private( xGridSpan, yGridSpan, zGridSpan ) &  
-            !$omp private( xKernelSpan, yKernelSpan, zKernelSpan ) 
-            do n = 1, this%histogram%nBBoxBins
+          ! Now loop over the cells within the bounding box,
+          ! and count how many bins will be computed.
+          !$omp parallel do                                &
+          !$omp firstprivate( filterKernel )               &
+          !$omp private( xGridSpan, yGridSpan, zGridSpan ) &  
+          !$omp private( xKernelSpan, yKernelSpan, zKernelSpan ) 
+          do n = 1, this%histogram%nBBoxBins
 
-                ! Determine spans
-                call filterKernel%ComputeGridSpans(&
-                    this%histogram%boundingBoxBinIds( :, n ), this%nBins, &
-                                         xGridSpan, yGridSpan, zGridSpan, & 
-                                   xKernelSpan, yKernelSpan, zKernelSpan, &
-                                   this%dimensionMask  ) 
+            ! Determine spans
+            call filterKernel%ComputeGridSpans(&
+                this%histogram%boundingBoxBinIds( :, n ), this%nBins, &
+                                     xGridSpan, yGridSpan, zGridSpan, & 
+                               xKernelSpan, yKernelSpan, zKernelSpan, &
+                               this%dimensionMask  ) 
 
-                if ( any( this%histogram%counts(    &
-                        xGridSpan(1):xGridSpan(2),  &
-                        yGridSpan(1):yGridSpan(2),  & 
-                        zGridSpan(1):zGridSpan(2) ) .gt. 0 ) ) then ! Cell active
+            if ( any( this%histogram%counts(    &
+                   xGridSpan(1):xGridSpan(2),  &
+                   yGridSpan(1):yGridSpan(2),  & 
+                   zGridSpan(1):zGridSpan(2) ) .gt. 0 ) ) then ! Cell active
+              computeThisBin( n ) = .true.
+            end if
 
-                   computeThisBin( n ) = .true.
+          end do
+          !$omp end parallel do 
 
-                end if
+          ! Count how many and allocate
+          this%nComputeBins = count( computeThisBin )
+          allocate( this%computeBinIds( nDim, this%nComputeBins ) )
 
-            end do
-            !$omp end parallel do 
+          ! Fill computeBinIds
+          do n = 1, this%histogram%nBBoxBins
+              if ( computeThisBin( n ) ) then 
+                  this%computeBinIds( :, bcount ) = this%histogram%boundingBoxBinIds( :, n )
+                  bcount = bcount + 1
+              end if 
+          end do 
 
-            ! Count how many and allocate
-            this%nComputeBins = count( computeThisBin )
-            allocate( this%computeBinIds( nDim, this%nComputeBins ) )
-
-            ! Fill computeBinIds
-            do n = 1, this%histogram%nBBoxBins
-                if ( computeThisBin( n ) ) then 
-                    this%computeBinIds( :, bcount ) = this%histogram%boundingBoxBinIds( :, n )
-                    bcount = bcount + 1
-                end if 
-            end do 
-
-            deallocate( computeThisBin )
+          deallocate( computeThisBin )
 
         else
           ! Active bins: Only cells with particles
@@ -2477,7 +2487,9 @@ module GridProjectedKDEModule
           write( this%outFileUnit, '(A,A,A,A)' )' GPKDE Optimization -- Time: ', trim(adjustl(timeChar)), &
                   ' -- Specie: ', trim(adjustl(spcChar))
           else
-            write( this%outFileUnit, '(A)' )' GPKDE Optimization ---------------------------'
+            write( this%outFileUnit, *     )
+            write( this%outFileUnit, '(A)' )'-----------------------------------------'
+            write( this%outFileUnit, '(A)' )'| Optimization ' 
           end if 
         end if 
 
@@ -2495,7 +2507,8 @@ module GridProjectedKDEModule
                   this%densityEstimateGrid,                                  &
                   nOptimizationLoops=localNOptimizationLoops,                &
                   exportOptimizationVariables=locExportOptimizationVariables,&
-                  skipErrorConvergence=locSkipErrorConvergence ) 
+                  skipErrorConvergence=locSkipErrorConvergence,              &
+                  relativeErrorConvergence=locRelativeErrorConvergence ) 
           ! Drop database ?
           if ( .not. persistKDB ) then
               call this%DropKernelDatabase()
@@ -2506,34 +2519,25 @@ module GridProjectedKDEModule
                   this%densityEstimateGrid,                                  &
                   nOptimizationLoops=localNOptimizationLoops,                &
                   exportOptimizationVariables=locExportOptimizationVariables,&
-                  skipErrorConvergence=locSkipErrorConvergence ) 
+                  skipErrorConvergence=locSkipErrorConvergence,              & 
+                  relativeErrorConvergence=locRelativeErrorConvergence ) 
         end if 
 
-        ! Some corrections to relevant variables before writing to output files !
 
+        ! Some corrections to relevant variables before writing to output files !
         if ( locComputeRawDensity ) then 
           ! Compute the rawDensityEstimate: histogram/binvolume
           this%histogram%counts = this%histogram%counts/this%histogram%binVolume
-          !if (allocated( this%rawDensityEstimateGrid )) deallocate( this%rawDensityEstimateGrid )
-          !this%rawDensityEstimateGrid = this%histogram%counts/this%histogram%binVolume
-          !if ( locUnitVolume ) then  
-          !  ! If unit volume, modify 
-          !  this%rawDensityEstimateGrid = &
-          !  this%rawDensityEstimateGrid*this%histogram%binVolume
-          !end if
         end if 
-
         if ( locUnitVolume ) then  
-            ! If unit volume, modify 
-            this%densityEstimateGrid = &
-            this%densityEstimateGrid*this%histogram%binVolume
+          ! If unit volume, modify 
+          this%densityEstimateGrid = &
+          this%densityEstimateGrid*this%histogram%binVolume
         end if
-
         if ( locScalingFactor .ne. 0d0 ) then
-            ! Apply scalingFactor to density
-            this%densityEstimateGrid = this%densityEstimateGrid*locScalingFactor
+          ! Apply scalingFactor to density
+          this%densityEstimateGrid = this%densityEstimateGrid*locScalingFactor
         end if
-
         if ( locScaleHistogram ) then
           ! Apply histogramScalingFactor to histogram
           this%histogram%counts = this%histogram%counts*locHistogramScalingFactor
@@ -2556,7 +2560,8 @@ module GridProjectedKDEModule
 
     ! Density optimization
     subroutine prComputeDensityOptimization( this, densityEstimateGrid, nOptimizationLoops, &
-                                          exportOptimizationVariables, skipErrorConvergence )
+                                         exportOptimizationVariables, skipErrorConvergence, &
+                                                                  relativeErrorConvergence  )
       !------------------------------------------------------------------------------
       ! Performs the optimization loop 
       ! 
@@ -2565,30 +2570,28 @@ module GridProjectedKDEModule
       ! Specifications 
       !------------------------------------------------------------------------------
       implicit none
+      ! input
       class( GridProjectedKDEType ), target:: this
       doubleprecision, dimension(:,:,:), intent(inout) :: densityEstimateGrid
-
+      integer, intent(in), optional         :: nOptimizationLoops
+      logical, intent(in), optional         :: exportOptimizationVariables
+      logical, intent(in), optional         :: skipErrorConvergence
+      doubleprecision, intent(in), optional :: relativeErrorConvergence
+      ! local
       ! kernels
       type( KernelMultiGaussianType )     :: kernel
       type( KernelMultiGaussianType )     :: kernelSigma
       type( KernelSecondDerivativeXType ) :: kernelSDX
       type( KernelSecondDerivativeYType ) :: kernelSDY
       type( KernelSecondDerivativeZType ) :: kernelSDZ
-
-      ! Optimization loops
-      integer, intent(in), optional :: nOptimizationLoops
-      logical, intent(in), optional :: exportOptimizationVariables
-      logical, intent(in), optional :: skipErrorConvergence
+      ! nloops
       integer                       :: nOptLoops
-
       ! Grid cells
       type( GridCellType ), dimension(:), pointer :: activeGridCells => null()
       type( GridCellType ), pointer :: gc => null()
-
       ! kernelMatrix pointer
       doubleprecision, dimension(:,:,:), pointer :: kernelMatrix => null()
       doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
-
       ! Utils
       integer            :: n, m, nd
       integer            :: convergenceCount 
@@ -2601,7 +2604,6 @@ module GridProjectedKDEModule
       logical            :: exportVariables, skipErrorBreak
       logical            :: exportLoopError
       integer            :: errorOutputUnit
-
       ! Optimization error monitoring 
       doubleprecision :: errorRMSE
       doubleprecision :: errorRMSEOld
@@ -2680,24 +2682,32 @@ module GridProjectedKDEModule
       if ( allocated(relativeSmoothingChange) ) deallocate(relativeSmoothingChange) 
       allocate( relativeSmoothingChange(this%nComputeBins) )
 
-      errorMetricConvergence   = this%densityRelativeConvergence
+      ! Initialize and process arguments
       nDensityConvergence      = 0d0
       nDensityConvergenceOld   = 0d0
       nRoughnessConvergence    = 0d0
       nRoughnessConvergenceOld = 0d0
-      ! Process arguments
       if ( present( nOptimizationLoops ) ) then 
         nOptLoops = nOptimizationLoops
       else 
         nOptLoops = this%nOptimizationLoops
       end if 
-
-      if ( present( skipErrorConvergence ) ) then 
-        skipErrorBreak = skipErrorConvergence
-      end if 
       if ( present( exportOptimizationVariables ) ) then 
         exportVariables = exportOptimizationVariables
       end if 
+      ! Error convergence
+      if ( present( skipErrorConvergence ) ) then 
+        skipErrorBreak = skipErrorConvergence
+      end if 
+      if ( present( relativeErrorConvergence ) ) then
+        if ( relativeErrorConvergence .gt. 0d0 ) then 
+          errorMetricConvergence =  relativeErrorConvergence
+        else 
+          errorMetricConvergence = defaultRelativeErrorConvergence
+        end if
+      else 
+        errorMetricConvergence = defaultRelativeErrorConvergence
+      end if
 
       ! Initialize active grid cells
       ! and compute rawDensity
@@ -2746,7 +2756,6 @@ module GridProjectedKDEModule
           kernelSigmaSupport(nd,:)   = 0
         end if 
       end do
-
 
       ! Initialize nEstimate
       nEstimateGrid = 0d0
@@ -3161,57 +3170,67 @@ module GridProjectedKDEModule
 
           ! Error analysis:
           if ( .not. skipErrorBreak ) then
-            ! NOTE: a new criteria could consider the 
-            ! densityGrid in order to include in the error 
-            ! estimate those cells without particles/mass.
-            if (  ( errorMetric .lt. errorMetricConvergence ) ) then
-              ! Criteria:
-              ! Break optimization loop if 
-              ! relative density change lower than 
-              ! a given convergence
-              this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-              !print *, '!! DENSITY CONVERGENCE !!'
-              if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
-              end if 
-              ! Break
-              exit
-            end if 
-            if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
-              ! Criteria:
-              ! Break optimization loop if 
-              ! relative smoothing change lower than 
-              ! a given convergence
-              this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-              !print *, '!! SMOOTHING CONVERGENCE !!'
-              if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+            ! ALMISE convergence
+            if ( errorALMISEProxyOld.gt.0d0 ) then 
+              if ( abs(errorALMISEProxy - errorALMISEProxyOld)/errorALMISEProxyOld .lt. errorMetricConvergence ) then  
+                if ( this%reportToOutUnit ) then 
+                  write( this%outFileUnit, '(A,es13.4e2)' ) '    - ALMISE convergence ', errorALMISEProxy
+                end if 
+                ! Break
+                exit
               end if
-              ! Break
-              exit
-            end if 
-            if ( (errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
-                    (errorRMSE .gt. errorRMSEOld ) .and.               &
-                    (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then 
-              ! Criteria
-              ! If both RMSE and ALMISE are increasing
-              ! and density convergence is below the relaxed limit, 
-              ! return previous density and leave
-              densityEstimateGrid = densityGridOld
-              ! Transfer grid density to array
-              do n = 1, this%nComputeBins
-                ! Assign gc pointer 
-                gc => activeGridCells(n)
-                densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-              end do
-              this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-              !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
-              if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
-              end if 
-              ! Break
-              exit
-            end if 
+            end if
+
+            !! NOTE: a new criteria could consider the 
+            !! densityGrid in order to include in the error 
+            !! estimate those cells without particles/mass.
+            !if (  ( errorMetric .lt. errorMetricConvergence ) ) then
+            !  ! Criteria:
+            !  ! Break optimization loop if 
+            !  ! relative density change lower than 
+            !  ! a given convergence
+            !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+            !  if ( this%reportToOutUnit ) then 
+            !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
+            !  end if 
+            !  ! Break
+            !  exit
+            !end if 
+            !if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
+            !  ! Criteria:
+            !  ! Break optimization loop if 
+            !  ! relative smoothing change lower than 
+            !  ! a given convergence
+            !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+            !  !print *, '!! SMOOTHING CONVERGENCE !!'
+            !  if ( this%reportToOutUnit ) then 
+            !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+            !  end if
+            !  ! Break
+            !  exit
+            !end if 
+            !if ( (errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
+            !        (errorRMSE .gt. errorRMSEOld ) .and.               &
+            !        (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then 
+            !  ! Criteria
+            !  ! If both RMSE and ALMISE are increasing
+            !  ! and density convergence is below the relaxed limit, 
+            !  ! return previous density and leave
+            !  densityEstimateGrid = densityGridOld
+            !  ! Transfer grid density to array
+            !  do n = 1, this%nComputeBins
+            !    ! Assign gc pointer 
+            !    gc => activeGridCells(n)
+            !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+            !  end do
+            !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+            !  !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
+            !  if ( this%reportToOutUnit ) then 
+            !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
+            !  end if 
+            !  ! Break
+            !  exit
+            !end if 
             !if ( & 
             !  (errorRMSE .lt. errorRMSEOld) .and. ( errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
             !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence )   ) then
@@ -3249,30 +3268,30 @@ module GridProjectedKDEModule
             !  ! Break
             !  exit
             !end if
-            if ( nFractionDensity .gt. 0.98 ) then 
-              ! Criteria
-              ! If the fraction of cells that is presenting changes in 
-              ! density below the convergence criteria is close to the total 
-              ! number of cells, exit.
-              !print *, '!! NFRACTIONDENSITY !!'
-              if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A)' ) '    - nFractionDensity '
-              end if 
-              ! Break
-              exit
-            end if  
-            if ( nFractionSmoothing .gt. 0.98 ) then 
-              ! Criteria
-              ! If the fraction of cells that is presenting changes in 
-              ! smoothing below the convergence criteria is close to the total 
-              ! number of cells, exit.
-              !print *, '!! NFRACTIONSMOOTHING !!'
-              if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A)' ) '    - nFractionSmoothing '
-              end if 
-              ! Break
-              exit
-            end if  
+            !if ( nFractionDensity .gt. 0.98 ) then 
+            !  ! Criteria
+            !  ! If the fraction of cells that is presenting changes in 
+            !  ! density below the convergence criteria is close to the total 
+            !  ! number of cells, exit.
+            !  !print *, '!! NFRACTIONDENSITY !!'
+            !  if ( this%reportToOutUnit ) then 
+            !  write( this%outFileUnit, '(A)' ) '    - nFractionDensity '
+            !  end if 
+            !  ! Break
+            !  exit
+            !end if  
+            !if ( nFractionSmoothing .gt. 0.98 ) then 
+            !  ! Criteria
+            !  ! If the fraction of cells that is presenting changes in 
+            !  ! smoothing below the convergence criteria is close to the total 
+            !  ! number of cells, exit.
+            !  !print *, '!! NFRACTIONSMOOTHING !!'
+            !  if ( this%reportToOutUnit ) then 
+            !  write( this%outFileUnit, '(A)' ) '    - nFractionSmoothing '
+            !  end if 
+            !  ! Break
+            !  exit
+            !end if  
           end if
 
 
@@ -3420,6 +3439,7 @@ module GridProjectedKDEModule
     end subroutine prComputeDensityOptimization
 
 
+    ! Optimization loop functions !
     subroutine prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
       !------------------------------------------------------------------------------
       ! 
@@ -3460,8 +3480,6 @@ module GridProjectedKDEModule
     end subroutine prComputeKernelSmoothingScale
 
 
-
-    ! Optimization loop functions
     subroutine prComputeSupportScale( this, kernelSmoothingScale, densityEstimate, &
                                               nEstimate, kernelSigmaSupportScale )
       !------------------------------------------------------------------------------
@@ -3492,7 +3510,6 @@ module GridProjectedKDEModule
       return
 
     end subroutine prComputeSupportScale
-
 
 
     subroutine prComputeCurvatureKernelBandwidth( this, densityEstimate, nEstimate, &
@@ -3573,7 +3590,6 @@ module GridProjectedKDEModule
       return
 
     end subroutine prComputeCurvatureKernelBandwidth
-
 
 
     subroutine prComputeOptimalSmoothingAndShape( this, nEstimate, netRoughness, &
