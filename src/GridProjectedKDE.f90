@@ -2692,17 +2692,8 @@ module GridProjectedKDEModule
       call kernelSDY%Initialize(   this%binSize, matrixRange=defaultKernelSDRange )
       call kernelSDZ%Initialize(   this%binSize, matrixRange=defaultKernelSDRange )
 
-      ! Something to detect a new loop/second run
-
-      ! Define initial smoothing array
-      ! initialSmoothing or kernelSmoothing could
-      ! be constructed from results of previous optimization
-      ! AFTER THE FIRST TIME 
-      !if( .not. this%firstRun ) then 
-      !    kernelSmoothing = spread( this%averageKernelSmoothing, 2, this%nComputeBins )
-      !else
-          kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
-      !end if
+      ! Initial smoothing
+      kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
       call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
       kernelSigmaSupportScale = 3d0*kernelSmoothingScale
       kernelSigmaSupport      = spread( kernelSigmaSupportScale, 1, 3 )
@@ -2768,7 +2759,6 @@ module GridProjectedKDEModule
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                           netRoughnessArray, kernelSigmaSupport, &
                                                  kernelSDX, kernelSDY, kernelSDZ )
-
       ! Optimal smoothing
       call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                               roughnessXXArray, roughnessYYArray, roughnessZZArray, &
