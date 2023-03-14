@@ -58,8 +58,6 @@ module GridProjectedKDEModule
     private
 
     ! MOVE ALL OF THESE ? 
-    ! Grids
-    doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
     ! Arrays
     doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
     doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
@@ -109,7 +107,6 @@ module GridProjectedKDEModule
       doubleprecision, dimension(:)    , allocatable :: densityEstimate
       doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
       doubleprecision, dimension(:,:,:), allocatable :: rawDensityEstimateGrid
-      !doubleprecision, dimension(:,:,:), allocatable :: nEstimateGrid
       doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
       doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
       doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
@@ -583,8 +580,8 @@ module GridProjectedKDEModule
       ! Allocate matrixes for density
       if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
       allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
-      if ( allocated( nEstimateGrid ) ) deallocate( nEstimateGrid )
-      allocate( nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      !if ( allocated( nEstimateGrid ) ) deallocate( nEstimateGrid )
+      !allocate( nEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
       ! Report intialization
       if ( this%reportToOutUnit ) then 
@@ -619,7 +616,7 @@ module GridProjectedKDEModule
       defaultMinKernelShape         = 5d-1
       dimensionMask                 = (/1,1,1/)
 
-      if ( allocated(  nEstimateGrid           )) deallocate(  nEstimateGrid           )
+      !if ( allocated(  nEstimateGrid           )) deallocate(  nEstimateGrid           )
       if ( allocated(  kernelSmoothing         )) deallocate(  kernelSmoothing         )
       if ( allocated(  kernelSmoothingScale    )) deallocate(  kernelSmoothingScale    )
       if ( allocated(  kernelSmoothingShape    )) deallocate(  kernelSmoothingShape    )
@@ -2421,6 +2418,10 @@ module GridProjectedKDEModule
             this%initialSmoothing(nd) = 0d0
           end if
         end do 
+        if ( this%reportToOutUnit ) then
+        write( this%outFileUnit, '(A)' ) ' GPKDE compute density '
+        write( this%outFileUnit, *) '  initialSmoothing   :', this%initialSmoothing
+        end if
       end if 
        
       ! Active bins: Only cells with particles
@@ -2711,13 +2712,14 @@ module GridProjectedKDEModule
       end do
 
       ! Initialize nEstimate
-      nEstimateGrid = 0d0
+      !nEstimateGrid = 0d0
       nEstimateArray = 0d0
       !$omp parallel do schedule( dynamic, 1 )                    &
       !$omp default( none )                                       &
       !$omp shared( this )                                        &
       !$omp shared( activeGridCells )                             &
-      !$omp shared( nEstimateGrid, nEstimateArray )               &
+      !!$omp shared( nEstimateGrid, nEstimateArray )               &
+      !$omp shared( nEstimateArray )               &
       !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
       !$omp firstprivate( kernelSigma )                           &
       !$omp private( gc )            
@@ -2733,7 +2735,8 @@ module GridProjectedKDEModule
 
         ! Compute estimate, using rawDensity
         ! Notice division by volume after the loop
-        nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+        !nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+        nEstimateArray( n ) = sum(&
           this%histogram%counts(&
               gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
               gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
@@ -2744,10 +2747,10 @@ module GridProjectedKDEModule
               gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
 
         ! Assign into array     
-        nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+        !nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
       end do
       !$omp end parallel do
-      nEstimateGrid  = nEstimateGrid/this%histogram%binVolume
+      !nEstimateGrid  = nEstimateGrid/this%histogram%binVolume
       nEstimateArray = nEstimateArray/this%histogram%binVolume
 
       ! Initialize variables
@@ -2755,6 +2758,7 @@ module GridProjectedKDEModule
       kernelSmoothingOld = kernelSmoothing
       kernelSmoothingScaleOld = kernelSmoothingScale
       ! Initial roughness
+      print *, 'WILL COMPUTE NET ROUGHNESS' 
       call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                           netRoughnessArray, kernelSigmaSupport, &
@@ -2765,8 +2769,18 @@ module GridProjectedKDEModule
                                                kernelSmoothing, kernelSmoothingOld, & 
                                      kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                                kernelSmoothingShape )
+      ! Limit maximum smoothing due to low-roughness to the support scale
+      do nd = 1, 3
+        if ( this%dimensionMask(nd) .eq. 0 ) cycle
+        where ( kernelSmoothing(nd,:) .gt. kernelSigmaSupportScale )
+          kernelSmoothing(nd,:) = kernelSigmaSupportScale
+        end where
+      end do 
       ! Update smoothing scale
       call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
+
+      print *, 'WILL COMPUTE INITIAL DENSITY' 
+      print *, minval(netRoughnessArray), maxval(netRoughnessArray)
 
       ! Initialize density grid
       densityEstimateGrid = 0d0
@@ -2816,6 +2830,8 @@ module GridProjectedKDEModule
         gc => activeGridCells(n)
         densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
       end do
+
+      print *, 'AFTER COMPUTE INITIAL DENSITY'
 
       ! Error monitoring
       squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
@@ -2878,19 +2894,21 @@ module GridProjectedKDEModule
       netRoughnessArrayOld    = netRoughnessArray
       densityGridOld          = densityEstimateGrid
 
+      print *, 'WILL START OPTIMIZATION' 
 
       ! Optimization loop !
       do m = 1, nOptLoops
 
           ! nEstimate
-          nEstimateGrid = 0d0 
+          !nEstimateGrid = 0d0 
           nEstimateArray = 0d0
           !$omp parallel do schedule( dynamic, 1 )                    &
           !$omp default( none )                                       &
           !$omp shared( this )                                        &
           !$omp shared( activeGridCells )                             &
           !$omp shared( densityEstimateGrid )                         &
-          !$omp shared( nEstimateGrid, nEstimateArray )               &
+          !$omp shared( nEstimateArray )               &
+          !!$omp shared( nEstimateGrid, nEstimateArray )               &
           !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
           !$omp firstprivate( kernelSigma )                           &
           !$omp private( gc )            
@@ -2905,7 +2923,8 @@ module GridProjectedKDEModule
             call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
             ! Compute estimate
-            nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+            !nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+            nEstimateArray( n ) = sum(&
               densityEstimateGrid(&
                   gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
                   gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
@@ -2916,7 +2935,7 @@ module GridProjectedKDEModule
                   gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
 
             ! Assign into array     
-            nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+            !nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
           end do
           !$omp end parallel do
 
@@ -2947,14 +2966,15 @@ module GridProjectedKDEModule
           end do
 
           ! Update nEstimate
-          nEstimateGrid  = 0d0
+          !nEstimateGrid  = 0d0
           nEstimateArray = 0d0
           !$omp parallel do schedule( dynamic, 1 )                    &
           !$omp default( none )                                       &
           !$omp shared( this )                                        &
           !$omp shared( activeGridCells )                             &
           !$omp shared( densityEstimateGrid )                         &
-          !$omp shared( nEstimateGrid, nEstimateArray )               &
+          !!$omp shared( nEstimateGrid, nEstimateArray )               &
+          !$omp shared( nEstimateArray )               &
           !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
           !$omp firstprivate( kernelSigma )                           &
           !$omp private( gc )
@@ -2967,7 +2987,8 @@ module GridProjectedKDEModule
             call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
             ! Compute estimate
-            nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+            !nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
+            nEstimateArray( n ) = sum(&
               densityEstimateGrid(&
                   gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
                   gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
@@ -2978,7 +2999,7 @@ module GridProjectedKDEModule
                   gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
 
             ! Assign into array     
-            nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+            !nEstimateArray( n ) = nEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
           end do
           !$omp end parallel do 
 
@@ -2999,6 +3020,13 @@ module GridProjectedKDEModule
                                                    kernelSmoothing, kernelSmoothingOld, & 
                                          kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                                    kernelSmoothingShape )
+      ! Limit maximum smoothing due to low-roughness to the support scale
+      do nd = 1, 3
+        if ( this%dimensionMask(nd) .eq. 0 ) cycle
+        where ( kernelSmoothing(nd,:) .gt. kernelSigmaSupportScale )
+          kernelSmoothing(nd,:) = kernelSigmaSupportScale
+        end where
+      end do 
           ! Update smoothing scale
           call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
 

@@ -438,7 +438,6 @@ contains
       if ( this%shouldIntegrateOne ) then 
         if ( ( abs( sum(this%bmatrix) ) .lt. 0.99 ) ) then  
           write(*,*) 'Kernel does not integrate one and it should. Integral: ', sum(this%bmatrix)
-          print *, kernelShape
           stop
         end if
       end if 
@@ -642,11 +641,11 @@ contains
 
       ! This means that matrixPositiveShape will have a zero in the compressed dimension
       where ( this%binSize .ne. 0d0 ) 
-          this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
+        this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
       elsewhere
-          this%matrixPositiveShape = 0
+        this%matrixPositiveShape = 0
       end where
-
+      
       allocate( zPXGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
       allocate( zPYGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )
       allocate( zPZGrid( this%matrixPositiveShape(1) + 1, this%matrixPositiveShape(2) + 1, this%matrixPositiveShape(3) + 1 ) )

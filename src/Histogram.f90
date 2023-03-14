@@ -13,8 +13,8 @@ module HistogramModule
 
         ! Properties
         doubleprecision, dimension(:,:,:), allocatable :: counts 
-        integer, dimension(:,:,:), allocatable         :: ncounts 
-        doubleprecision, dimension(:,:,:), allocatable :: avgmbin
+        !integer, dimension(:,:,:), allocatable         :: ncounts 
+        !doubleprecision, dimension(:,:,:), allocatable :: avgmbin
         integer, dimension(3)                      :: nBins
         doubleprecision, dimension(3)              :: binSize
         doubleprecision                            :: binVolume
@@ -130,8 +130,8 @@ contains
 
         ! Allocate and initialize histogram counts
         allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
-        allocate( this%ncounts( nBins(1), nBins(2), nBins(3) ) )
-        allocate( this%avgmbin( nBins(1), nBins(2), nBins(3) ) )
+        !allocate( this%ncounts( nBins(1), nBins(2), nBins(3) ) )
+        !allocate( this%avgmbin( nBins(1), nBins(2), nBins(3) ) )
         this%counts = 0
 
 
@@ -155,8 +155,8 @@ contains
         this%binVolume   = 0d0
 
         if( allocated(this%counts) ) deallocate( this%counts )
-        if( allocated(this%ncounts) ) deallocate( this%ncounts )
-        if( allocated(this%avgmbin) ) deallocate( this%avgmbin )
+        !if( allocated(this%ncounts) ) deallocate( this%ncounts )
+        !if( allocated(this%avgmbin) ) deallocate( this%avgmbin )
         if( allocated(this%activeBinIds) ) deallocate( this%activeBinIds ) 
         if( allocated(this%boundingBoxBinIds) ) deallocate( this%boundingBoxBinIds ) 
         if( allocated( this%dimensions) ) deallocate( this%dimensions) 
@@ -229,77 +229,66 @@ contains
 
 
     subroutine prComputeCountsWeighted( this, dataPoints, weights, exact )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(HistogramType) :: this
-        doubleprecision, dimension(:,:), intent(in) :: dataPoints
-        doubleprecision, dimension(:), intent(in)   :: weights
-        logical, intent(in), optional      :: exact 
-        integer, dimension(2)              :: nPointsShape
-        integer                            :: np, nd, did
-        integer, dimension(3)              :: gridIndexes
-        logical :: inside
-        integer :: exactIndex 
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      ! 
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none 
+      class(HistogramType) :: this
+      doubleprecision, dimension(:,:), intent(in) :: dataPoints
+      doubleprecision, dimension(:), intent(in)   :: weights
+      logical, intent(in), optional      :: exact 
+      integer, dimension(2)              :: nPointsShape
+      integer                            :: np, nd, did
+      integer, dimension(3)              :: gridIndexes
+      logical :: inside
+      integer :: exactIndex 
+      !------------------------------------------------------------------------------
 
-        exactIndex = 1
-        if( present(exact) ) then 
-          if ( exact ) exactIndex = 0
-        end if
+      exactIndex = 1
+      if( present(exact) ) then 
+        if ( exact ) exactIndex = 0
+      end if
 
-        ! Reset counts
-        this%counts  = 0
-        this%ncounts = 0
-        this%avgmbin = 0
-        nPointsShape = shape(dataPoints)
+      ! Reset counts
+      this%counts  = 0
+      nPointsShape = shape(dataPoints)
 
-        ! This could be done with OpenMP (?) 
-        do np = 1, nPointsShape(1)
-            ! Initialize point
-            inside      = .true.
-            gridIndexes = 1
-            ! Compute gridIndex and verify  
-            ! only for active dimensions if inside or not.
-            ! Histogram considers active dimensions those where
-            ! binSize is non zero.
-            do nd = 1,this%nDim
-              did = this%dimensions(nd)
-              gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + exactIndex
-              if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
-                  (gridIndexes(did) .le. 0) ) then
-                inside = .false. 
-                exit
-              end if 
-            end do
-            if ( .not. inside ) cycle
+      ! This could be done with OpenMP (?) 
+      do np = 1, nPointsShape(1)
+        ! Initialize point
+        inside      = .true.
+        gridIndexes = 1
+        ! Compute gridIndex and verify  
+        ! only for active dimensions if inside or not.
+        ! Histogram considers active dimensions those where
+        ! binSize is non zero.
+        do nd = 1,this%nDim
+          did = this%dimensions(nd)
+          gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + exactIndex
+          if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
+              (gridIndexes(did) .le. 0) ) then
+            inside = .false. 
+            exit
+          end if 
+        end do
+        if ( .not. inside ) cycle
 
-            ! Increase counter
-            this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
-                this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)
-            !this%ncounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
-            !    this%ncounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1
+        ! Increase counter
+        this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+            this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)
 
-        end do 
+      end do 
      
-        this%totalMass     = sum(weights)
-        this%nEffective    = this%totalMass**2/sum(weights**2)
-        this%effectiveMass = this%totalMass/this%nEffective
+      this%totalMass     = sum(weights)
+      this%nEffective    = this%totalMass**2/sum(weights**2)
+      this%effectiveMass = this%totalMass/this%nEffective
 
-        ! Tranform mass counts into n counts
-        this%counts     = this%counts/this%effectiveMass
-        this%nPoints    = size(weights)
-        this%isWeighted = .true.
-
-        !where (this%ncounts.ne.0)  
-        !  this%avgmbin = this%counts/this%ncounts
-        !end where
-        !where (this%avgmbin.ne.0)  
-        !  this%counts = this%counts/this%avgmbin
-        !end where
+      ! Tranform mass counts into n counts
+      this%counts     = this%counts/this%effectiveMass
+      this%nPoints    = size(weights)
+      this%isWeighted = .true.
 
 
     end subroutine prComputeCountsWeighted
@@ -307,39 +296,39 @@ contains
 
 
     subroutine prComputeActiveBinIds( this )
-        !------------------------------------------------------------------------------
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(HistogramType) :: this
-        integer              :: ix, iy, iz
-        integer              :: icount = 1 
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none 
+      class(HistogramType) :: this
+      integer              :: ix, iy, iz
+      integer              :: icount = 1 
+      !------------------------------------------------------------------------------
 
-        ! Reset icount
-        icount = 1
+      ! Reset icount
+      icount = 1
 
-        this%nActiveBins = count( this%counts/=0d0 )
-        !this%nActiveBins = count( this%counts/=0 )
+      this%nActiveBins = count( this%counts/=0d0 )
+      !this%nActiveBins = count( this%counts/=0 )
 
-        ! Reallocate activeBinIds to new size 
-        if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
-        allocate( this%activeBinIds( 3, this%nActiveBins ) )
-        
-        ! Following column-major nesting
-        ! This could be in parallel with OpenMP (?)
-        do iz = 1, this%nBins(3)
-            do iy = 1, this%nBins(2)
-                do ix = 1, this%nBins(1)
-                    if ( this%counts( ix, iy, iz ) .eq. 0d0 ) cycle
-                    !if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
-                    this%activeBinIds( :, icount ) = [ ix, iy, iz ]
-                    icount = icount + 1
-                end do
-            end do
+      ! Reallocate activeBinIds to new size 
+      if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
+      allocate( this%activeBinIds( 3, this%nActiveBins ) )
+      
+      ! Following column-major nesting
+      ! This could be in parallel with OpenMP (?)
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%counts( ix, iy, iz ) .eq. 0d0 ) cycle
+            !if ( this%counts( ix, iy, iz ) .eq. 0 ) cycle
+            this%activeBinIds( :, icount ) = [ ix, iy, iz ]
+            icount = icount + 1
+          end do
         end do
+      end do
 
 
     end subroutine prComputeActiveBinIds
