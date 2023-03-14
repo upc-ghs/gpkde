@@ -23,6 +23,8 @@ program GPKDE
   integer            :: nlines, io, id
   integer            :: inputDataFormat
   integer            :: nOptLoops
+  doubleprecision    :: initialSmoothingFactor
+  integer            :: initialSmoothingSelection 
   ! urword
   character(len=200) :: line
   integer            :: icol,istart,istop,n
@@ -34,6 +36,7 @@ program GPKDE
   doubleprecision, dimension(3) :: domainSize  
   doubleprecision, dimension(3) :: binSize     
   doubleprecision, dimension(3) :: domainOrigin
+  doubleprecision, dimension(3) :: initialSmoothing
   doubleprecision, dimension(3) :: kernelParams
   !-----------------------------------------------
   simUnit    = 111
@@ -333,6 +336,60 @@ program GPKDE
   end select
 
 
+  ! Selection of initial smoothing
+  ! 0: automatic, based on Silverman (1986) global estimate
+  ! 1: user provides a factor scaling the characteristic bin size
+  ! 2: user provides the initial smoothing array
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Initial smoothing is selected from the global estimate of Silverman (1986). '
+    end if
+    initialSmoothing(:) = 0d0
+    initialSmoothingFactor = 1d0
+    initialSmoothingSelection = n 
+  case(1)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Initial smoothing specified as a factor multiplying characteristic bin size.'
+    end if
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    initialSmoothing(:) = 0d0
+    initialSmoothingFactor = r
+    if ( (logUnit.gt.0).and.(initialSmoothingFactor.gt.0d0) ) then 
+      write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set to: ', initialSmoothingFactor
+    end if
+    if ( initialSmoothingFactor .le. 0d0 ) then 
+      call ustop('Invalid initial smoothing factor, it should greater than zero. Stop.')
+    end if 
+    initialSmoothingSelection = n 
+  case(2)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Initial smoothing array specified by the user.'
+    end if
+    read(simUnit, '(a)') line
+    icol = 1
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    initialSmoothing(1) = r
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    initialSmoothing(2) = r
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    initialSmoothing(3) = r
+    initialSmoothingFactor = 1d0
+    if ( any( initialSmoothing .lt. 0d0 ) ) then 
+      call ustop('Invalid value for initial smoothing, it should greater or equal to zero. Stop.')
+    end if 
+    if ( all( initialSmoothing .le. 0d0 ) ) then 
+      call ustop('Invalid values for initial smoothing, at least one should be positive. Stop.')
+    end if 
+    initialSmoothingSelection = n 
+  case default
+     call ustop('Initial smoothing selection method not valid. Should be 0, 1 or 2. Stop.')
+  end select
+
+
   ! Read data into arrays for reconstruction
   if ( logUnit.gt.0 ) then 
     write(logUnit,'(a)') 'GPKDE will load data into arrays.'
@@ -361,25 +418,31 @@ program GPKDE
   allocate( gpkdeObj )
   if (logUnit.gt.0) then
     call gpkdeObj%Initialize(& 
-        domainSize, binSize,                   &
-        domainOrigin         = domainOrigin,   & 
-        nOptimizationLoops   = nOptLoops,      &
-        databaseOptimization = kernelDatabase, &
-        minHOverLambda       = kernelParams(1),&
-        deltaHOverLambda     = kernelParams(2),&
-        maxHOverLambda       = kernelParams(3),&
-        outFileName          = logFile         &
+        domainSize, binSize,                                  &
+        domainOrigin              = domainOrigin,             & 
+        nOptimizationLoops        = nOptLoops,                &
+        databaseOptimization      = kernelDatabase,           &
+        minHOverLambda            = kernelParams(1),          &
+        deltaHOverLambda          = kernelParams(2),          &
+        maxHOverLambda            = kernelParams(3),          &
+        initialSmoothing          = initialSmoothing,         & 
+        initialSmoothingFactor    = initialSmoothingFactor,   & 
+        initialSmoothingSelection = initialSmoothingSelection,& 
+        outFileName               = logFile                   &
     )
     write(logUnit,'(a)') 'GPKDE is initialized. '
   else
     call gpkdeObj%Initialize(& 
-        domainSize, binSize,                   &
-        domainOrigin         = domainOrigin,   & 
-        nOptimizationLoops   = nOptLoops,      &
-        databaseOptimization = kernelDatabase, &
-        minHOverLambda       = kernelParams(1),&
-        deltaHOverLambda     = kernelParams(2),&
-        maxHOverLambda       = kernelParams(3) &
+        domainSize, binSize,                                  &
+        domainOrigin              = domainOrigin,             & 
+        nOptimizationLoops        = nOptLoops,                &
+        databaseOptimization      = kernelDatabase,           &
+        minHOverLambda            = kernelParams(1),          &
+        deltaHOverLambda          = kernelParams(2),          &
+        maxHOverLambda            = kernelParams(3),          &
+        initialSmoothing          = initialSmoothing,         & 
+        initialSmoothingFactor    = initialSmoothingFactor,   & 
+        initialSmoothingSelection = initialSmoothingSelection & 
     )
   end if
 
