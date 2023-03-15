@@ -2389,6 +2389,16 @@ module GridProjectedKDEModule
         call this%histogram%ComputeCounts( dataPoints, locExactPoint )
       end if
 
+      if ( this%reportToOutUnit ) then
+       write(this%outFileUnit, *  )
+       write(this%outFileUnit, '(A)' ) 'GPKDE histogram statistics '
+       write(this%outFileUnit, *     ) '  Max count         :', maxval(this%histogram%counts)
+       write(this%outFileUnit, *     ) '  Max raw density   :', maxval(this%histogram%counts)/this%histogram%binVolume
+       write(this%outFileUnit, *     ) '  Min count         :', minval(this%histogram%counts)
+       write(this%outFileUnit, *     ) '  Min raw density   :', minval(this%histogram%counts)/this%histogram%binVolume
+       write(this%outFileUnit, *  )
+      end if
+
       ! If only histogram, leave
       if ( locOnlyHistogram ) then 
         if( locWeightedHistogram ) then

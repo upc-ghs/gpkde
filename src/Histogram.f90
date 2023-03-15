@@ -85,9 +85,7 @@ contains
           locDimensionMask = (/1,1,1/)
         end if
 
-
         ! Assign dim properties
-        !this%nDim = sum(dimensionMask, mask=(locDimensionMask.eq.1))
         this%nDim = sum((/1,1,1/), mask=(binSize.gt.0d0))
         if ( this%nDim .le. 0 ) then 
           write(*,*)'Error while initializing Histogram, nDim .le. 0. Stop.'
@@ -105,11 +103,9 @@ contains
         dcount= 0
         do nd = 1, 3
           if ( binSize(nd) .le. 0d0 ) cycle
-          !if ( locDimensionMask(nd) .eq. 0 ) cycle
           dcount = dcount + 1
           this%dimensions(dcount) = nd
         end do 
-
 
         ! domainOrigin
         if ( present( domainOrigin ) ) then 
@@ -118,20 +114,14 @@ contains
           this%domainOrigin = 0 
         end if
 
-
         ! Initialize variables
         this%nBins     = nBins
         this%binSize   = binSize
-        !this%binVolume = product( binSize, mask=(locDimensionMask.eq.1) ) 
-        !this%binDistance = ( this%binVolume )**(1d0/sum(locDimensionMask))
         this%binVolume = product( binSize, mask=(binSize.gt.0d0) ) 
         this%binDistance = ( this%binVolume )**(1d0/this%nDim)
 
-
         ! Allocate and initialize histogram counts
         allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
-        !allocate( this%ncounts( nBins(1), nBins(2), nBins(3) ) )
-        !allocate( this%avgmbin( nBins(1), nBins(2), nBins(3) ) )
         this%counts = 0
 
 
