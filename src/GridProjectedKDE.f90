@@ -35,7 +35,8 @@ module GridProjectedKDEModule
     ! Optimization
     doubleprecision :: defaultInitialSmoothingFactor = 5
     doubleprecision :: defaultDensityScale           = 1d0
-    doubleprecision :: defaultMinLimitRoughness      = 1d-40
+    doubleprecision :: defaultMinLimitRoughness      = 1d-5
+    doubleprecision :: defaultMinRelativeRoughness   = 1d-5
     doubleprecision :: defaultMaxLimitRoughness      = 1d40
     doubleprecision :: defaultMaxSmoothingGrowth     = 10d0
     doubleprecision :: defaultMaxKernelShape         = 10d0
@@ -125,6 +126,7 @@ module GridProjectedKDEModule
       integer :: nOptimizationLoops
       doubleprecision :: densityRelativeConvergence
       doubleprecision :: minLimitRoughness
+      doubleprecision :: minRelativeRoughness
       doubleprecision :: maxLimitRoughness
       doubleprecision :: maxSmoothingGrowth
       doubleprecision :: densityScale
@@ -459,6 +461,11 @@ module GridProjectedKDEModule
       else 
         this%minLimitRoughness = defaultMinLimitRoughness
       end if
+      if ( present( minRoughness ) ) then 
+        this%minRelativeRoughness = minRoughness
+      else 
+        this%minRelativeRoughness = defaultMinRelativeRoughness
+      end if
       if ( present( maxRoughness ) ) then 
         this%maxLimitRoughness = maxRoughness
       else 
@@ -496,6 +503,8 @@ module GridProjectedKDEModule
       this%initialSmoothing(:) = 0d0
       select case(this%initialSmoothingSelection) 
       case(0)
+        ! Choose from global estimate of Silverman (1986)
+        continue
       case(1)
         if ( present( initialSmoothingFactor ) ) then 
           this%initialSmoothing = initialSmoothingFactor*this%histogram%binDistance
@@ -717,15 +726,11 @@ module GridProjectedKDEModule
       !------------------------------------------------------------------------------
 
 
-      !! Allocate arrays
+      ! Allocate arrays
       allocate(         lockernelSmoothing( 3, nComputeBins ) )
       allocate(      lockernelSigmaSupport( 3, nComputeBins ) )
       allocate(    lockernelSmoothingShape( 3, nComputeBins ) )
       allocate(      loccurvatureBandwidth( 3, nComputeBins ) )
-      !allocate(         lockernelSmoothing( nDim, nComputeBins ) )
-      !allocate(      lockernelSigmaSupport( nDim, nComputeBins ) )
-      !allocate(    lockernelSmoothingShape( nDim, nComputeBins ) )
-      !allocate(      loccurvatureBandwidth( nDim, nComputeBins ) )
       allocate(          lockernelSmoothingScale( nComputeBins ) )
       allocate(       lockernelSigmaSupportScale( nComputeBins ) )
       allocate(          locdensityEstimateArray( nComputeBins ) )
@@ -755,17 +760,16 @@ module GridProjectedKDEModule
 
 
     subroutine prInitializeModuleDimensions( this, nDim, dimensionMask )
-      !------------------------------------------------------------------------------
-      ! 
+      !-----------------------------------------------------------------
       !
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------
       ! Specifications 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------
       class( GridProjectedKDEType ), target :: this 
       integer, intent(inout)        :: nDim
       integer, dimension(3), intent(inout) :: dimensionMask
       integer :: n, nd, currentDim
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------
 
       ! Determine dimensions based on number of bins
       do n = 1,3
@@ -832,7 +836,6 @@ module GridProjectedKDEModule
       !   - supportDimensionConstant for Eq. (23) in Sole-Mari et al. (2019)
       !   - alphaDimensionConstant
       !     and betaDimensionConstant, Eq. (28) in Sole-Mari et al. (2019)
-      !
       !------------------------------------------------------------------------------
       ! Specifications 
       !------------------------------------------------------------------------------
@@ -850,9 +853,7 @@ module GridProjectedKDEModule
       ! Done
       return
 
-
     end subroutine prInitializeModuleConstants 
-
 
 
     ! NET ROUGHNESS
@@ -860,7 +861,6 @@ module GridProjectedKDEModule
     ! initialize
     subroutine prInitializeNetRoughnessFunction( this, nDim )
       !------------------------------------------------------------------------------
-      ! 
       !
       !------------------------------------------------------------------------------
       ! Specifications 
@@ -898,9 +898,7 @@ module GridProjectedKDEModule
       ! Done
       return
 
-
     end subroutine prInitializeNetRoughnessFunction 
-
 
 
     ! NET ROUGHNESS
@@ -910,14 +908,14 @@ module GridProjectedKDEModule
                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                             netRoughnessArray, kernelSigmaSupport, &
                                                    kernelSDX, kernelSDY, kernelSDZ ) 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       ! Net roughness in 1D
       ! 
       !  - Eq. 13a in Sole-Mari et al. (2019)
       !
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       ! Specifications 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       !input
       class( GridProjectedKDEType ), target                   :: this
       type( GridCellType ), dimension(:), intent(in), target  :: activeGridCells
@@ -935,26 +933,19 @@ module GridProjectedKDEModule
       type( GridCellType ), pointer :: gc => null()
       doubleprecision, dimension(:), pointer :: roughness11Array
       doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
-      doubleprecision, dimension(:,:,:), allocatable, target :: curvature11
-      doubleprecision, dimension(:,:,:), allocatable, target :: roughness11
       integer :: n
-      integer :: iX, iY, iZ
       type( KernelMultiGaussianType ) :: kernelSigma
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       allocate( curvature1(  this%nBins(1), this%nBins(2), this%nBins(3) )) 
-      allocate( curvature11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-      allocate( roughness11( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
    
       ! Initialize
       curvature1  = 0d0
-      roughness11 = 0d0
 
       ! Assign dimension pointers
       select case( this%idDim1 ) 
         case (1)
           roughness11Array => roughnessXXArray
-
           !$omp parallel do schedule( dynamic, 1 ) & 
           !$omp default( none )                    &
           !$omp shared( this )                     &
@@ -989,13 +980,12 @@ module GridProjectedKDEModule
                             gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
                             gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
                      )
-
+            deallocate( gc%kernelSD1Matrix ) 
           end do
           !$omp end parallel do
 
         case (2)
           roughness11Array => roughnessYYArray
-
           !$omp parallel do schedule( dynamic, 1 ) & 
           !$omp default( none )                    &
           !$omp shared( this )                     &
@@ -1030,13 +1020,12 @@ module GridProjectedKDEModule
                             gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
                             gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
                      )
-
+            deallocate( gc%kernelSD1Matrix ) 
           end do
           !$omp end parallel do
 
         case (3)
           roughness11Array => roughnessZZArray
-
           !$omp parallel do schedule( dynamic, 1 ) & 
           !$omp default( none )                    &
           !$omp shared( this )                     &
@@ -1071,31 +1060,29 @@ module GridProjectedKDEModule
                             gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
                             gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
                      )
-
+            deallocate( gc%kernelSD1Matrix ) 
           end do
           !$omp end parallel do
-
       end select
       curvature1 = curvature1/this%histogram%binVolume
       ! Matrix from curvature kernels is lambda**2*KernelVMatrix
       curvature1 = curvature1/( this%binSize(this%idDim1)**2 )
 
-
-      ! Product curvatures, roughness
-      curvature11 = curvature1*curvature1
-
+      ! Product curvature
+      curvature1 = curvature1*curvature1
 
       ! kernelSigma was already computed ? 
       call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange   )
 
-
-      ! 11
+      ! Net roughness
+      roughness11Array  = 0d0 
+      netRoughnessArray = 0d0
       !$omp parallel do schedule( dynamic, 1 ) &
       !$omp default( none )                    &
       !$omp shared( this )                     &
       !$omp shared( activeGridCells )          &
-      !$omp shared( curvature11 )              &
-      !$omp shared( roughness11 )              & 
+      !$omp shared( curvature1 )               &
+      !$omp shared( roughness11Array )         &
       !$omp shared( kernelSigmaSupport )       & 
       !$omp firstprivate( kernelSigma )        &
       !$omp private( gc )
@@ -1107,8 +1094,8 @@ module GridProjectedKDEModule
         call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
         ! Compute roughness grid estimates
-        roughness11( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
-            curvature11(&
+        roughness11Array( n ) = sum(&
+            curvature1(&
                 gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
                 gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
                 gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
@@ -1116,53 +1103,16 @@ module GridProjectedKDEModule
                 gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
                 gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
                 gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
-
+        deallocate( gc%kernelSigmaMatrix ) 
       end do
       !$omp end parallel do 
-
-
-      ! Net roughness
-      roughness11Array  = 0d0 
-      netRoughnessArray = 0d0
-      !$omp parallel do schedule( dynamic, 1 ) &
-      !$omp default( none )                    &
-      !$omp shared( this )                     &
-      !$omp shared( activeGridCells )          &
-      !$omp shared( roughness11 )              &
-      !$omp shared( roughness11Array )         &
-      !$omp shared( netRoughnessArray )        &
-      !$omp private( gc )                      & 
-      !$omp private( iX, iY, iZ )  
-      do n = 1, this%nComputeBins
-
-        ! Assign pointer 
-        gc => activeGridCells(n)
-
-        if ( gc%skipKernelSigma ) cycle
-
-        iX = gc%id(1)
-        iY = gc%id(2)
-        iZ = gc%id(3)
-
-        ! Assign info for needed arrays 
-        roughness11Array( n ) = roughness11(iX,iY,iZ)
-
-        ! Compute net roughness
-        ! 1D
-        netRoughnessArray( n ) = roughness11(iX,iY,iZ)
-
-      end do
-      !$omp end parallel do
-      
+      netRoughnessArray = roughness11Array
 
       ! Deallocate
-      deallocate( curvature1  ) 
-      deallocate( curvature11 ) 
-      deallocate( roughness11 ) 
+      deallocate( curvature1 )
 
-
+      ! Done
       return
-
 
     end subroutine prComputeNetRoughness1D
 
@@ -1174,14 +1124,14 @@ module GridProjectedKDEModule
                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                             netRoughnessArray, kernelSigmaSupport, &
                                                    kernelSDX, kernelSDY, kernelSDZ ) 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       ! Net roughness in 2D
       ! 
       !  - Eq. 13b in Sole-Mari et al. (2019)
       ! 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       ! Specifications 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       ! input
       class( GridProjectedKDEType ), target                  :: this
       type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
@@ -1203,13 +1153,12 @@ module GridProjectedKDEModule
       doubleprecision, dimension(:,:,:), allocatable :: curvature2
       doubleprecision, dimension(:,:,:), allocatable :: curvature12
       integer :: n
-      integer :: iX, iY, iZ
       type( KernelMultiGaussianType ) :: kernelSigma
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       allocate( curvature1( this%nBins(1), this%nBins(2), this%nBins(3)  )) 
       allocate( curvature2( this%nBins(1), this%nBins(2), this%nBins(3)  )) 
       allocate( curvature12( this%nBins(1), this%nBins(2), this%nBins(3) )) 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
 
       ! Initialize 
       curvature1  = 0d0
@@ -1412,7 +1361,7 @@ module GridProjectedKDEModule
       roughness11Array  = 0d0 
       roughness22Array  = 0d0 
       netRoughnessArray = 0d0
-! NEW
+
       ! 11
       !$omp parallel do schedule( dynamic, 1 ) &
       !$omp default( none )                    &
@@ -1473,112 +1422,18 @@ module GridProjectedKDEModule
       end do
       !$omp end parallel do 
 
-
-
-! ORIGINAL
-      !! 11
-      !!$omp parallel do schedule( dynamic, 1 ) &
-      !!$omp default( none )                    &
-      !!$omp shared( this )                     &
-      !!$omp shared( activeGridCells )          &
-      !!$omp shared( curvature1 )               &
-      !!$omp shared( roughness11Array )         &
-      !!$omp firstprivate( kernelSigma )        &
-      !!$omp shared( kernelSigmaSupport )       &
-      !!$omp private( gc )
-      !do n = 1, this%nComputeBins
-
-      !  ! Assign pointer 
-      !  gc => activeGridCells(n)
-
-      !  ! Notice this stage: kernelSigma is used in following loops
-      !  call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
-
-      !  ! Compute roughness grid estimates
-      !  roughness11Array( n ) = sum(&
-      !      curvature1(&
-      !          gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-      !          gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-      !          gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-      !      )*gc%kernelSigmaMatrix(&
-      !          gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-      !          gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-      !          gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
-      !end do
-      !!$omp end parallel do 
-
-
-      !! 22
-      !!$omp parallel do schedule( dynamic, 1 ) &
-      !!$omp default( none )                    &
-      !!$omp shared( this )                     &
-      !!$omp shared( activeGridCells )          &
-      !!$omp shared( curvature2 )               &
-      !!$omp shared( roughness22Array )         &
-      !!$omp private( gc )
-      !do n = 1, this%nComputeBins
-
-      !  ! Assign pointer 
-      !  gc => activeGridCells(n)
-
-      !  ! Compute roughness grid estimates
-      !  roughness22Array( n ) = sum(&
-      !      curvature2(&
-      !          gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-      !          gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-      !          gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-      !      )*gc%kernelSigmaMatrix(&
-      !          gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-      !          gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-      !          gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
-      !end do
-      !!$omp end parallel do 
-
-      !! Net roughness
-      !!$omp parallel do schedule( dynamic, 1 ) &
-      !!$omp default( none )                    &
-      !!$omp shared( this )                     &
-      !!$omp shared( activeGridCells )          &
-      !!$omp shared( curvature12 )              &
-      !!$omp shared( roughness11Array )         & 
-      !!$omp shared( roughness22Array )         & 
-      !!$omp shared( netRoughnessArray )        & 
-      !!$omp private( gc )
-      !do n = 1, this%nComputeBins
-
-      !  ! Assign pointer 
-      !  gc => activeGridCells(n)
-
-      !  ! Compute net roughness
-      !  netRoughnessArray( n )  = 2d0*sum(&
-      !      curvature12(&
-      !          gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2),     &
-      !          gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2),     & 
-      !          gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)      & 
-      !      )*gc%kernelSigmaMatrix(&
-      !          gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2),     &
-      !          gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2),     & 
-      !          gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) + & 
-      !      maxval( (/ & 
-      !        roughness11Array(n) + roughness22Array(n),      &
-      !        2*sqrt(roughness11Array(n)*roughness22Array(n)) &
-      !      /) )
-      !end do
-      !!$omp end parallel do 
-
-
       ! Deallocate
       deallocate( curvature1  ) 
       deallocate( curvature2  ) 
       deallocate( curvature12 ) 
 
-
+      ! Done
       return
-
 
     end subroutine prComputeNetRoughness2D
 
 
+    ! NEEDS UPDATE !
     ! NET ROUGHNESS
     ! net roughness
     ! 3D
@@ -1586,14 +1441,14 @@ module GridProjectedKDEModule
                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                             netRoughnessArray, kernelSigmaSupport, &
                                                    kernelSDX, kernelSDY, kernelSDZ ) 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       ! Net roughness in 3D
       !
       !  - Eq. 13c in Sole-Mari et al. (2019)
       !
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       ! Specifications 
-      !------------------------------------------------------------------------------
+      !-----------------------------------------------------------------------------
       !input
       class( GridProjectedKDEType ), target :: this
       type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
@@ -1931,27 +1786,22 @@ module GridProjectedKDEModule
         localKernelSDRange = defaultKernelSDRange
       end if 
 
-
       ! In the meantime a single nDelta, 
       ! it could be any discretization
       if ( localLogDatabase ) then
         ! LOG FORM
-        ! Verify this 
         nDelta      = ceiling( log10( maxHOverLambda/minHOverLambda )/log10( 1 + deltaHOverLambda ) ) + 1
         allocate( hOverLambda( nDelta ) )
         hOverLambda = this%GenerateLogSpaceData( minHOverLambda, maxHOverLambda, nDelta )
-
         ! Assign indexes interfaces
         this%ComputeKernelDatabaseFlatIndexes => prComputeKernelDatabaseFlatIndexesLog
         this%ComputeKernelDatabaseIndexes     => prComputeKernelDatabaseIndexesLog ! meanwhile for SD's
-
         this%deltaHOverLambda = log( hOverLambda(2)/hOverLambda(1) ) ! Fix this inconsistency, is overwritten
       else 
         ! LINEAR FORM
         nDelta      = floor( ( maxHOverLambda - minHOverLambda )/deltaHOverLambda )
         allocate( hOverLambda( nDelta ) )
         hOverLambda = [ (minHOverLambda + i*deltaHOverLambda, i=0, nDelta ) ]
-
         ! Assign indexes interface
         this%ComputeKernelDatabaseFlatIndexes => prComputeKernelDatabaseFlatIndexesLinear
         this%ComputeKernelDatabaseIndexes     => prComputeKernelDatabaseIndexesLinear ! meanwhile for SD's
@@ -2396,7 +2246,6 @@ module GridProjectedKDEModule
        write(this%outFileUnit, *     ) '  Max raw density   :', maxval(this%histogram%counts)/this%histogram%binVolume
        write(this%outFileUnit, *     ) '  Min count         :', minval(this%histogram%counts)
        write(this%outFileUnit, *     ) '  Min raw density   :', minval(this%histogram%counts)/this%histogram%binVolume
-       write(this%outFileUnit, *  )
       end if
 
       ! If only histogram, leave
@@ -2409,6 +2258,28 @@ module GridProjectedKDEModule
           this%histogram%counts = this%histogram%counts/this%histogram%binVolume
         end if 
         return
+      end if 
+
+      ! Active bins: Only cells with particles
+      call this%histogram%ComputeActiveBinIds()
+      this%computeBinIds => this%histogram%activeBinIds
+      this%nComputeBins  = this%histogram%nActiveBins
+      if ( this%nComputeBins .eq. 0 ) then 
+       ! No bins to compute 
+       if ( this%reportToOutUnit ) then
+        write(this%outFileUnit, *  )
+        write(this%outFileUnit, '(A)' ) 'WARNING: GPKDE module  '
+        write(this%outFileUnit, '(A)' ) 'NO bins to compute. Check origin coordinates or particles. Leaving ComputeDensity.'
+        write(this%outFileUnit, *  )
+       end if
+       ! Leaving  
+       return
+      else
+       if ( this%reportToOutUnit ) then
+         write(this%outFileUnit, *     ) '  Mean raw density  :',& 
+           sum(this%histogram%counts)/this%histogram%binVolume/this%nComputeBins
+         write(this%outFileUnit, *  )
+       end if 
       end if 
 
       ! Distribution basic statistics
@@ -2441,6 +2312,9 @@ module GridProjectedKDEModule
        end if
       end if
 
+      ! Set min limit roughness
+      this%minLimitRoughness = this%minRelativeRoughness*(this%histogram%maxRawDensity**2)
+
       ! Assign distribution statistics as initial smoothing, Silverman (1986)
       if ( this%initialSmoothingSelection .eq. 0 ) then 
         this%initialSmoothing(:) = this%hSigmaScale
@@ -2455,21 +2329,6 @@ module GridProjectedKDEModule
         end if
       end if 
        
-      ! Active bins: Only cells with particles
-      call this%histogram%ComputeActiveBinIds()
-      this%computeBinIds => this%histogram%activeBinIds
-      this%nComputeBins  = this%histogram%nActiveBins
-      if ( this%nComputeBins .eq. 0 ) then 
-       ! No bins to compute 
-       if ( this%reportToOutUnit ) then
-        write(this%outFileUnit, *  )
-        write(this%outFileUnit, '(A)' ) 'WARNING: GPKDE module  '
-        write(this%outFileUnit, '(A)' ) 'NO bins to compute. Check origin coordinates or particles. Leaving ComputeDensity.'
-        write(this%outFileUnit, *  )
-       end if
-       ! Leaving  
-       return
-      end if 
 
       ! Logging
       if ( this%reportToOutUnit ) then 
@@ -2592,9 +2451,8 @@ module GridProjectedKDEModule
       integer            :: softConvergenceCount
       integer            :: zeroDensityCount    
       character(len=500) :: varsOutputFileName
-      character(len=500) :: errorOutputFileName
+      !character(len=500) :: errorOutputFileName
       character(len=20)  :: loopId
-      character(len=20)  :: auxChar
       logical            :: exportVariables, skipErrorBreak
       logical            :: exportLoopError
       integer            :: errorOutputUnit
@@ -2629,8 +2487,8 @@ module GridProjectedKDEModule
       doubleprecision :: nFractionRoughness
       doubleprecision :: nFractionSmoothing
       !character(len=16) :: helpChar
-      integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-      doubleprecision :: elapsedTime
+      !integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
+      !doubleprecision :: elapsedTime
       !------------------------------------------------------------------------------
 
       ! Initialize vars
@@ -2729,8 +2587,6 @@ module GridProjectedKDEModule
       ! Initial smoothing
       kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
       call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
-      !kernelSigmaSupportScale = this%hSigmaScale
-      !3d0*kernelSmoothingScale
       kernelSigmaSupportScale = 3d0*kernelSmoothingScale
       kernelSigmaSupport      = spread( kernelSigmaSupportScale, 1, 3 )
       do nd =1, 3
@@ -2745,80 +2601,8 @@ module GridProjectedKDEModule
           kernelSigmaSupport(nd,:)   = 0
         end if 
       end do
-
-      ! Initialize nEstimate
-      nEstimateArray = 0d0
-      !$omp parallel do schedule( dynamic, 1 )                    &
-      !$omp default( none )                                       &
-      !$omp shared( this )                                        &
-      !$omp shared( activeGridCells )                             &
-      !$omp shared( nEstimateArray )                              &
-      !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
-      !$omp firstprivate( kernelSigma )                           &
-      !$omp private( gc )            
-      do n = 1, this%nComputeBins
-
-        ! Assign gc pointer
-        gc => activeGridCells( n )
-
-        if (  kernelSigmaSupportScale( n ) .lt. 0d0 ) cycle ! yes ?
-
-        ! Set kernel sigma
-        call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
-
-        ! Compute estimate, using rawDensity
-        ! Notice division by volume after the loop
-        nEstimateArray( n ) = sum(&
-          this%histogram%counts(&
-              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-          )*gc%kernelSigmaMatrix(&
-              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
-        deallocate( gc%kernelSigmaMatrix ) 
-      end do
-      !$omp end parallel do
-      nEstimateArray = nEstimateArray/this%histogram%binVolume
-
-      ! Initialize variables
-      curvatureBandwidth = kernelSigmaSupport
       kernelSmoothingOld = kernelSmoothing
       kernelSmoothingScaleOld = kernelSmoothingScale
-      ! Initial roughness
-      print *, 'WILL COMPUTE NET ROUGHNESS'
-      ! TIC
-      call system_clock(clockCountStart, clockCountRate, clockCountMax)
-      call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
-                           roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                          netRoughnessArray, kernelSigmaSupport, &
-                                                 kernelSDX, kernelSDY, kernelSDZ )
-      ! TOC
-      call system_clock(clockCountStop, clockCountRate, clockCountMax)
-      elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-print *, minval(netRoughnessArray)/(this%histogram%nEffective**2), maxval(netRoughnessArray)/(this%histogram%nEffective**2) 
-print *, minval(netRoughnessArray)/(this%histogram%nEffective**2), maxval(netRoughnessArray)/(this%histogram%nEffective**2)
-print *, 'TIME: ', elapsedTime
-call exit(0)
-      ! Optimal smoothing
-      call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
-                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                               kernelSmoothing, kernelSmoothingOld, & 
-                                     kernelSmoothingScale, kernelSmoothingScaleOld, & 
-                                                               kernelSmoothingShape )
-      ! Limit maximum smoothing due to low-roughness to the std support scale
-      do nd = 1, 3
-        if ( this%dimensionMask(nd) .eq. 0 ) cycle
-        where ( kernelSmoothing(nd,:) .gt. this%hSigmaScale )
-          kernelSmoothing(nd,:) = this%hSigmaScale
-        end where
-      end do 
-      ! Update smoothing scale
-      call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
-
-      print *, 'WILL COMPUTE INITIAL DENSITY' 
-      print *, minval(netRoughnessArray), maxval(netRoughnessArray)
 
       ! Initialize density grid
       densityEstimateGrid = 0d0
@@ -2833,35 +2617,35 @@ call exit(0)
       !$omp private( gc )                        
       do n = 1, this%nComputeBins
           
-          ! Assign gc pointer 
-          gc => activeGridCells(n)
+        ! Assign gc pointer 
+        gc => activeGridCells(n)
 
-          if ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) cycle
+        if ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) cycle
 
-          ! Set kernel 
-          call this%SetKernel( gc, kernel, kernelSmoothing( :, n ) )
+        ! Set kernel 
+        call this%SetKernel( gc, kernel, kernelSmoothing( :, n ) )
 
-          ! Compute estimate
-          densityEstimateGrid(                         &
-                gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-                gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-                gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-            ) = densityEstimateGrid(                   &
-                gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-                gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-                gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-            ) + this%histogram%counts(                 &
-                gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                     gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                     gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                     gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
-            )
+        ! Compute estimate
+        densityEstimateGrid(                         &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) = densityEstimateGrid(                   &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) + this%histogram%counts(                 &
+              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                   gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
+                   gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
+                   gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
+          )
 
-          !! Cannot be done here ! Reduction !
-          ! Assign into array   
-          !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+        !! Cannot be done here ! Reduction !
+        ! Assign into array   
+        !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
 
-          deallocate( gc%kernelMatrix )
+        deallocate( gc%kernelMatrix )
       end do
       !$omp end parallel do 
       densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
@@ -2870,8 +2654,6 @@ call exit(0)
         gc => activeGridCells(n)
         densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
       end do
-
-      print *, 'AFTER COMPUTE INITIAL DENSITY'
 
       ! Error monitoring
       squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
@@ -2908,20 +2690,20 @@ call exit(0)
           sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binDistance,errorALMISEProxy, errorRMSE
       end if 
 
-      ! Write error variables to output file
-      if ( (exportLoopError) ) then
-        ! Name of the loop-errors file
-        write( unit=auxChar, fmt=* )999
-        write( unit=errorOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(auxChar))
-        ! Open output file name
-        open( errorOutputUnit, file=errorOutputFileName, status='replace' )
-        ! Write initial records
-        call prWriteErrorMetricsRecord( this, errorOutputUnit, 0, &
-                                  0d0, 0d0, errorMetricSmoothing, &  
-                                    0d0, 0d0, nFractionSmoothing, & 
-                                 errorRMSE, errorALMISEProxy, 0d0 )
-      end if 
-
+      if ( nOptLoops .eq. 0 ) then
+        ! Export variables 
+        if ( (exportVariables) ) then
+          write( unit=loopId, fmt=* )0
+          write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
+          call prExportOptimizationVariablesExtended( this, varsOutputFileName, & 
+            densityEstimateArray, kernelSmoothing, kernelSmoothingScale,kernelSmoothingShape,  & 
+            kernelSigmaSupportScale, &
+            curvatureBandwidth, nEstimateArray, roughnessXXArray, &
+            roughnessYYArray, roughnessZZArray, netRoughnessArray )
+        end if
+        ! Done
+        return
+      end if
 
       ! Initialize old error trackers
       errorALMISEProxyOld     = errorALMISEProxy
@@ -2934,440 +2716,396 @@ call exit(0)
       netRoughnessArrayOld    = netRoughnessArray
       densityGridOld          = densityEstimateGrid
 
-      print *, 'WILL START OPTIMIZATION' 
-
       ! Optimization loop !
       do m = 1, nOptLoops
-print *, 'LOOP : ', m 
-          ! nEstimate
-          nEstimateArray = 0d0
-          !$omp parallel do schedule( dynamic, 1 )                    &
-          !$omp default( none )                                       &
-          !$omp shared( this )                                        &
-          !$omp shared( activeGridCells )                             &
-          !$omp shared( densityEstimateGrid )                         &
-          !$omp shared( nEstimateArray )                              &
-          !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
-          !$omp firstprivate( kernelSigma )                           &
-          !$omp private( gc )            
-          do n = 1, this%nComputeBins
+        ! nEstimate
+        nEstimateArray = 0d0
+        !$omp parallel do schedule( dynamic, 1 )                    &
+        !$omp default( none )                                       &
+        !$omp shared( this )                                        &
+        !$omp shared( activeGridCells )                             &
+        !$omp shared( densityEstimateGrid )                         &
+        !$omp shared( nEstimateArray )                              &
+        !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
+        !$omp firstprivate( kernelSigma )                           &
+        !$omp private( gc )            
+        do n = 1, this%nComputeBins
 
-            ! Assign gc pointer
-            gc => activeGridCells( n )
+          ! Assign gc pointer
+          gc => activeGridCells( n )
 
-            if (  kernelSigmaSupportScale( n ) .lt. 0d0 ) cycle ! yes ?
+          if (  kernelSigmaSupportScale( n ) .lt. 0d0 ) cycle ! yes ?
 
-            ! Set kernel sigma
-            call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
+          ! Set kernel sigma
+          call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
-            ! Compute estimate
-            nEstimateArray( n ) = sum(&
-              densityEstimateGrid(&
-                  gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-                  gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-                  gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-              )*gc%kernelSigmaMatrix(&
-                  gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-                  gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                  gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
-            deallocate( gc%kernelSigmaMatrix ) 
-          end do
-          !$omp end parallel do
+          ! Compute estimate
+          nEstimateArray( n ) = sum(&
+            densityEstimateGrid(&
+                gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+                gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+                gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+            )*gc%kernelSigmaMatrix(&
+                gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+                gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
+          deallocate( gc%kernelSigmaMatrix ) 
+        end do
+        !$omp end parallel do
 
-          ! Export optimization variables 
-          if ( (exportVariables) .and. (m.eq.1) ) then
-            ! Export initial optimization variables
-            write( unit=loopId, fmt=* )m-1
-            write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
-            call prExportOptimizationVariablesExtended( this, varsOutputFileName, & 
-              densityEstimateArray, kernelSmoothing, kernelSmoothingScale,kernelSmoothingShape,  & 
-              kernelSigmaSupportScale, &
-              curvatureBandwidth, nEstimateArray, roughnessXXArray, &
-              roughnessYYArray, roughnessZZArray, netRoughnessArray )
-          end if 
+
        
-          ! Compute support scale 
-          call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
-                                             nEstimateArray, kernelSigmaSupportScale )
+        ! Compute support scale 
+        call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
+                                           nEstimateArray, kernelSigmaSupportScale )
+          
+        ! Spread the support scale as isotropic 
+        ! And deactivate compressed dimension
+        kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, 3 )
+        do nd =1, 3
+          if ( this%dimensionMask(nd) .eq. 0 ) then 
+            ! No smoothing in compressed dimension 
+            kernelSigmaSupport(nd,:)   = 0d0
+          end if 
+        end do
 
-          ! Spread the support scale as isotropic 
-          ! And deactivate compressed dimension
-          kernelSigmaSupport = spread( kernelSigmaSupportScale, 1, 3 )
-          do nd =1, 3
-            if ( this%dimensionMask(nd) .eq. 0 ) then 
-              ! No smoothing in compressed dimension 
-              kernelSigmaSupport(nd,:)   = 0d0
-            end if 
-          end do
+        ! Update nEstimate
+        nEstimateArray = 0d0
+        !$omp parallel do schedule( dynamic, 1 )                    &
+        !$omp default( none )                                       &
+        !$omp shared( this )                                        &
+        !$omp shared( activeGridCells )                             &
+        !$omp shared( densityEstimateGrid )                         &
+        !$omp shared( nEstimateArray )                              &
+        !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
+        !$omp firstprivate( kernelSigma )                           &
+        !$omp private( gc )
+        do n = 1, this%nComputeBins
 
-          ! Update nEstimate
-          nEstimateArray = 0d0
-          !$omp parallel do schedule( dynamic, 1 )                    &
-          !$omp default( none )                                       &
-          !$omp shared( this )                                        &
-          !$omp shared( activeGridCells )                             &
-          !$omp shared( densityEstimateGrid )                         &
-          !$omp shared( nEstimateArray )                              &
-          !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
-          !$omp firstprivate( kernelSigma )                           &
-          !$omp private( gc )
-          do n = 1, this%nComputeBins
+          ! Assign gc pointer 
+          gc => activeGridCells(n)
 
-            ! Assign gc pointer 
-            gc => activeGridCells(n)
+          ! Set kernel sigma
+          call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
-            ! Set kernel sigma
-            call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
+          ! Compute estimate
+          nEstimateArray( n ) = sum(&
+            densityEstimateGrid(&
+                gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+                gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+                gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+            )*gc%kernelSigmaMatrix(&
+                gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+                gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
+          deallocate( gc%kernelSigmaMatrix ) 
+        end do
+        !$omp end parallel do 
 
-            ! Compute estimate
-            nEstimateArray( n ) = sum(&
-              densityEstimateGrid(&
-                  gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-                  gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-                  gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-              )*gc%kernelSigmaMatrix(&
-                  gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-                  gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                  gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
-            deallocate( gc%kernelSigmaMatrix ) 
-          end do
-          !$omp end parallel do 
+        ! Curvature bandwidths
+        call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
+                            kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, & 
+                                             kernelSigmaSupportScale, curvatureBandwidth )
+        ! Net roughness
+        call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
+                             roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                                            netRoughnessArray, kernelSigmaSupport, &
+                                                   kernelSDX, kernelSDY, kernelSDZ )
+        ! Optimal smoothing
+        call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
+                                roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                                                 kernelSmoothing, kernelSmoothingOld, & 
+                                       kernelSmoothingScale, kernelSmoothingScaleOld, & 
+                                                                 kernelSmoothingShape )
 
-          ! Curvature bandwidths
-          call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
-                              kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, & 
-                                               kernelSigmaSupportScale, curvatureBandwidth )
+        ! Update density
+        densityEstimateGrid = 0d0
+        densityEstimateArray = 0d0
+        !$omp parallel do schedule( dynamic, 1 )  &
+        !$omp default( none )                     &
+        !$omp shared( this )                      &
+        !$omp shared( activeGridCells )           & 
+        !$omp shared( kernelSmoothing )           & 
+        !$omp reduction( +: densityEstimateGrid ) & 
+        !$omp firstprivate( kernel )              & 
+        !$omp private( gc )                        
+        do n = 1, this%nComputeBins
 
-          ! Net roughness
-          call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
-                               roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                              netRoughnessArray, kernelSigmaSupport, &
-                                                     kernelSDX, kernelSDY, kernelSDZ )
-   
-          ! Optimal smoothing
-          call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
-                                  roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                                   kernelSmoothing, kernelSmoothingOld, & 
-                                         kernelSmoothingScale, kernelSmoothingScaleOld, & 
-                                                                   kernelSmoothingShape )
-      ! Limit maximum smoothing due to low-roughness to the support scale
-      do nd = 1, 3
-        if ( this%dimensionMask(nd) .eq. 0 ) cycle
-        where ( kernelSmoothing(nd,:) .gt. this%hSigmaScale )
-          kernelSmoothing(nd,:) = this%hSigmaScale
+          ! Any smoothing < 0 or NaN, skip
+          if ( ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) .or.             &
+              ( any( kernelSmoothing( :, n ) /= kernelSmoothing( :, n ) ) ) ) then
+            cycle
+          end if
+
+          ! Assign pointer 
+          gc => activeGridCells(n)
+
+          ! Set kernel
+          call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
+
+          ! Compute estimate
+          densityEstimateGrid(                         &
+                gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+                gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+                gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+            ) = densityEstimateGrid(                   &
+                gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+                gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+                gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+            ) + this%histogram%counts(                 &
+                gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                     gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
+                     gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
+                     gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
+            )
+
+          !! Cannot be done here ! Reduction !
+          ! Assign into array   
+          !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+
+          deallocate( gc%kernelMatrix ) 
+        end do
+        !$omp end parallel do
+        densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
+        ! Transfer grid density to array
+        do n = 1, this%nComputeBins
+          gc => activeGridCells(n)
+          densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+        end do
+
+        ! Update smoothing scale
+        call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
+
+        ! A proxy to error: relative density change
+        relativeDensityChange = 0d0
+        where ( densityEstimateArrayOld .ne. 0d0 )
+          relativeDensityChange = abs(densityEstimateArray/maxval(densityEstimateArray) -   & 
+                                    densityEstimateArrayOld/maxval(densityEstimateArrayOld) & 
+                                    )/(densityEstimateArrayOld/maxval(densityEstimateArrayOld) )
         end where
-      end do 
-          ! Update smoothing scale
-          call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
+        errorMetric = sqrt( sum(relativeDensityChange**2)/this%nComputeBins )
+        ! A proxy to error: relative roughness change 
+        relativeRoughnessChange = 0d0
+        where (netRoughnessArrayOld .ne. 0d0 ) 
+          relativeRoughnessChange = abs(netRoughnessArray/maxval(netRoughnessArray) - &
+                netRoughnessArrayOld/maxval(netRoughnessArrayOld) & 
+                )/(netRoughnessArrayOld/maxval(netRoughnessArrayOld))
+        end where
+        ! A proxy to error: relative smoothing change
+        relativeSmoothingChange = 0d0
+        where (kernelSmoothingScaleOld .ne. 0d0 ) 
+          relativeSmoothingChange = abs(kernelSmoothingScale - & 
+               kernelSmoothingScaleOld)/kernelSmoothingScaleOld
+        end where
+        errorMetricSmoothing = sqrt(sum(relativeSmoothingChange**2)/this%nComputeBins)
 
-          ! Update density
-          densityEstimateGrid = 0d0
-          densityEstimateArray = 0d0
-          !$omp parallel do schedule( dynamic, 1 )  &
-          !$omp default( none )                     &
-          !$omp shared( this )                      &
-          !$omp shared( activeGridCells )           & 
-          !$omp shared( kernelSmoothing )           & 
-          !$omp reduction( +: densityEstimateGrid ) & 
-          !$omp firstprivate( kernel )              & 
-          !$omp private( gc )                        
-          do n = 1, this%nComputeBins
+        ! Counters
+        nDensityConvergence = 0
+        nRoughnessConvergence = 0
+        nSmoothingConvergence = 0
+        !$omp parallel do schedule(static)      &    
+        !$omp default(none)                     &
+        !$omp shared(this)                      &
+        !$omp shared(errorMetricConvergence)    &
+        !$omp shared(relativeDensityChange)     &
+        !$omp shared(relativeRoughnessChange)   &
+        !$omp shared(relativeSmoothingChange)   &
+        !$omp reduction(+:nDensityConvergence)  &
+        !$omp reduction(+:nRoughnessConvergence)&
+        !$omp reduction(+:nSmoothingConvergence)
+        do n = 1, this%nComputeBins
+          if ( relativeDensityChange(n) < errorMetricConvergence ) then 
+            nDensityConvergence = nDensityConvergence + 1
+          end if
+          if ( relativeRoughnessChange(n) < errorMetricConvergence ) then 
+            nRoughnessConvergence = nRoughnessConvergence + 1
+          end if
+          if ( relativeSmoothingChange(n) < errorMetricConvergence ) then 
+            nSmoothingConvergence = nSmoothingConvergence + 1
+          end if
+        end do
+        !$omp end parallel do
+        nFractionDensity   = real(nDensityConvergence)/real(this%nComputeBins)
+        nFractionRoughness = real(nRoughnessConvergence)/real(this%nComputeBins)
+        nFractionSmoothing = real(nSmoothingConvergence)/real(this%nComputeBins)
 
-            ! Any smoothing < 0 or NaN, skip
-            if ( ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) .or.             &
-                ( any( kernelSmoothing( :, n ) /= kernelSmoothing( :, n ) ) ) ) then
-              cycle
+        ! A proxy to error: an estimate of ALIMISE
+        errorMetricArray = 0d0
+        where ( kernelSmoothingScale .ne. 0d0 ) 
+            errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
+            0.25*netRoughnessArray*kernelSmoothingScale**4d0)/(this%histogram%nPoints**2)
+        end where
+        errorALMISEProxy = sqrt(sum(errorMetricArray**2)/this%nComputeBins)
+
+        ! A proxy to error: RMSE versus histogram density
+        squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
+        errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
+
+        ! Error analysis:
+        if ( .not. skipErrorBreak ) then
+          ! ALMISE convergence
+          if ( errorALMISEProxyOld.gt.0d0 ) then 
+            if ( abs(errorALMISEProxy - errorALMISEProxyOld)/errorALMISEProxyOld .lt. errorMetricConvergence ) then  
+              if ( this%reportToOutUnit ) then 
+                write( this%outFileUnit, '(A,es13.4e2)' ) '    - ALMISE convergence ', errorALMISEProxy
+              end if 
+              ! Break
+              exit
             end if
-
-            ! Assign pointer 
-            gc => activeGridCells(n)
-
-            ! Set kernel
-            call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
-
-            ! Compute estimate
-            densityEstimateGrid(                         &
-                  gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-                  gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-                  gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-              ) = densityEstimateGrid(                   &
-                  gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-                  gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-                  gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-              ) + this%histogram%counts(                 &
-                  gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                       gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                       gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                       gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
-              )
-
-            !! Cannot be done here ! Reduction !
-            ! Assign into array   
-            !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-
-            deallocate( gc%kernelMatrix ) 
-          end do
-          !$omp end parallel do
-          densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
-          ! Transfer grid density to array
-          do n = 1, this%nComputeBins
-            gc => activeGridCells(n)
-            densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-          end do
-
-          ! A proxy to error: relative density change
-          relativeDensityChange = 0d0
-          where ( densityEstimateArrayOld .ne. 0d0 )
-            relativeDensityChange = abs(densityEstimateArray/maxval(densityEstimateArray) -   & 
-                                      densityEstimateArrayOld/maxval(densityEstimateArrayOld) & 
-                                      )/(densityEstimateArrayOld/maxval(densityEstimateArrayOld) )
-          end where
-          errorMetric = sqrt( sum(relativeDensityChange**2)/this%nComputeBins )
-          ! A proxy to error: relative roughness change 
-          relativeRoughnessChange = 0d0
-          where (netRoughnessArrayOld .ne. 0d0 ) 
-            relativeRoughnessChange = abs(netRoughnessArray/maxval(netRoughnessArray) - &
-                  netRoughnessArrayOld/maxval(netRoughnessArrayOld) & 
-                  )/(netRoughnessArrayOld/maxval(netRoughnessArrayOld))
-          end where
-          ! A proxy to error: relative smoothing change
-          relativeSmoothingChange = 0d0
-          where (kernelSmoothingScaleOld .ne. 0d0 ) 
-            relativeSmoothingChange = abs(kernelSmoothingScale - & 
-                 kernelSmoothingScaleOld)/kernelSmoothingScaleOld
-          end where
-          errorMetricSmoothing = sqrt(sum(relativeSmoothingChange**2)/this%nComputeBins)
-
-          ! Counters
-          nDensityConvergence = 0
-          nRoughnessConvergence = 0
-          nSmoothingConvergence = 0
-          !$omp parallel do schedule(static)      &    
-          !$omp default(none)                     &
-          !$omp shared(this)                      &
-          !$omp shared(errorMetricConvergence)    &
-          !$omp shared(relativeDensityChange)     &
-          !$omp shared(relativeRoughnessChange)   &
-          !$omp shared(relativeSmoothingChange)   &
-          !$omp reduction(+:nDensityConvergence)  &
-          !$omp reduction(+:nRoughnessConvergence)&
-          !$omp reduction(+:nSmoothingConvergence)
-          do n = 1, this%nComputeBins
-            if ( relativeDensityChange(n) < errorMetricConvergence ) then 
-              nDensityConvergence = nDensityConvergence + 1
-            end if
-            if ( relativeRoughnessChange(n) < errorMetricConvergence ) then 
-              nRoughnessConvergence = nRoughnessConvergence + 1
-            end if
-            if ( relativeSmoothingChange(n) < errorMetricConvergence ) then 
-              nSmoothingConvergence = nSmoothingConvergence + 1
-            end if
-          end do
-          !$omp end parallel do
-          nFractionDensity   = real(nDensityConvergence)/real(this%nComputeBins)
-          nFractionRoughness = real(nRoughnessConvergence)/real(this%nComputeBins)
-          nFractionSmoothing = real(nSmoothingConvergence)/real(this%nComputeBins)
-
-          ! A proxy to error: an estimate of ALIMISE
-          errorMetricArray = 0d0
-          where ( kernelSmoothingScale .ne. 0d0 ) 
-              errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
-              0.25*netRoughnessArray*kernelSmoothingScale**4d0)/(this%histogram%nPoints**2)
-          end where
-          errorALMISEProxy = sqrt(sum(errorMetricArray**2)/this%nComputeBins)
-
-          ! A proxy to error: RMSE versus histogram density
-          squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
-          errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
-
-          ! Error analysis:
-          if ( .not. skipErrorBreak ) then
-            ! ALMISE convergence
-            if ( errorALMISEProxyOld.gt.0d0 ) then 
-              if ( abs(errorALMISEProxy - errorALMISEProxyOld)/errorALMISEProxyOld .lt. errorMetricConvergence ) then  
-                if ( this%reportToOutUnit ) then 
-                  write( this%outFileUnit, '(A,es13.4e2)' ) '    - ALMISE convergence ', errorALMISEProxy
-                end if 
-                ! Break
-                exit
-              end if
-            end if
-
-            !! NOTE: a new criteria could consider the 
-            !! densityGrid in order to include in the error 
-            !! estimate those cells without particles/mass.
-            !if (  ( errorMetric .lt. errorMetricConvergence ) ) then
-            !  ! Criteria:
-            !  ! Break optimization loop if 
-            !  ! relative density change lower than 
-            !  ! a given convergence
-            !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-            !  if ( this%reportToOutUnit ) then 
-            !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
-            !  end if 
-            !  ! Break
-            !  exit
-            !end if 
-            !if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
-            !  ! Criteria:
-            !  ! Break optimization loop if 
-            !  ! relative smoothing change lower than 
-            !  ! a given convergence
-            !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-            !  !print *, '!! SMOOTHING CONVERGENCE !!'
-            !  if ( this%reportToOutUnit ) then 
-            !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
-            !  end if
-            !  ! Break
-            !  exit
-            !end if 
-            !if ( (errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
-            !        (errorRMSE .gt. errorRMSEOld ) .and.               &
-            !        (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then 
-            !  ! Criteria
-            !  ! If both RMSE and ALMISE are increasing
-            !  ! and density convergence is below the relaxed limit, 
-            !  ! return previous density and leave
-            !  densityEstimateGrid = densityGridOld
-            !  ! Transfer grid density to array
-            !  do n = 1, this%nComputeBins
-            !    ! Assign gc pointer 
-            !    gc => activeGridCells(n)
-            !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-            !  end do
-            !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-            !  !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
-            !  if ( this%reportToOutUnit ) then 
-            !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
-            !  end if 
-            !  ! Break
-            !  exit
-            !end if 
-            !if ( & 
-            !  (errorRMSE .lt. errorRMSEOld) .and. ( errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
-            !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence )   ) then
-            !  ! Criteria
-            !  ! If the RMSE versus the histogram decreases, 
-            !  ! but the ALMISE increases it is probably and indication 
-            !  ! of high resolution in the particle model. 
-            !  ! This has been observed for high number of particles 
-            !  ! and error indicators oscillate.
-            !  if ( this%reportToOutUnit ) then 
-            !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetric
-            !  end if 
-            !  !print *, '!! INCREASED ALMISE DECREASE RMSE AND SOFT CONVERGENCE !!'
-            !  ! Break
-            !  exit
-            !end if 
-            !if ( (errorMetric .gt. errorMetricOld) .and. & 
-            !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then
-            !  ! Criteria
-            !  ! If the relative change in density increased with 
-            !  ! respect to previous value, return previous density and leave
-            !  ! This could be complemented with maximum density analysis, 
-            !  ! requires mass. 
-            !  densityEstimateGrid = densityGridOld
-            !  ! Transfer grid density to array
-            !  do n = 1, this%nComputeBins
-            !    gc => activeGridCells(n)
-            !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-            !  end do
-            !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-            !  !print *, '!! INCREASED RELATIVE DENSITY CHANGE AND SOFT CONVERGENCE !!'
-            !  if ( this%reportToOutUnit ) then 
-            !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
-            !  end if 
-            !  ! Break
-            !  exit
-            !end if
-            !if ( nFractionDensity .gt. 0.98 ) then 
-            !  ! Criteria
-            !  ! If the fraction of cells that is presenting changes in 
-            !  ! density below the convergence criteria is close to the total 
-            !  ! number of cells, exit.
-            !  !print *, '!! NFRACTIONDENSITY !!'
-            !  if ( this%reportToOutUnit ) then 
-            !  write( this%outFileUnit, '(A)' ) '    - nFractionDensity '
-            !  end if 
-            !  ! Break
-            !  exit
-            !end if  
-            !if ( nFractionSmoothing .gt. 0.98 ) then 
-            !  ! Criteria
-            !  ! If the fraction of cells that is presenting changes in 
-            !  ! smoothing below the convergence criteria is close to the total 
-            !  ! number of cells, exit.
-            !  !print *, '!! NFRACTIONSMOOTHING !!'
-            !  if ( this%reportToOutUnit ) then 
-            !  write( this%outFileUnit, '(A)' ) '    - nFractionSmoothing '
-            !  end if 
-            !  ! Break
-            !  exit
-            !end if  
           end if
 
+          !! NOTE: a new criteria could consider the 
+          !! densityGrid in order to include in the error 
+          !! estimate those cells without particles/mass.
+          !if (  ( errorMetric .lt. errorMetricConvergence ) ) then
+          !  ! Criteria:
+          !  ! Break optimization loop if 
+          !  ! relative density change lower than 
+          !  ! a given convergence
+          !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+          !  if ( this%reportToOutUnit ) then 
+          !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
+          !  end if 
+          !  ! Break
+          !  exit
+          !end if 
+          !if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
+          !  ! Criteria:
+          !  ! Break optimization loop if 
+          !  ! relative smoothing change lower than 
+          !  ! a given convergence
+          !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+          !  !print *, '!! SMOOTHING CONVERGENCE !!'
+          !  if ( this%reportToOutUnit ) then 
+          !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+          !  end if
+          !  ! Break
+          !  exit
+          !end if 
+          !if ( (errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
+          !        (errorRMSE .gt. errorRMSEOld ) .and.               &
+          !        (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then 
+          !  ! Criteria
+          !  ! If both RMSE and ALMISE are increasing
+          !  ! and density convergence is below the relaxed limit, 
+          !  ! return previous density and leave
+          !  densityEstimateGrid = densityGridOld
+          !  ! Transfer grid density to array
+          !  do n = 1, this%nComputeBins
+          !    ! Assign gc pointer 
+          !    gc => activeGridCells(n)
+          !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+          !  end do
+          !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+          !  !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
+          !  if ( this%reportToOutUnit ) then 
+          !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
+          !  end if 
+          !  ! Break
+          !  exit
+          !end if 
+          !if ( & 
+          !  (errorRMSE .lt. errorRMSEOld) .and. ( errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
+          !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence )   ) then
+          !  ! Criteria
+          !  ! If the RMSE versus the histogram decreases, 
+          !  ! but the ALMISE increases it is probably and indication 
+          !  ! of high resolution in the particle model. 
+          !  ! This has been observed for high number of particles 
+          !  ! and error indicators oscillate.
+          !  if ( this%reportToOutUnit ) then 
+          !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetric
+          !  end if 
+          !  !print *, '!! INCREASED ALMISE DECREASE RMSE AND SOFT CONVERGENCE !!'
+          !  ! Break
+          !  exit
+          !end if 
+          !if ( (errorMetric .gt. errorMetricOld) .and. & 
+          !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then
+          !  ! Criteria
+          !  ! If the relative change in density increased with 
+          !  ! respect to previous value, return previous density and leave
+          !  ! This could be complemented with maximum density analysis, 
+          !  ! requires mass. 
+          !  densityEstimateGrid = densityGridOld
+          !  ! Transfer grid density to array
+          !  do n = 1, this%nComputeBins
+          !    gc => activeGridCells(n)
+          !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+          !  end do
+          !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+          !  !print *, '!! INCREASED RELATIVE DENSITY CHANGE AND SOFT CONVERGENCE !!'
+          !  if ( this%reportToOutUnit ) then 
+          !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
+          !  end if 
+          !  ! Break
+          !  exit
+          !end if
+          !if ( nFractionDensity .gt. 0.98 ) then 
+          !  ! Criteria
+          !  ! If the fraction of cells that is presenting changes in 
+          !  ! density below the convergence criteria is close to the total 
+          !  ! number of cells, exit.
+          !  !print *, '!! NFRACTIONDENSITY !!'
+          !  if ( this%reportToOutUnit ) then 
+          !  write( this%outFileUnit, '(A)' ) '    - nFractionDensity '
+          !  end if 
+          !  ! Break
+          !  exit
+          !end if  
+          !if ( nFractionSmoothing .gt. 0.98 ) then 
+          !  ! Criteria
+          !  ! If the fraction of cells that is presenting changes in 
+          !  ! smoothing below the convergence criteria is close to the total 
+          !  ! number of cells, exit.
+          !  !print *, '!! NFRACTIONSMOOTHING !!'
+          !  if ( this%reportToOutUnit ) then 
+          !  write( this%outFileUnit, '(A)' ) '    - nFractionSmoothing '
+          !  end if 
+          !  ! Break
+          !  exit
+          !end if  
+        end if
 
-          if ( exportLoopError ) then 
-            ! Write initial records
-            call prWriteErrorMetricsRecord( this, errorOutputUnit, m,      &
-                  sqrt(sum(relativeDensityChange**2)/this%nComputeBins),   &  
-                  sqrt(sum(relativeRoughnessChange**2)/this%nComputeBins), &  
-                                                     errorMetricSmoothing, &  
-                 nFractionDensity, nFractionRoughness, nFractionSmoothing, & 
-                                        errorRMSE, errorALMISEProxy, 0d0 )
-          end if 
+        ! Continue to next loop !
+        errorALMISEProxyOld      = errorALMISEProxy
+        errorRMSEOld             = errorRMSE
+        errorMetricOld           = errorMetric
+        kernelSmoothingOld       = kernelSmoothing
+        netRoughnessArrayOld     = netRoughnessArray
+        densityEstimateArrayOld  = densityEstimateArray
+        densityGridOld           = densityEstimateGrid
+        nDensityConvergenceOld   = nDensityConvergence
+        nRoughnessConvergenceOld = nRoughnessConvergence
+        nSmoothingConvergenceOld = nSmoothingConvergence
+        call prComputeKernelSmoothingScale( this, kernelSmoothingOld, kernelSmoothingScaleOld )
 
-          ! Continue to next loop !
-          errorALMISEProxyOld      = errorALMISEProxy
-          errorRMSEOld             = errorRMSE
-          errorMetricOld           = errorMetric
-          kernelSmoothingOld       = kernelSmoothing
-          netRoughnessArrayOld     = netRoughnessArray
-          densityEstimateArrayOld  = densityEstimateArray
-          densityGridOld           = densityEstimateGrid
-          nDensityConvergenceOld   = nDensityConvergence
-          nRoughnessConvergenceOld = nRoughnessConvergence
-          nSmoothingConvergenceOld = nSmoothingConvergence
-          call prComputeKernelSmoothingScale( this, kernelSmoothingOld, kernelSmoothingScaleOld )
+        ! Export optimization variables
+        if ( exportVariables ) then
+          write( unit=loopId, fmt=* )m
+          write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
+          call prExportOptimizationVariablesExtended( this, varsOutputFileName, & 
+                   densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
+                                 kernelSmoothingShape, kernelSigmaSupportScale, &
+                          curvatureBandwidth, nEstimateArray, roughnessXXArray, &
+                          roughnessYYArray, roughnessZZArray, netRoughnessArray )
 
-          ! Export optimization variables
-          if ( exportVariables ) then
-            write( unit=loopId, fmt=* )m
-            write( unit=varsOutputFileName, fmt='(a)' )trim(adjustl(this%outputFileName))//trim(adjustl(loopId))
-            !call prExportOptimizationVariables( this, varsOutputFileName, & 
-            !    densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
-            !    curvatureBandwidth, nEstimateArray, netRoughnessArray )
-            !call prExportOptimizationVariablesExtendedError( this, varsOutputFileName, & 
-            !    densityEstimateArray, kernelSmoothing, kernelSmoothingScale,kernelSmoothingShape,  & 
-            !    kernelSigmaSupportScale, &
-            !    curvatureBandwidth, nEstimateArray, roughnessXXArray, &
-            !    roughnessYYArray, roughnessZZArray, netRoughnessArray, &
-            !             relativeDensityChange, relativeRoughnessChange )
-            call prExportOptimizationVariablesExtended( this, varsOutputFileName, & 
-                     densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
-                                   kernelSmoothingShape, kernelSigmaSupportScale, &
-                            curvatureBandwidth, nEstimateArray, roughnessXXArray, &
-                            roughnessYYArray, roughnessZZArray, netRoughnessArray )
+        end if
 
-          end if
-
-          if ( this%reportToOutUnit ) then 
-          write( this%outFileUnit, "(I6,3es18.9e3)" ) m, & 
-            sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binDistance,errorALMISEProxy, errorRMSE
-          end if 
+        if ( this%reportToOutUnit ) then 
+        write( this%outFileUnit, "(I6,3es18.9e3)" ) m, & 
+          sum(kernelSmoothingScale)/this%nComputeBins/this%histogram%binDistance,errorALMISEProxy, errorRMSE
+        end if 
 
       end do
       ! End optimization loop ! 
 
+      ! Report if max loops
       if ( ((m-1).eq.nOptLoops).and.this%reportToOutUnit ) then 
         write( this%outFileUnit, '(A)' ) '    - Max loops '
       end if
 
-      ! Finalize error output unit
-      if ( exportLoopError ) then
-        close( errorOutputUnit )
-      end if 
-
+      ! Final density estimate for weighted histograms
       if ( this%histogram%isWeighted ) then 
         ! Fix histogram
         this%histogram%counts = this%histogram%counts*this%histogram%effectiveMass
@@ -3626,12 +3364,9 @@ print *, 'LOOP : ', m
       doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScale
       doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScaleOld
       doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingShape
-      doubleprecision, dimension(:), allocatable     :: roughnessScale
       integer :: nd
       !------------------------------------------------------------------------------
 
-      allocate( roughnessScale( this%nComputeBins ) )
-      
       ! Compute smoothing scale. 
       ! For the cases of really low roughness, use the limit
       ! value to keep bound the smoothing scale
@@ -3643,15 +3378,8 @@ print *, 'LOOP : ', m
         kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( 1d0/( nDim + 4d0 ) )
       end where
 
-      ! Bounded
-      ! FIX ! 
-      !where( kernelSmoothingScale .gt. this%maxHOverLambda(1)*this%binSize(1) )
-      !  kernelSmoothingScale = this%maxHOverLambda(1)*this%binSize(1)
-      !end where
-       
-      ! Compute roughness scale, even better: set as netRoughness
+      ! Roughness scale is set as netRoughness
       ! Replaces Eq. 20b in Sole-Mari et al. (2019)
-      roughnessScale = netRoughness
       !roughnessScale = 1d0
       !do nd=1,3
       !  if ( this%dimensionMask(nd) .eq. 1 ) then
@@ -3667,10 +3395,10 @@ print *, 'LOOP : ', m
       !end do
       !roughnessScale = roughnessScale**( 1d0/nDim )
 
-      ! Limit roughness max roughness scale ?
-      where ( roughnessScale .gt. this%maxLimitRoughness ) 
-        roughnessScale = this%maxLimitRoughness
-      end where 
+      !! Limit roughness max roughness scale ?
+      !where ( roughnessScale .gt. this%maxLimitRoughness ) 
+      !  roughnessScale = this%maxLimitRoughness
+      !end where 
 
       ! The fact that roughnessScale can be zero
       ! indicate that one or more kernel dimensions 
@@ -3678,43 +3406,34 @@ print *, 'LOOP : ', m
 
       ! Compute shape factors and kernelSmoothing
       kernelSmoothing = 0d0
-      kernelSmoothingShape = 0d0
+      kernelSmoothingShape = 1d0
       do nd=1,3
         if ( this%dimensionMask(nd) .eq. 1 ) then
           ! For anisotropic kernels
           select case (nd) 
             case (1)   
               where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
-                kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessXXActive )**( 0.25 )
+                kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessXXActive )**( 0.25 )
               end where
             case (2) 
               where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
-                kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessYYActive )**( 0.25 )
+                kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessYYActive )**( 0.25 )
               end where
             case (3) 
               where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
-                kernelSmoothingShape( nd, : ) = ( roughnessScale/roughnessZZActive )**( 0.25 )
+                kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessZZActive )**( 0.25 )
               end where
           end select
 
-          ! Minimum roughness sets transition to isotropic
-          ! Verify ! 
-          where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
-            kernelSmoothingShape(nd,:) = this%minKernelShape
-          end where
-          where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
-            kernelSmoothingShape(nd,:) = this%maxKernelShape
-          end where
+          !! Minimum roughness sets transition to isotropic
+          !! Verify ! 
+          !where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
+          !  kernelSmoothingShape(nd,:) = this%minKernelShape
+          !end where
+          !where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
+          !  kernelSmoothingShape(nd,:) = this%maxKernelShape
+          !end where
           kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
-
-          ! Limit the maximum/minimum value
-          ! Verify ! 
-          !where ( kernelSmoothing( nd, : )/this%binSize(nd) .gt. this%maxHOverLambda(nd) )
-          !  kernelSmoothing( nd, : ) = this%binSize(nd)*this%maxHOverLambda(nd) 
-          !end where
-          !where ( kernelSmoothing( nd, : )/this%binSize(nd) .lt. this%minHOverLambda(nd) )
-          !    kernelSmoothing( nd, : ) = this%binSize(nd)*this%minHOverLambda(nd) 
-          !end where
 
           where ( kernelSmoothingScale .gt. 0d0 ) 
             kernelSmoothingShape(nd,:) = kernelSmoothing(nd,:)/kernelSmoothingScale
@@ -3724,8 +3443,6 @@ print *, 'LOOP : ', m
       end do
      
 
-      deallocate( roughnessScale )
-      
       ! Done 
       return
 
@@ -3807,7 +3524,7 @@ print *, 'LOOP : ', m
         flatDBIndexes(2) = indexes(3)
       end if     
 
-
+      ! Done
       return
 
 
@@ -3817,534 +3534,564 @@ print *, 'LOOP : ', m
     ! OUTDATED
     ! Kernel Database indexes, Flat
     subroutine prComputeKernelDatabaseFlatIndexesLinear( this, smoothing, flatDBIndexes, transposeKernel )
-        !------------------------------------------------------------------------------
-        ! 
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
-        integer, dimension(2), intent(inout)      :: flatDBIndexes
-        logical, intent(inout)                    :: transposeKernel
-        ! local 
-        integer, dimension(3) :: indexes 
-        integer :: nd 
-        !------------------------------------------------------------------------------
-        
-        indexes = 0
+      !------------------------------------------------------------------------------
+      ! 
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ) :: this
+      doubleprecision, dimension(3), intent(in) :: smoothing
+      integer, dimension(2), intent(inout)      :: flatDBIndexes
+      logical, intent(inout)                    :: transposeKernel
+      ! local 
+      integer, dimension(3) :: indexes 
+      integer :: nd 
+      !------------------------------------------------------------------------------
+      
+      indexes = 0
 
-        do nd = 1, nDim
-            indexes(nd) = min(&
-                max(&
-                    floor(&
-                        (smoothing(nd)/this%binSize(nd) - this%minHOverLambda(nd))/this%deltaHOverLambda(nd)&
-                    ) + 1, 1 &
-                ), &
-            this%nDeltaHOverLambda(nd)  )
-        end do 
-       
+      do nd = 1, nDim
+        indexes(nd) = min(&
+          max(&
+            floor(&
+              (smoothing(nd)/this%binSize(nd) - this%minHOverLambda(nd))/this%deltaHOverLambda(nd)&
+            ) + 1, 1 &
+          ), &
+        this%nDeltaHOverLambda(nd)  )
+      end do 
+      
 
-        ! 1D
-        if ( nDim .eq. 1 ) then 
-                flatDBIndexes(1) = maxval(indexes)
-                flatDBIndexes(2) = 1 
-                ! Done 
-                return
-        end if 
-
-        ! Will work properly as long nDeltaHOverLambda
-        ! has the same value for each axis. 
-        ! This is linked to database initialization function.
-        if ( indexes(1) < indexes(2) ) then
-            transposeKernel  = .true.
-            flatDBIndexes(1) = indexes(2)*( indexes(2) - 1 )/2 + indexes(1)
-            flatDBIndexes(2) = indexes(3)
-        else
-            transposeKernel  = .false.
-            flatDBIndexes(1) = indexes(1)*( indexes(1) - 1 )/2 + indexes(2)
-            flatDBIndexes(2) = indexes(3)
-        end if     
-
-
+      ! 1D
+      if ( nDim .eq. 1 ) then 
+        flatDBIndexes(1) = maxval(indexes)
+        flatDBIndexes(2) = 1 
+        ! Done 
         return
+      end if 
 
+      ! Will work properly as long nDeltaHOverLambda
+      ! has the same value for each axis. 
+      ! This is linked to database initialization function.
+      if ( indexes(1) < indexes(2) ) then
+        transposeKernel  = .true.
+        flatDBIndexes(1) = indexes(2)*( indexes(2) - 1 )/2 + indexes(1)
+        flatDBIndexes(2) = indexes(3)
+      else
+        transposeKernel  = .false.
+        flatDBIndexes(1) = indexes(1)*( indexes(1) - 1 )/2 + indexes(2)
+        flatDBIndexes(2) = indexes(3)
+      end if     
+
+      ! Done
+      return
 
     end subroutine prComputeKernelDatabaseFlatIndexesLinear
 
-    ! DEPRECATION WARNING !
+    ! NEEDS UPDATE 
     ! Kernel Database indexes, 3D
     function prComputeKernelDatabaseIndexesLinear( this, smoothing ) result(indexes)
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
-        integer, dimension(3) :: indexes 
-        integer :: nd 
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ) :: this
+      doubleprecision, dimension(3), intent(in) :: smoothing
+      integer, dimension(3) :: indexes 
+      integer :: nd 
+      !------------------------------------------------------------------------------
 
+      indexes = 0
 
-        indexes = 0
+      do nd = 1, nDim
+        indexes(nd) = min(&
+          max(&
+            floor(&
+              (smoothing(nd)/this%binSize(nd) - this%minHOverLambda(nd))/this%deltaHOverLambda(nd)&
+            ) + 1, 1 &
+          ), &
+        this%nDeltaHOverLambda(nd)  )
+      end do 
 
-        do nd = 1, nDim
-            indexes(nd) = min(&
-                max(&
-                    floor(&
-                        (smoothing(nd)/this%binSize(nd) - this%minHOverLambda(nd))/this%deltaHOverLambda(nd)&
-                    ) + 1, 1 &
-                ), &
-            this%nDeltaHOverLambda(nd)  )
-        end do 
-
-
-        return
-
+      ! Done
+      return
 
     end function prComputeKernelDatabaseIndexesLinear
-    ! DEPRECATION WARNING !
+
+    ! NEEDS UPDATE
     function prComputeKernelDatabaseIndexesLog( this, smoothing ) result(indexes)
-        !------------------------------------------------------------------------------
-        ! 
-        !
-        !------------------------------------------------------------------------------
-        ! Specifications 
-        !------------------------------------------------------------------------------
-        implicit none
-        class( GridProjectedKDEType ) :: this
-        doubleprecision, dimension(3), intent(in) :: smoothing
-        integer, dimension(3) :: indexes 
-        integer :: nd 
-        !------------------------------------------------------------------------------
+      !------------------------------------------------------------------------------
+      !
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ) :: this
+      doubleprecision, dimension(3), intent(in) :: smoothing
+      integer, dimension(3) :: indexes 
+      integer :: nd 
+      !------------------------------------------------------------------------------
 
-        ! Initialize indexes 
-        indexes = 1
+      ! Initialize indexes 
+      indexes = 1
 
-        ! Compute indexes where smoothing > 0d0
-        do nd = 1, 3
-            if ( smoothing( nd ) .le. 0d0 ) cycle
-            indexes(nd) = min(&
-                max(&
-                    floor(&
-                        log( smoothing(nd)/this%binSize(nd)/this%minHOverLambda(nd) )/this%deltaHOverLambda(nd)&
-                    ) + 1, 1 &
-                ), &
-            this%nDeltaHOverLambda(nd)  )
-        end do 
+      ! Compute indexes where smoothing > 0d0
+      do nd = 1, 3
+        if ( smoothing( nd ) .le. 0d0 ) cycle
+        indexes(nd) = min(&
+          max(&
+            floor(&
+              log( smoothing(nd)/this%binSize(nd)/this%minHOverLambda(nd) )/this%deltaHOverLambda(nd)&
+            ) + 1, 1 &
+          ), &
+        this%nDeltaHOverLambda(nd)  )
+      end do 
 
-
-        return
-
+      ! Done
+      return
 
     end function prComputeKernelDatabaseIndexesLog
 
 
     subroutine prSetKernelFromDatabase( this, gridCell, kernel,  smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target       :: this
-        type( GridCellType ), intent(inout)         :: gridCell
-        class( KernelType ), target, intent(inout)  :: kernel
-        doubleprecision, dimension(3), intent(in)   :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target       :: this
+      type( GridCellType ), intent(inout)         :: gridCell
+      class( KernelType ), target, intent(inout)  :: kernel
+      doubleprecision, dimension(3), intent(in)   :: smoothing
+      !---------------------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel%ResetMatrix()
 
-        ! Compute indexes on kernel database
-        call this%ComputeKernelDatabaseFlatIndexes( smoothing,   &
-          gridCell%kernelDBFlatIndexes, gridCell%transposeKernel )
+      ! Compute indexes on kernel database
+      call this%ComputeKernelDatabaseFlatIndexes( smoothing,   &
+        gridCell%kernelDBFlatIndexes, gridCell%transposeKernel )
 
-        ! Copy kernel from database
-        call kernel%CopyFrom( this%kernelDatabaseFlat( gridCell%kernelDBFlatIndexes(1), gridCell%kernelDBFlatIndexes(2) ) )
+      ! Copy kernel from database
+      call kernel%CopyFrom(& 
+        this%kernelDatabaseFlat( gridCell%kernelDBFlatIndexes(1), gridCell%kernelDBFlatIndexes(2) ) )
 
-        if ( gridCell%transposeKernel ) then
-            ! Determine spans ( internally computes transpose )
-            call kernel%ComputeGridSpansTranspose( gridCell%id, this%nBins,        &
-              gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-              gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, &
-                                                               this%dimensionMask  )
-        else
-            ! Determine spans
-            call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
-                gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-                gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, & 
-                                                                 this%dimensionMask  )
-        end if 
+      if ( gridCell%transposeKernel ) then
+        ! Determine spans ( internally computes transpose )
+        call kernel%ComputeGridSpansTranspose( gridCell%id, this%nBins,        &
+          gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
+          gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, &
+                                                           this%dimensionMask  )
+      else
+        ! Determine spans
+        call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+          gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
+          gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, & 
+                                                           this%dimensionMask  )
+      end if 
 
+      ! For boundaries 
+      gridCell%kernelMatrix = kernel%bmatrix
 
-        ! For boundaries 
-        gridCell%kernelMatrix = kernel%bmatrix
-
-        ! Done
-        return
+      ! Done
+      return
 
     end subroutine prSetKernelFromDatabase
 
 
     subroutine prSetKernelSigmaFromDatabase( this, gridCell, kernel, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target        :: this
-        type( GridCellType ),  intent(inout)         :: gridCell
-        class( KernelType ), target, intent(inout)   :: kernel
-        doubleprecision, dimension(3), intent(in)    :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target        :: this
+      type( GridCellType ),  intent(inout)         :: gridCell
+      class( KernelType ), target, intent(inout)   :: kernel
+      doubleprecision, dimension(3), intent(in)    :: smoothing
+      !---------------------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel%ResetMatrix()
 
-        ! Compute indexes on kernel database
-        ! transposeKernelSigma will always be false as this kernel is isotropic
-        call this%ComputeKernelDatabaseFlatIndexes( smoothing, &
-            gridCell%kernelSigmaDBFlatIndexes, gridCell%transposeKernelSigma ) 
+      ! Compute indexes on kernel database
+      ! transposeKernelSigma will always be false as this kernel is isotropic
+      call this%ComputeKernelDatabaseFlatIndexes( smoothing, &
+        gridCell%kernelSigmaDBFlatIndexes, gridCell%transposeKernelSigma ) 
 
-        ! Copy kernel from database
-        call kernel%CopyFrom(& 
-            this%kernelDatabaseFlat( gridCell%kernelSigmaDBFlatIndexes(1), gridCell%kernelSigmaDBFlatIndexes(2) ) )
+      ! Copy kernel from database
+      call kernel%CopyFrom(& 
+        this%kernelDatabaseFlat( gridCell%kernelSigmaDBFlatIndexes(1), gridCell%kernelSigmaDBFlatIndexes(2) ) )
 
-        ! Determine spans
-        call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
-            gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
-            gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan, & 
-                                                                             this%dimensionMask  ) 
+      ! Determine spans
+      call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
+        gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan  )
 
-        ! Boundary matrix ?
-        gridCell%kernelSigmaMatrix = kernel%bmatrix
+      gridCell%kernelSigmaMatrix = kernel%matrix
 
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSigmaFromDatabase
 
 
     subroutine prSetKernelSD1DFromDatabase( this, gridCell, kernel, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target        :: this
-        type( GridCellType ),  intent(inout)         :: gridCell
-        class( KernelType ), target, intent(inout)   :: kernel
-        doubleprecision, dimension(3), intent(in)    :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target        :: this
+      type( GridCellType ),  intent(inout)         :: gridCell
+      class( KernelType ), target, intent(inout)   :: kernel
+      doubleprecision, dimension(3), intent(in)    :: smoothing
+      !---------------------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel%ResetMatrix()
 
-        ! Compute indexes on kernel database
-        gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
+      ! Compute indexes on kernel database
+      gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
 
-        ! Copy kernel from database
-        call kernel%CopyFrom( this%kernelSDDatabase1( gridCell%kernelSDDBIndexes(this%idDim1) ) )
+      ! Copy kernel from database
+      call kernel%CopyFrom( this%kernelSDDatabase1( gridCell%kernelSDDBIndexes(this%idDim1) ) )
 
-        ! Determine spans
-        call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
-           gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, &
-                                                                  this%dimensionMask  ) 
+      ! Determine spans
+      call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
+        gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, &
+                                                               this%dimensionMask  ) 
+      ! For boundaries
+      gridCell%kernelSD1Matrix = kernel%bmatrix
 
-        ! For boundaries
-        gridCell%kernelSD1Matrix = kernel%bmatrix
-
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSD1DFromDatabase
 
 
     subroutine prSetKernelSD2DFromDatabase( this, gridCell, kernel1, kernel2, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target      :: this
-        type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(inout) :: kernel1
-        class( KernelType ), target, intent(inout) :: kernel2
-        doubleprecision, dimension(3), intent(in)  :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target      :: this
+      type( GridCellType ),  intent(inout)       :: gridCell
+      class( KernelType ), target, intent(inout) :: kernel1
+      class( KernelType ), target, intent(inout) :: kernel2
+      doubleprecision, dimension(3), intent(in)  :: smoothing
+      !---------------------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel1%ResetMatrix()
-        call kernel2%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel1%ResetMatrix()
+      call kernel2%ResetMatrix()
 
-        ! Compute indexes on kernel database
-        gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
+      ! Compute indexes on kernel database
+      gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
 
-        ! Copy kernel from database
-        call kernel1%CopyFrom( this%kernelSDDatabase1( gridCell%kernelSDDBIndexes(this%idDim1) ) )
+      ! Copy kernel from database
+      call kernel1%CopyFrom( this%kernelSDDatabase1( gridCell%kernelSDDBIndexes(this%idDim1) ) )
 
-        ! Determine spans
-        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
-                                                                     this%dimensionMask  ) 
+      ! Determine spans
+      call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+        gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
+                                                                   this%dimensionMask  ) 
 
-        ! Copy kernel from database
-        call kernel2%CopyFrom( this%kernelSDDatabase2( gridCell%kernelSDDBIndexes(this%idDim2) ) )
+      ! Copy kernel from database
+      call kernel2%CopyFrom( this%kernelSDDatabase2( gridCell%kernelSDDBIndexes(this%idDim2) ) )
 
-        ! Determine spans
-        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
-                                                                     this%dimensionMask  ) 
+      ! Determine spans
+      call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+        gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
+                                                                   this%dimensionMask  ) 
 
-        ! For boundaries
-        gridCell%kernelSD1Matrix = kernel1%bmatrix
-        gridCell%kernelSD2Matrix = kernel2%bmatrix
+      ! For boundaries
+      gridCell%kernelSD1Matrix = kernel1%bmatrix
+      gridCell%kernelSD2Matrix = kernel2%bmatrix
 
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSD2DFromDatabase
 
 
     subroutine prSetKernelSD3DFromDatabase( this, gridCell, kernel1, kernel2, kernel3, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target      :: this
-        type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(inout) :: kernel1
-        class( KernelType ), target, intent(inout) :: kernel2
-        class( KernelType ), target, intent(inout) :: kernel3
-        doubleprecision, dimension(3), intent(in)  :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target      :: this
+      type( GridCellType ),  intent(inout)       :: gridCell
+      class( KernelType ), target, intent(inout) :: kernel1
+      class( KernelType ), target, intent(inout) :: kernel2
+      class( KernelType ), target, intent(inout) :: kernel3
+      doubleprecision, dimension(3), intent(in)  :: smoothing
+      !---------------------------------------------------------------------
 
-        ! Compute indexes on kernel database
-        gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
+      ! Compute indexes on kernel database
+      gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
 
-        ! Copy kernel from database
-        call kernel1%CopyFrom( this%kernelSDXDatabase( gridCell%kernelSDDBIndexes(1) ) )
+      ! Copy kernel from database
+      call kernel1%CopyFrom( this%kernelSDXDatabase( gridCell%kernelSDDBIndexes(1) ) )
 
-        ! Determine spans
-        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
-                                                                     this%dimensionMask  )
+      ! Determine spans
+      call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+        gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
+                                                                  this%dimensionMask  )
 
-        ! Copy kernel from database
-        call kernel2%CopyFrom( this%kernelSDYDatabase( gridCell%kernelSDDBIndexes(2) ) )
+      ! Copy kernel from database
+      call kernel2%CopyFrom( this%kernelSDYDatabase( gridCell%kernelSDDBIndexes(2) ) )
 
-        ! Determine spans
-        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
-                                                                     this%dimensionMask  )
+      ! Determine spans
+      call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+        gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
+                                                                  this%dimensionMask  )
 
-        ! Copy kernel from database
-        call kernel3%CopyFrom( this%kernelSDZDatabase( gridCell%kernelSDDBIndexes(3) ) )
+      ! Copy kernel from database
+      call kernel3%CopyFrom( this%kernelSDZDatabase( gridCell%kernelSDDBIndexes(3) ) )
 
-        ! Determine spans
-        call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-           gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, &
-                                                                     this%dimensionMask  )
+      ! Determine spans
+      call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
+        gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, &
+                                                                  this%dimensionMask  )
 
-        ! For boundaries
-        gridCell%kernelSD1Matrix = kernel1%bmatrix
-        gridCell%kernelSD2Matrix = kernel2%bmatrix
-        gridCell%kernelSD3Matrix = kernel3%bmatrix
+      ! For boundaries
+      gridCell%kernelSD1Matrix = kernel1%bmatrix
+      gridCell%kernelSD2Matrix = kernel2%bmatrix
+      gridCell%kernelSD3Matrix = kernel3%bmatrix
 
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSD3DFromDatabase
 
 
     subroutine prSetKernelBrute( this, gridCell, kernel,  smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target      :: this
-        type( GridCellType ), intent(inout)        :: gridCell
-        class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)  :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target      :: this
+      type( GridCellType ), intent(inout)        :: gridCell
+      class( KernelType ), target, intent(inout) :: kernel
+      doubleprecision, dimension(3), intent(in)  :: smoothing
+      !---------------------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel%ResetMatrix()
 
-        ! Setup kernel matrix
-        call kernel%SetupMatrix( smoothing )
+      ! Setup kernel matrix
+      call kernel%SetupMatrix( smoothing )
 
-        ! Determine spans
-        call kernel%ComputeGridSpans( gridCell%id, this%nBins   , &
-            gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-            gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, &
-                                                             this%dimensionMask  )
+      ! Determine spans
+      call kernel%ComputeGridSpans( gridCell%id, this%nBins   , &
+        gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
+        gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, &
+                                                         this%dimensionMask  )
 
-        ! For boundaries 
-        gridCell%kernelMatrix = kernel%bmatrix
+      ! For boundaries 
+      gridCell%kernelMatrix = kernel%bmatrix
 
-        ! Done 
-        return
-
+      ! Done 
+      return
 
     end subroutine prSetKernelBrute
 
 
     subroutine prSetKernelSigmaBrute( this, gridCell, kernel, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target      :: this
-        type( GridCellType ), intent(inout)        :: gridCell
-        class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)  :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target      :: this
+      type( GridCellType ), intent(inout)        :: gridCell
+      class( KernelType ), target, intent(inout) :: kernel
+      doubleprecision, dimension(3), intent(in)  :: smoothing
+      !---------------------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel%ResetMatrix()
 
-        ! Setup kernel matrix
-        call kernel%SetupMatrix( smoothing )
+      ! Setup kernel matrix
+      call kernel%SetupMatrix( smoothing )
 
-        ! Determine spans
-        call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
-            gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
-            gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan, &
-                                                                            this%dimensionMask  )
+      ! Determine spans
+      call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
+        gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan  )
 
-        gridCell%kernelSigmaMatrix = kernel%bmatrix
+      gridCell%kernelSigmaMatrix = kernel%matrix
 
-
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSigmaBrute
 
 
     subroutine prSetKernelSD1DBrute( this, gridCell, kernel, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target      :: this
-        type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(inout) :: kernel
-        doubleprecision, dimension(3), intent(in)  :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target      :: this
+      type( GridCellType ),  intent(inout)       :: gridCell
+      class( KernelType ), target, intent(inout) :: kernel
+      doubleprecision, dimension(3), intent(in)  :: smoothing
+      !-----------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel%ResetMatrix()
 
-        ! Compute matrix
-        call kernel%SetupMatrix( smoothing )
+      ! Compute matrix
+      call kernel%SetupMatrix( smoothing )
 
-        ! Determine spans
-        call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
-           gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, & 
-                                                                   this%dimensionMask )
+      ! Determine spans
+      call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
+        gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, & 
+                                                                this%dimensionMask )
+      ! For boundaries
+      gridCell%kernelSD1Matrix = kernel%bmatrix
 
-        ! For boundaries
-        gridCell%kernelSD1Matrix = kernel%bmatrix
-
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSD1DBrute
 
 
     subroutine prSetKernelSD2DBrute( this, gridCell, kernel1, kernel2, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target      :: this
-        type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(inout) :: kernel1
-        class( KernelType ), target, intent(inout) :: kernel2
-        doubleprecision, dimension(3), intent(in)  :: smoothing
-        doubleprecision, dimension(3)              :: locSmoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target      :: this
+      type( GridCellType ),  intent(inout)       :: gridCell
+      class( KernelType ), target, intent(inout) :: kernel1
+      class( KernelType ), target, intent(inout) :: kernel2
+      doubleprecision, dimension(3), intent(in)  :: smoothing
+      doubleprecision, dimension(3)              :: locSmoothing
+      !---------------------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel1%ResetMatrix()
-        call kernel2%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel1%ResetMatrix()
+      call kernel2%ResetMatrix()
 
-        ! Fill smoothing, curvature kernel is isotropic
-        locSmoothing = 0d0
-        locSmoothing(this%idDim1) = smoothing(this%idDim1)
-        locSmoothing(this%idDim2) = smoothing(this%idDim1)
+      ! Fill smoothing, curvature kernel is isotropic
+      locSmoothing = 0d0
+      locSmoothing(this%idDim1) = smoothing(this%idDim1)
+      locSmoothing(this%idDim2) = smoothing(this%idDim1)
 
-        ! Compute matrix
-        call kernel1%SetupMatrix( locSmoothing )
+      ! Compute matrix
+      call kernel1%SetupMatrix( locSmoothing )
 
-        ! Determine spans
-        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
-                                                                      this%dimensionMask )
+      ! Determine spans
+      call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+        gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
+                                                                   this%dimensionMask )
 
-        ! Fill smoothing, curvature kernel is isotropic
-        locSmoothing = 0d0
-        locSmoothing(this%idDim1) = smoothing(this%idDim2)
-        locSmoothing(this%idDim2) = smoothing(this%idDim2)
+      ! Fill smoothing, curvature kernel is isotropic
+      locSmoothing = 0d0
+      locSmoothing(this%idDim1) = smoothing(this%idDim2)
+      locSmoothing(this%idDim2) = smoothing(this%idDim2)
 
-        ! Compute matrix
-        call kernel2%SetupMatrix( locSmoothing )
+      ! Compute matrix
+      call kernel2%SetupMatrix( locSmoothing )
 
-        ! Determine spans
-        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
-                                                                      this%dimensionMask )
+      ! Determine spans
+      call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+        gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
+                                                                   this%dimensionMask )
 
-        ! For boundaries
-        gridCell%kernelSD1Matrix = kernel1%bmatrix
-        gridCell%kernelSD2Matrix = kernel2%bmatrix
+      ! For boundaries
+      gridCell%kernelSD1Matrix = kernel1%bmatrix
+      gridCell%kernelSD2Matrix = kernel2%bmatrix
 
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSD2DBrute
 
 
     subroutine prSetKernelSD3DBrute( this, gridCell, kernel1, kernel2, kernel3, smoothing )
-        implicit none
-        class( GridProjectedKDEType ), target      :: this
-        type( GridCellType ),  intent(inout)       :: gridCell
-        class( KernelType ), target, intent(inout) :: kernel1
-        class( KernelType ), target, intent(inout) :: kernel2
-        class( KernelType ), target, intent(inout) :: kernel3
-        doubleprecision, dimension(3), intent(in)  :: smoothing
-        !-----------------------------------------------------------
+      !---------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------
+      implicit none
+      class( GridProjectedKDEType ), target      :: this
+      type( GridCellType ),  intent(inout)       :: gridCell
+      class( KernelType ), target, intent(inout) :: kernel1
+      class( KernelType ), target, intent(inout) :: kernel2
+      class( KernelType ), target, intent(inout) :: kernel3
+      doubleprecision, dimension(3), intent(in)  :: smoothing
+      !-----------------------------------------------------------
 
-        ! Restart kernel matrices
-        call kernel1%ResetMatrix()
-        call kernel2%ResetMatrix()
-        call kernel3%ResetMatrix()
+      ! Restart kernel matrices
+      call kernel1%ResetMatrix()
+      call kernel2%ResetMatrix()
+      call kernel3%ResetMatrix()
 
-        ! Compute matrix
-        call kernel1%SetupMatrix( (/smoothing(1),smoothing(1),smoothing(1)/) )
+      ! Compute matrix
+      call kernel1%SetupMatrix( (/smoothing(1),smoothing(1),smoothing(1)/) )
 
-        ! Determine spans
-        call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-           gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
-                                                                      this%dimensionMask )
+      ! Determine spans
+      call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
+        gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
+                                                                   this%dimensionMask )
 
-        ! Compute matrix
-        call kernel2%SetupMatrix( (/smoothing(2),smoothing(2),smoothing(2)/) )
+      ! Compute matrix
+      call kernel2%SetupMatrix( (/smoothing(2),smoothing(2),smoothing(2)/) )
 
-        ! Determine spans
-        call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-           gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
-                                                                      this%dimensionMask )
+      ! Determine spans
+      call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
+        gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
+                                                                   this%dimensionMask )
 
-        ! Compute matrix
-        call kernel3%SetupMatrix( (/smoothing(3),smoothing(3),smoothing(3)/) )
+      ! Compute matrix
+      call kernel3%SetupMatrix( (/smoothing(3),smoothing(3),smoothing(3)/) )
 
-        ! Determine spans
-        call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
-           gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-           gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, & 
-                                                                      this%dimensionMask )
+      ! Determine spans
+      call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
+        gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
+        gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, & 
+                                                                   this%dimensionMask )
 
-        ! For boundaries
-        gridCell%kernelSD1Matrix = kernel1%bmatrix
-        gridCell%kernelSD2Matrix = kernel2%bmatrix
-        gridCell%kernelSD3Matrix = kernel3%bmatrix
+      ! For boundaries
+      gridCell%kernelSD1Matrix = kernel1%bmatrix
+      gridCell%kernelSD2Matrix = kernel2%bmatrix
+      gridCell%kernelSD3Matrix = kernel3%bmatrix
 
 
-        ! Done
-        return
-
+      ! Done
+      return
 
     end subroutine prSetKernelSD3DBrute
 
@@ -4380,11 +4127,11 @@ print *, 'LOOP : ', m
         output(n) = logBase**( logInit + deltaAccumulated )
         deltaAccumulated = deltaAccumulated + deltaExponent
       end do
-      
+     
+      ! Done 
       return
 
     end function prGenerateLogSpaceData
-
 
 
     function prComputeXYTranspose( this, sourceMatrix ) result( transposedMatrix )
@@ -4407,9 +4154,10 @@ print *, 'LOOP : ', m
       allocate( transposedMatrix( sourceShape(2), sourceShape(1), sourceShape(3) ) )
 
       do n = 1, sourceShape(3)
-          transposedMatrix(:,:,n) = transpose( sourceMatrix(:,:,n) )
+        transposedMatrix(:,:,n) = transpose( sourceMatrix(:,:,n) )
       end do
-  
+ 
+      ! Done  
       return 
 
     end function prComputeXYTranspose
@@ -4435,19 +4183,18 @@ print *, 'LOOP : ', m
 
       ! Following column-major nesting
       do iz = 1, this%nBins(3)
-          do iy = 1, this%nBins(2)
-              do ix = 1, this%nBins(1)
-                  if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-                  ! cellids, density, histogram
-                  write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
-                    this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
-              end do
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
+            ! cellids, density, histogram
+            write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
           end do
+        end do
       end do
 
       ! Finished
       close(outputUnit)
-
 
     end subroutine prExportDensity
 
@@ -4464,16 +4211,9 @@ print *, 'LOOP : ', m
       integer, optional, intent(in) :: outputDataId
       integer, optional, intent(in) :: particleGroupId
       integer :: ix, iy, iz
-      !integer :: countNonZero, counter
       integer :: dataId
       !------------------------------------------------------------------------------
 
-      ! Not being used
-      !counter      = 0
-      !countNonZero = count(this%densityEstimateGrid /=0d0)
-      !if( allocated( this%outputBinIds ) ) deallocate( this%outputBinIds )
-      !allocate( this%outputBinIds(countNonZero,3) )
-      
       if ( present( outputDataId ) .and. present( particleGroupId ) ) then
         ! Following column-major nesting
         do iz = 1, this%nBins(3)
@@ -4483,8 +4223,6 @@ print *, 'LOOP : ', m
               write(outputUnit,"(5I8,2es18.9e3)") outputDataId, particleGroupId, &
                   ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
                                  this%histogram%counts( ix, iy, iz ) 
-              !counter = counter + 1 
-              !this%outputBinIds(counter,:) = (/ix,iy,iz/)
             end do
           end do
         end do
@@ -4527,6 +4265,10 @@ print *, 'LOOP : ', m
       densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
       curvatureBandwidth, nEstimate, netRoughness )
       !------------------------------------------------------------------------------
+      ! 
+      !------------------------------------------------------------------------------
+      ! Specifications 
+      !------------------------------------------------------------------------------
       implicit none 
       class(GridProjectedKDEType) :: this
       character(len=500), intent(in) :: outputFileName
@@ -4545,18 +4287,18 @@ print *, 'LOOP : ', m
       open( outputUnit, file=outputFileName, status='replace' )
 
       do n = 1, this%nComputeBins
-          ix = this%computeBinIds( 1, n )
-          iy = this%computeBinIds( 2, n )
-          iz = this%computeBinIds( 3, n )
-          ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-          write(outputUnit,&
-              "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
-              ix, iy, iz,& 
-              densityEstimateArray( n ),& 
-              kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
-              kernelSigmaSupportScale(n), &
-              curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
-              nEstimate(n), netRoughness(n)
+        ix = this%computeBinIds( 1, n )
+        iy = this%computeBinIds( 2, n )
+        iz = this%computeBinIds( 3, n )
+        ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
+        write(outputUnit,&
+          "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
+          ix, iy, iz,& 
+          densityEstimateArray( n ),& 
+          kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
+          kernelSigmaSupportScale(n), &
+          curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
+          nEstimate(n), netRoughness(n)
       end do
 
       ! Finished
@@ -4570,7 +4312,11 @@ print *, 'LOOP : ', m
                              kernelSmoothingShape, kernelSigmaSupportScale, &
          curvatureBandwidth, nEstimate, roughnessXXArray, roughnessYYArray, &
                                              roughnessZZArray, netRoughness )
-      !------------------------------------------------------------------------------
+      !----------------------------------------------------------------------
+      ! 
+      !----------------------------------------------------------------------
+      ! Specifications 
+      !----------------------------------------------------------------------
       implicit none 
       class(GridProjectedKDEType) :: this
       character(len=500), intent(in) :: outputFileName
@@ -4587,7 +4333,7 @@ print *, 'LOOP : ', m
       doubleprecision, dimension(:)  ,intent(in) :: roughnessZZArray
       integer :: ix, iy, iz, n
       integer :: outputUnit = 555
-      !------------------------------------------------------------------------------
+      !---------------------------------------------------------------------
 
       ! Write the output file name
       ! Add some default
@@ -4613,14 +4359,17 @@ print *, 'LOOP : ', m
     end subroutine prExportOptimizationVariablesExtended
 
 
-
     subroutine prExportOptimizationVariablesExtendedError( this, outputFileName, &
                     densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
                                   kernelSmoothingShape, kernelSigmaSupportScale, &
               curvatureBandwidth, nEstimate, roughnessXXArray, roughnessYYArray, &
                                                  roughnessZZArray, netRoughness, &
                                   relativeDensityChange, relativeRoughnessChange )
-      !------------------------------------------------------------------------------
+      !---------------------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------------------
       implicit none 
       class(GridProjectedKDEType) :: this
       character(len=500), intent(in) :: outputFileName
@@ -4670,25 +4419,28 @@ print *, 'LOOP : ', m
               relativeDensity, relativeRoughness, relativeSmoothing, &
            nFractionDensity, nFractionRoughness, nFractionSmoothing, &
                                               error1, error2, error3 )
-        !------------------------------------------------------------------------------
-        !------------------------------------------------------------------------------
-        implicit none 
-        class(GridProjectedKDEType) :: this
-        integer,intent(in) :: outputUnit, loopId
-        doubleprecision, intent(in) :: relativeDensity
-        doubleprecision, intent(in) :: relativeRoughness
-        doubleprecision, intent(in) :: relativeSmoothing
-        doubleprecision, intent(in) :: nFractionDensity
-        doubleprecision, intent(in) :: nFractionRoughness
-        doubleprecision, intent(in) :: nFractionSmoothing
-        doubleprecision, intent(in) :: error1, error2, error3
-        !------------------------------------------------------------------------------
+      !---------------------------------------------------------------
+      ! 
+      !---------------------------------------------------------------
+      ! Specifications 
+      !---------------------------------------------------------------
+      implicit none 
+      class(GridProjectedKDEType) :: this
+      integer,intent(in) :: outputUnit, loopId
+      doubleprecision, intent(in) :: relativeDensity
+      doubleprecision, intent(in) :: relativeRoughness
+      doubleprecision, intent(in) :: relativeSmoothing
+      doubleprecision, intent(in) :: nFractionDensity
+      doubleprecision, intent(in) :: nFractionRoughness
+      doubleprecision, intent(in) :: nFractionSmoothing
+      doubleprecision, intent(in) :: error1, error2, error3
+      !---------------------------------------------------------------
     
-        write(outputUnit, '(I8,9es18.9e3)') loopId, &
-          relativeDensity, nFractionDensity,     & 
-          relativeRoughness, nFractionRoughness, & 
-          relativeSmoothing, nFractionSmoothing, & 
-          error1, error2, error3 
+      write(outputUnit, '(I8,9es18.9e3)') loopId, &
+        relativeDensity, nFractionDensity,     & 
+        relativeRoughness, nFractionRoughness, & 
+        relativeSmoothing, nFractionSmoothing, & 
+        error1, error2, error3 
 
 
     end subroutine prWriteErrorMetricsRecord

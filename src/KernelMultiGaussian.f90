@@ -234,7 +234,7 @@ contains
       integer, dimension(3), intent(in) :: gridIndexes
       integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
       integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
-      integer, dimension(3), intent(in) :: dimensionMask
+      integer, dimension(3), intent(in), optional :: dimensionMask
       integer :: boundLocX, boundLocY, boundLocZ
       logical :: isBoundaryX    
       logical :: isBoundaryY
@@ -257,69 +257,71 @@ contains
       yKernelSpan = yGridSpan + this%matrixPositiveShape(2) - gridIndexes(2) + 1
       zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
 
-      ! Identify boundary faces
-      isBoundaryX = .false.
-      isBoundaryY = .false.
-      isBoundaryZ = .false.
-      
-      boundLocX = 0
-      boundLocY = 0
-      boundLocZ = 0
+      if ( present( dimensionMask ) ) then 
 
-      ! X
-      if ( dimensionMask(1) .eq. 1 ) then 
-        if ( ( gridIndexes(1) - this%matrixPositiveShape(1) ) .lt. 1 ) then 
-          isBoundaryX  = .true.
-          boundLocX    = 1 - gridIndexes(1) + this%matrixPositiveShape(1)
-          boundDirX    = 1
-        else if ( ( gridIndexes(1) + this%matrixPositiveShape(1) ) .gt. gridShape(1) ) then 
-          isBoundaryX  = .true.
-          boundLocX    = 2*this%matrixPositiveShape(1) + 1 &
-              - ( gridIndexes(1) + this%matrixPositiveShape(1) - gridShape(1) )
-          boundDirX    = 2
+        ! Identify boundary faces
+        isBoundaryX = .false.
+        isBoundaryY = .false.
+        isBoundaryZ = .false.
+        
+        boundLocX = 0
+        boundLocY = 0
+        boundLocZ = 0
+
+        ! X
+        if ( dimensionMask(1) .eq. 1 ) then 
+          if ( ( gridIndexes(1) - this%matrixPositiveShape(1) ) .lt. 1 ) then 
+            isBoundaryX  = .true.
+            boundLocX    = 1 - gridIndexes(1) + this%matrixPositiveShape(1)
+            boundDirX    = 1
+          else if ( ( gridIndexes(1) + this%matrixPositiveShape(1) ) .gt. gridShape(1) ) then 
+            isBoundaryX  = .true.
+            boundLocX    = 2*this%matrixPositiveShape(1) + 1 &
+              - ( gridIndexes(1) + this%matrixPositiveShape(1) - gridShape(1) ) + 1 
+            boundDirX    = 2
+          end if 
         end if 
-      end if 
 
-      ! Y
-      if ( dimensionMask(2) .eq. 1 ) then 
-        if ( ( gridIndexes(2) - this%matrixPositiveShape(2) ) .lt. 1 ) then 
-          isBoundaryY  = .true.
-          boundLocY    = 1 - gridIndexes(2) + this%matrixPositiveShape(2)
-          boundDirY    = 1
-        else if ( ( gridIndexes(2) + this%matrixPositiveShape(2) ) .gt. gridShape(2) ) then 
-          isBoundaryY  = .true.
-          boundLocY    = 2*this%matrixPositiveShape(2) + 1 &
-              - ( gridIndexes(2) + this%matrixPositiveShape(2) - gridShape(2) )
-          boundDirY    = 2
+        ! Y
+        if ( dimensionMask(2) .eq. 1 ) then 
+          if ( ( gridIndexes(2) - this%matrixPositiveShape(2) ) .lt. 1 ) then 
+            isBoundaryY  = .true.
+            boundLocY    = 1 - gridIndexes(2) + this%matrixPositiveShape(2)
+            boundDirY    = 1
+          else if ( ( gridIndexes(2) + this%matrixPositiveShape(2) ) .gt. gridShape(2) ) then 
+            isBoundaryY  = .true.
+            boundLocY    = 2*this%matrixPositiveShape(2) + 1 &
+              - ( gridIndexes(2) + this%matrixPositiveShape(2) - gridShape(2) ) + 1 
+            boundDirY    = 2
+          end if 
         end if 
-      end if 
 
-      ! Z
-      if ( dimensionMask(3) .eq. 1 ) then 
-        if ( ( gridIndexes(3) - this%matrixPositiveShape(3) ) .lt. 1 ) then 
-          isBoundaryZ  = .true.
-          boundLocZ    = 1 - gridIndexes(3) + this%matrixPositiveShape(3)
-          boundDirZ    = 1
-        else if ( ( gridIndexes(3) + this%matrixPositiveShape(3) ) .gt. gridShape(3) ) then 
-          isBoundaryZ  = .true.
-          boundLocZ    = 2*this%matrixPositiveShape(3) + 1 &
-              - ( gridIndexes(3) + this%matrixPositiveShape(3) - gridShape(3) )
-          boundDirZ    = 2
+        ! Z
+        if ( dimensionMask(3) .eq. 1 ) then 
+          if ( ( gridIndexes(3) - this%matrixPositiveShape(3) ) .lt. 1 ) then 
+            isBoundaryZ  = .true.
+            boundLocZ    = 1 - gridIndexes(3) + this%matrixPositiveShape(3)
+            boundDirZ    = 1
+          else if ( ( gridIndexes(3) + this%matrixPositiveShape(3) ) .gt. gridShape(3) ) then 
+            isBoundaryZ  = .true.
+            boundLocZ    = 2*this%matrixPositiveShape(3) + 1 &
+              - ( gridIndexes(3) + this%matrixPositiveShape(3) - gridShape(3) ) + 1
+            boundDirZ    = 2
+          end if 
         end if 
-      end if 
 
-      ! Writes corrected kernel matrix in 
-      ! this%bmatrix in order to avoid rewriting
-      ! matrix at databases
-      this%bmatrix = this%matrix
-      call prVerifyBoundary( this, gridIndexes, gridShape, &
-                          xGridSpan, yGridSpan, zGridSpan, &
-                    xKernelSpan, yKernelSpan, zKernelSpan, &
-                          boundLocX, boundLocY, boundLocZ, &
-                    isBoundaryX, isBoundaryY, isBoundaryZ, & 
-                          boundDirX, boundDirY, boundDirZ, &
-                             dimensionMask = dimensionMask )
-      
+        ! Writes corrected kernel matrix in 
+        ! this%bmatrix in order to avoid rewriting
+        ! matrix at databases
+        this%bmatrix = this%matrix
+        call prVerifyBoundary( this, gridIndexes, gridShape, &
+                            xGridSpan, yGridSpan, zGridSpan, &
+                      xKernelSpan, yKernelSpan, zKernelSpan, &
+                            boundLocX, boundLocY, boundLocZ, &
+                      isBoundaryX, isBoundaryY, isBoundaryZ, & 
+                            boundDirX, boundDirY, boundDirZ, &
+                               dimensionMask = dimensionMask )
+     end if  
 
     end subroutine prComputeGridSpans
 
@@ -379,11 +381,11 @@ contains
               this%bmatrix( :boundLocX, :, :) = 0
             case(2)
               ! EAST 
-              lenb = kernelShape(1) - boundLocX
-              this%bmatrix( boundLocX - lenb + 1: boundLocX, :, :) = &
-              this%bmatrix( boundLocX - lenb + 1: boundLocX, :, :) + &
-              this%bmatrix( kernelShape(1): boundLocX + 1 :-1, :, :)
-              this%bmatrix( boundLocX + 1:, :, :) = 0
+              lenb = kernelShape(1) - boundLocX + 1 
+              this%bmatrix( boundLocX - lenb: boundLocX - 1, :, :) = &
+              this%bmatrix( boundLocX - lenb: boundLocX - 1, :, :) + &
+              this%bmatrix( kernelShape(1): boundLocX :-1, :, :)
+              this%bmatrix( boundLocX:, :, :) = 0
           end select    
         end if 
       end if 
@@ -402,11 +404,11 @@ contains
               this%bmatrix( :, :boundLocY, :) = 0
             case(2)
               ! NORTH
-              lenb = kernelShape(2) - boundLocY 
-              this%bmatrix( :, boundLocY - lenb + 1 : boundLocY, :) = &
-              this%bmatrix( :, boundLocY - lenb + 1 : boundLocY, :) + &
-              this%bmatrix( :, kernelShape(2): boundLocY + 1 :-1, :)
-              this%bmatrix( :, boundLocY + 1 :, :) = 0
+              lenb = kernelShape(2) - boundLocY + 1 
+              this%bmatrix( :, boundLocY - lenb: boundLocY - 1, :) = &
+              this%bmatrix( :, boundLocY - lenb: boundLocY - 1, :) + &
+              this%bmatrix( :, kernelShape(2): boundLocY :-1, :)
+              this%bmatrix( :, boundLocY:, :) = 0
           end select    
         end if
       end if 
@@ -425,11 +427,11 @@ contains
               this%bmatrix( :, :, :boundLocZ) = 0
             case(2)
               ! TOP
-              lenb = kernelShape(3) - boundLocZ
-              this%bmatrix( :, :, boundLocZ - lenb + 1 : boundLocZ) = &
-              this%bmatrix( :, :, boundLocZ - lenb + 1 : boundLocZ) + &
-              this%bmatrix( :, :, kernelShape(3): boundLocZ + 1 :-1)
-              this%bmatrix( :, :, boundLocZ + 1 :) = 0
+              lenb = kernelShape(3) - boundLocZ + 1 
+              this%bmatrix( :, :, boundLocZ - lenb: boundLocZ - 1) = &
+              this%bmatrix( :, :, boundLocZ - lenb: boundLocZ - 1) + &
+              this%bmatrix( :, :, kernelShape(3): boundLocZ :-1)
+              this%bmatrix( :, :, boundLocZ:) = 0
           end select
         end if 
       end if 
@@ -774,7 +776,12 @@ contains
     ! KernelSecondDerivativeX
     subroutine prComputeKernelVXMatrix( this, zPXGrid, zPYGrid, zPZGrid )
       !------------------------------------------------------------------------------
-      ! 
+      ! Integrated X second derivative
+      !
+      ! Applies kernel corrections A.3 and A.4 in Sole-Mari et al. 2019
+      !
+      ! Returns the product lambda_i**2*V^i
+      !
       !------------------------------------------------------------------------------
       ! Specifications 
       !------------------------------------------------------------------------------
@@ -804,7 +811,6 @@ contains
       if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
       allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
-      !if ( all( this%bandwidth .eq. 0d0 ) ) this%matrix = 0d0 return
       if ( all( this%bandwidth .eq. 0d0 ) ) then 
         this%matrix = 0d0
         return
@@ -846,6 +852,11 @@ contains
       where ( this%matrix > 0 )
         this%matrix = aCoeff*this%matrix
       end where
+
+      if ( sum( this%matrix**2 ) .eq. 0d0 ) then 
+        this%matrix = 0d0
+        return
+      end if
 
       ! Correct kernel
       do nd=1,3
@@ -940,6 +951,11 @@ contains
         this%matrix = aCoeff*this%matrix
       end where
 
+      if ( sum( this%matrix**2 ) .eq. 0d0 ) then 
+        this%matrix = 0d0
+        return
+      end if
+
       ! Correct kernel
       do nd=1,3
         if ( hLambda(nd) .le. 0d0 ) cycle
@@ -1031,6 +1047,11 @@ contains
       where ( this%matrix > 0 )
         this%matrix = aCoeff*this%matrix
       end where
+
+      if ( sum( this%matrix**2 ) .eq. 0d0 ) then 
+        this%matrix = 0d0
+        return
+      end if
 
       ! Correct kernel
       do nd=1,3

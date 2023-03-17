@@ -25,6 +25,7 @@ program GPKDE
   integer            :: nOptLoops
   doubleprecision    :: initialSmoothingFactor
   integer            :: initialSmoothingSelection 
+  logical            :: exportOptimizationVariables
   ! urword
   character(len=200) :: line
   integer            :: icol,istart,istop,n
@@ -248,11 +249,11 @@ program GPKDE
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  if (n.lt.1) then
+  if (n.lt.0) then
     if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'Given number of optimization loops is less than 1. It should be at least 1. Stop.'
+      write(logUnit,'(a)') 'Given number of optimization loops is less than 0. Stop.'
     end if 
-    call ustop('Given number of optimization loops is less than 1. It should be at least 1. Stop.')
+    call ustop('Given number of optimization loops is less than 0. Stop.')
   end if
   nOptLoops = n
   if ( logUnit .gt. 0 ) then
@@ -390,6 +391,32 @@ program GPKDE
   end select
 
 
+  ! Export optimization variables 
+  ! 0: does not export 
+  ! 1: export data, one file per loop for active bins 
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will not export optimization variables.'
+    end if
+    exportOptimizationVariables = .false.
+  case(1)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will export optimization variables, one file per loop.'
+    end if
+    exportOptimizationVariables = .true.
+  case default
+    ! Defaults to false
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will not export optimization variables.'
+    end if
+    exportOptimizationVariables = .false.
+  end select
+
+
   ! Read data into arrays for reconstruction
   if ( logUnit.gt.0 ) then 
     write(logUnit,'(a)') 'GPKDE will load data into arrays.'
@@ -469,7 +496,8 @@ program GPKDE
      outputFileUnit    = outputUnit,    &
      computeRawDensity = .true.,        &
      skipErrorConvergence = skipErrorConvergence, &
-     relativeErrorConvergence = relativeErrorConvergence &
+     relativeErrorConvergence = relativeErrorConvergence,  &
+     exportOptimizationVariables = exportOptimizationVariables &
     )
   case(1)
     ! Weighted reconstruction
@@ -480,15 +508,14 @@ program GPKDE
      weightedHistogram = .true.,        &
      weights           = weightsCarrier,&
      skipErrorConvergence = skipErrorConvergence, &
-     relativeErrorConvergence = relativeErrorConvergence &
+     relativeErrorConvergence = relativeErrorConvergence, &
+     exportOptimizationVariables = exportOptimizationVariables &
     )
   end select
   call system_clock(clockCountStop, clockCountRate, clockCountMax)
 
-
   ! Deallocate
   if ( allocated( gpkdeObj ) ) deallocate( gpkdeObj )
-
 
   ! Exit 
   elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
