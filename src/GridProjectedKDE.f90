@@ -2291,6 +2291,8 @@ module GridProjectedKDEModule
       end do 
       this%stdSigmaScale = product( this%stdCoords, mask=(this%dimensionMask.eq.1))
       this%stdSigmaScale = this%stdSigmaScale**(1d0/nDim)
+      !this%hSigmaScale   = minval(this%stdCoords, mask=(this%stdCoords.gt.0d0))*(&
+      !        4d0/((nDim + 2d0)*this%histogram%nEffective) )**(1d0/(nDim+4d0))
       this%hSigmaScale   = this%stdSigmaScale*( 4d0/((nDim + 2d0)*this%histogram%nEffective) )**(1d0/(nDim+4d0))
       if( this%stdSigmaScale.ne.0d0 ) this%varSigmaScale = 1d0/((4d0*pi)**nDim*this%histogram%nEffective*this%stdSigmaScale)
       if( this%stdSigmaScale .eq. 0d0 ) then 
@@ -2314,6 +2316,7 @@ module GridProjectedKDEModule
 
       ! Set min limit roughness
       this%minLimitRoughness = this%minRelativeRoughness*(this%histogram%maxRawDensity**2)
+        print *, 'MIN LIMIT ROUGHNESS', this%minLimitRoughness
 
       ! Assign distribution statistics as initial smoothing, Silverman (1986)
       if ( this%initialSmoothingSelection .eq. 0 ) then 
@@ -2328,8 +2331,7 @@ module GridProjectedKDEModule
         write( this%outFileUnit, *) '  initialSmoothing   :', this%initialSmoothing
         end if
       end if 
-       
-
+     
       ! Logging
       if ( this%reportToOutUnit ) then 
         if ( present( outputDataId ) .and. present( particleGroupId ) ) then 
@@ -2654,7 +2656,7 @@ module GridProjectedKDEModule
         gc => activeGridCells(n)
         densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
       end do
-
+print *, 'AFTER INITIAL DENSITY'
       ! Error monitoring
       squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
       errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
@@ -2718,6 +2720,7 @@ module GridProjectedKDEModule
 
       ! Optimization loop !
       do m = 1, nOptLoops
+      print *, 'NLOOP', m
         ! nEstimate
         nEstimateArray = 0d0
         !$omp parallel do schedule( dynamic, 1 )                    &
@@ -2753,6 +2756,7 @@ module GridProjectedKDEModule
         end do
         !$omp end parallel do
 
+print *, 'AFTER NETIMATE INITIAL DENSITY'
 
        
         ! Compute support scale 
@@ -2801,6 +2805,7 @@ module GridProjectedKDEModule
           deallocate( gc%kernelSigmaMatrix ) 
         end do
         !$omp end parallel do 
+print *, 'AFTER SECOND NETIMATEY'
 
         ! Curvature bandwidths
         call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
@@ -2811,12 +2816,20 @@ module GridProjectedKDEModule
                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                             netRoughnessArray, kernelSigmaSupport, &
                                                    kernelSDX, kernelSDY, kernelSDZ )
+
+print *, 'AFTER uROUGHNESS SECOND NETIMATEY'
+print *, maxval( netRoughnessArray )
+print *, minval( netRoughnessArray )
         ! Optimal smoothing
         call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                                 roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                                  kernelSmoothing, kernelSmoothingOld, & 
                                        kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                                  kernelSmoothingShape )
+print *, 'AFTER OPTIMAL SMOOTHIG AND SGHAPE'
+print *, maxval( kernelSmoothing(1,:) ),maxval( kernelSmoothing(2,:) )
+print *, maxval( kernelSmoothing(1,:) )/this%histogram%binDistance
+print *, maxval( kernelSmoothing(2,:) )/this%histogram%binDistance
 
         ! Update density
         densityEstimateGrid = 0d0
@@ -2872,6 +2885,7 @@ module GridProjectedKDEModule
           gc => activeGridCells(n)
           densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
+print *, 'AFTER SECOND DENSITY ESITMATOp'
 
         ! Update smoothing scale
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
@@ -3406,7 +3420,7 @@ module GridProjectedKDEModule
 
       ! Compute shape factors and kernelSmoothing
       kernelSmoothing = 0d0
-      kernelSmoothingShape = 1d0
+      kernelSmoothingShape = 0d0
       do nd=1,3
         if ( this%dimensionMask(nd) .eq. 1 ) then
           ! For anisotropic kernels
@@ -3425,14 +3439,14 @@ module GridProjectedKDEModule
               end where
           end select
 
-          !! Minimum roughness sets transition to isotropic
-          !! Verify ! 
-          !where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
-          !  kernelSmoothingShape(nd,:) = this%minKernelShape
-          !end where
-          !where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
-          !  kernelSmoothingShape(nd,:) = this%maxKernelShape
-          !end where
+          ! Control kernel shapes, notice that roughnesses
+          ! could be close to zero 
+          where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
+            kernelSmoothingShape(nd,:) = this%minKernelShape
+          end where
+          where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
+            kernelSmoothingShape(nd,:) = this%maxKernelShape
+          end where
           kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
 
           where ( kernelSmoothingScale .gt. 0d0 ) 

@@ -445,31 +445,31 @@ program GPKDE
   allocate( gpkdeObj )
   if (logUnit.gt.0) then
     call gpkdeObj%Initialize(& 
-        domainSize, binSize,                                  &
-        domainOrigin              = domainOrigin,             & 
-        nOptimizationLoops        = nOptLoops,                &
-        databaseOptimization      = kernelDatabase,           &
-        minHOverLambda            = kernelParams(1),          &
-        deltaHOverLambda          = kernelParams(2),          &
-        maxHOverLambda            = kernelParams(3),          &
-        initialSmoothing          = initialSmoothing,         & 
-        initialSmoothingFactor    = initialSmoothingFactor,   & 
-        initialSmoothingSelection = initialSmoothingSelection,& 
-        outFileName               = logFile                   &
+      domainSize, binSize,                                  &
+      domainOrigin              = domainOrigin,             & 
+      nOptimizationLoops        = nOptLoops,                &
+      databaseOptimization      = kernelDatabase,           &
+      minHOverLambda            = kernelParams(1),          &
+      deltaHOverLambda          = kernelParams(2),          &
+      maxHOverLambda            = kernelParams(3),          &
+      initialSmoothing          = initialSmoothing,         & 
+      initialSmoothingFactor    = initialSmoothingFactor,   & 
+      initialSmoothingSelection = initialSmoothingSelection,& 
+      outFileName               = logFile                   &
     )
     write(logUnit,'(a)') 'GPKDE is initialized. '
   else
     call gpkdeObj%Initialize(& 
-        domainSize, binSize,                                  &
-        domainOrigin              = domainOrigin,             & 
-        nOptimizationLoops        = nOptLoops,                &
-        databaseOptimization      = kernelDatabase,           &
-        minHOverLambda            = kernelParams(1),          &
-        deltaHOverLambda          = kernelParams(2),          &
-        maxHOverLambda            = kernelParams(3),          &
-        initialSmoothing          = initialSmoothing,         & 
-        initialSmoothingFactor    = initialSmoothingFactor,   & 
-        initialSmoothingSelection = initialSmoothingSelection & 
+      domainSize, binSize,                                  &
+      domainOrigin              = domainOrigin,             & 
+      nOptimizationLoops        = nOptLoops,                &
+      databaseOptimization      = kernelDatabase,           &
+      minHOverLambda            = kernelParams(1),          &
+      deltaHOverLambda          = kernelParams(2),          &
+      maxHOverLambda            = kernelParams(3),          &
+      initialSmoothing          = initialSmoothing,         & 
+      initialSmoothingFactor    = initialSmoothingFactor,   & 
+      initialSmoothingSelection = initialSmoothingSelection & 
     )
   end if
 
