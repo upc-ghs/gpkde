@@ -793,7 +793,7 @@ contains
       doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
       integer :: nx, ny, nz
       integer :: nd
-      doubleprecision :: aDenom, aNum, aCoeff
+      doubleprecision :: aDenom, aNum, aCoeff, summatrixsq
       !------------------------------------------------------------------------------
 
       this%shouldIntegrateOne = .false.
@@ -853,7 +853,9 @@ contains
         this%matrix = aCoeff*this%matrix
       end where
 
-      if ( sum( this%matrix**2 ) .eq. 0d0 ) then 
+      ! Health
+      summatrixsq = sum( this%matrix**2 )
+      if ( summatrixsq .lt. epsilon(aNum) ) then 
         this%matrix = 0d0
         return
       end if
@@ -863,7 +865,7 @@ contains
         if ( hLambda(nd) .le. 0d0 ) cycle
         select case(nd)
         case(1)
-          this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(1)**5)*sum( this%matrix**2 ) ) )
+          this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(1)**5)*summatrixsq ) )
         case(2)
           this%matrix = this%matrix/sqrt( hLambda(2) )
         case(3)
@@ -891,7 +893,7 @@ contains
       doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
       integer :: nx, ny, nz
       integer :: nd
-      doubleprecision :: aDenom, aNum, aCoeff
+      doubleprecision :: aDenom, aNum, aCoeff, summatrixsq
       !------------------------------------------------------------------------------
 
       this%shouldIntegrateOne = .false.
@@ -951,7 +953,9 @@ contains
         this%matrix = aCoeff*this%matrix
       end where
 
-      if ( sum( this%matrix**2 ) .eq. 0d0 ) then 
+      ! Health
+      summatrixsq = sum( this%matrix**2 )
+      if ( summatrixsq .lt. epsilon(aNum) ) then 
         this%matrix = 0d0
         return
       end if
@@ -963,7 +967,7 @@ contains
         case(1)
           this%matrix = this%matrix/sqrt( hLambda(1) )
         case(2)
-          this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(2)**5)*sum( this%matrix**2 ) ) )
+          this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(2)**5)*summatrixsq ) )
         case(3)
           this%matrix = this%matrix/sqrt( hLambda(3) )
         end select
@@ -989,7 +993,7 @@ contains
       doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
       integer :: nx, ny, nz
       integer :: nd
-      doubleprecision :: aDenom, aNum, aCoeff
+      doubleprecision :: aDenom, aNum, aCoeff, summatrixsq
       !------------------------------------------------------------------------------
 
       this%shouldIntegrateOne = .false.
@@ -1048,7 +1052,9 @@ contains
         this%matrix = aCoeff*this%matrix
       end where
 
-      if ( sum( this%matrix**2 ) .eq. 0d0 ) then 
+      ! Health
+      summatrixsq = sum( this%matrix**2 )
+      if ( summatrixsq .lt. epsilon(aNum) ) then 
         this%matrix = 0d0
         return
       end if
@@ -1062,7 +1068,7 @@ contains
         case(2)
           this%matrix = this%matrix/sqrt( hLambda(2) )
         case(3)
-          this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(3)**5)*sum( this%matrix**2 ) ) )
+          this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(3)**5)*summatrixsq ) )
         end select
       end do 
 
