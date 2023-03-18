@@ -40,7 +40,7 @@ module GridProjectedKDEModule
     doubleprecision :: defaultMaxLimitRoughness      = 1d40
     doubleprecision :: defaultMaxSmoothingGrowth     = 10d0
     doubleprecision :: defaultMaxKernelShape         = 10d0
-    doubleprecision :: defaultMinKernelShape         = 5d-1
+    doubleprecision :: defaultMinKernelShape         = 1d-1
     doubleprecision, parameter :: defaultRelativeErrorConvergence = 0.01
 
     ! Default initial smoothing 
@@ -527,19 +527,20 @@ module GridProjectedKDEModule
           this%initialSmoothing(n) = 0d0
         end if 
       end do
-      ! TO BE DEPRECATED ?
+      ! TO BE DEPRECATED !
       ! Smoothing growth
       if ( present( maxSmoothingGrowth ) ) then 
         this%maxSmoothingGrowth = maxSmoothingGrowth
       else 
         this%maxSmoothingGrowth = defaultMaxSmoothingGrowth
       end if
-      ! Limit kernel shapes
       if ( present( minKernelShape ) ) then 
         this%minKernelShape = minKernelShape
       else 
         this%minKernelShape = defaultMinKernelShape
       end if
+      ! END TO BE DEPRECATED !
+      ! Max limit kernel shapes
       if ( present( maxKernelShape ) ) then 
         this%maxKernelShape = maxKernelShape
       else 
@@ -2316,7 +2317,6 @@ module GridProjectedKDEModule
 
       ! Set min limit roughness
       this%minLimitRoughness = this%minRelativeRoughness*(this%histogram%maxRawDensity**2)
-        print *, 'MIN LIMIT ROUGHNESS', this%minLimitRoughness
 
       ! Assign distribution statistics as initial smoothing, Silverman (1986)
       if ( this%initialSmoothingSelection .eq. 0 ) then 
@@ -2656,7 +2656,7 @@ module GridProjectedKDEModule
         gc => activeGridCells(n)
         densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
       end do
-print *, 'AFTER INITIAL DENSITY'
+
       ! Error monitoring
       squareDensityDiff = ((densityEstimateArray - rawDensity)/this%histogram%nPoints)**2
       errorRMSE         = sqrt(sum( squareDensityDiff )/this%nComputeBins)
@@ -2720,7 +2720,6 @@ print *, 'AFTER INITIAL DENSITY'
 
       ! Optimization loop !
       do m = 1, nOptLoops
-      print *, 'NLOOP', m
         ! nEstimate
         nEstimateArray = 0d0
         !$omp parallel do schedule( dynamic, 1 )                    &
@@ -2756,9 +2755,6 @@ print *, 'AFTER INITIAL DENSITY'
         end do
         !$omp end parallel do
 
-print *, 'AFTER NETIMATE INITIAL DENSITY'
-
-       
         ! Compute support scale 
         call this%ComputeSupportScale( kernelSmoothingScale, densityEstimateArray, & 
                                            nEstimateArray, kernelSigmaSupportScale )
@@ -2805,7 +2801,6 @@ print *, 'AFTER NETIMATE INITIAL DENSITY'
           deallocate( gc%kernelSigmaMatrix ) 
         end do
         !$omp end parallel do 
-print *, 'AFTER SECOND NETIMATEY'
 
         ! Curvature bandwidths
         call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
@@ -2816,20 +2811,12 @@ print *, 'AFTER SECOND NETIMATEY'
                              roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                             netRoughnessArray, kernelSigmaSupport, &
                                                    kernelSDX, kernelSDY, kernelSDZ )
-
-print *, 'AFTER uROUGHNESS SECOND NETIMATEY'
-print *, maxval( netRoughnessArray )
-print *, minval( netRoughnessArray )
         ! Optimal smoothing
         call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                                 roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                                  kernelSmoothing, kernelSmoothingOld, & 
                                        kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                                  kernelSmoothingShape )
-print *, 'AFTER OPTIMAL SMOOTHIG AND SGHAPE'
-print *, maxval( kernelSmoothing(1,:) ),maxval( kernelSmoothing(2,:) )
-print *, maxval( kernelSmoothing(1,:) )/this%histogram%binDistance
-print *, maxval( kernelSmoothing(2,:) )/this%histogram%binDistance
 
         ! Update density
         densityEstimateGrid = 0d0
@@ -2885,7 +2872,6 @@ print *, maxval( kernelSmoothing(2,:) )/this%histogram%binDistance
           gc => activeGridCells(n)
           densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
         end do
-print *, 'AFTER SECOND DENSITY ESITMATOp'
 
         ! Update smoothing scale
         call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
@@ -3378,6 +3364,8 @@ print *, 'AFTER SECOND DENSITY ESITMATOp'
       doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScale
       doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScaleOld
       doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingShape
+      doubleprecision, dimension(:), pointer :: roughness11Array
+      doubleprecision, dimension(:), pointer :: roughness22Array
       integer :: nd
       !------------------------------------------------------------------------------
 
@@ -3420,46 +3408,124 @@ print *, 'AFTER SECOND DENSITY ESITMATOp'
 
       ! Compute shape factors and kernelSmoothing
       kernelSmoothing = 0d0
-      kernelSmoothingShape = 0d0
+      kernelSmoothingShape = 1d0
       do nd=1,3
         if ( this%dimensionMask(nd) .eq. 1 ) then
           ! For anisotropic kernels
           select case (nd) 
             case (1)   
-              where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
+              where (  netRoughness .gt. this%minLimitRoughness ) 
                 kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessXXActive )**( 0.25 )
               end where
             case (2) 
-              where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
+              where (  netRoughness .gt. this%minLimitRoughness ) 
                 kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessYYActive )**( 0.25 )
               end where
             case (3) 
-              where (  abs(netRoughness) .gt. this%minLimitRoughness ) 
+              where (  netRoughness .gt. this%minLimitRoughness ) 
                 kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessZZActive )**( 0.25 )
               end where
           end select
 
-          ! Control kernel shapes, notice that roughnesses
-          ! could be close to zero 
-          where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
-            kernelSmoothingShape(nd,:) = this%minKernelShape
-          end where
-          where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
-            kernelSmoothingShape(nd,:) = this%maxKernelShape
-          end where
-          kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
 
-          where ( kernelSmoothingScale .gt. 0d0 ) 
-            kernelSmoothingShape(nd,:) = kernelSmoothing(nd,:)/kernelSmoothingScale
-          end where  
+          !! Control kernel shapes, notice that roughnesses
+          !! could be close to zero 
+          !where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
+          !  kernelSmoothingShape(nd,:) = this%minKernelShape
+          !end where
+          !where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
+          !  kernelSmoothingShape(nd,:) = this%maxKernelShape
+          !end where
+          !kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
+
+          !where ( kernelSmoothingScale .gt. 0d0 ) 
+          !  kernelSmoothingShape(nd,:) = kernelSmoothing(nd,:)/kernelSmoothingScale
+          !end where  
 
         end if
       end do
-     
+    
+      ! Compute shape factors
+      select case(nDim)
+        case(1)
+          continue
+        case(2)
+          select case(this%idDim1)
+            case(1)
+              roughness11Array => roughnessXXArray
+            case(2)
+              roughness11Array => roughnessYYArray
+            case(3)
+              roughness11Array => roughnessZZArray
+          end select
+          select case(this%idDim2)
+            case(1)
+              roughness22Array => roughnessXXArray
+            case(2)
+              roughness22Array => roughnessYYArray
+            case(3)
+              roughness22Array => roughnessZZArray
+          end select
+          where( roughness11Array .lt. this%minLimitRoughness ) 
+            roughness11Array = this%minLimitRoughness
+          end where
+          where( roughness22Array .lt. this%minLimitRoughness ) 
+            roughness22Array = this%minLimitRoughness
+          end where
+          kernelSmoothingShape(this%idDim1,:) = (roughness22Array/roughness11Array)**( 0.25 )
+          kernelSmoothingShape(this%idDim2,:) = (roughness11Array/roughness22Array)**( 0.25 )
+          where( kernelSmoothingShape(this%idDim1,:).gt.this%maxKernelShape )
+            kernelSmoothingShape(this%idDim1,:) = this%maxKernelShape
+            kernelSmoothingShape(this%idDim2,:) = 1/this%maxKernelShape
+          end where
+          where( kernelSmoothingShape(this%idDim2,:).gt.this%maxKernelShape )
+            kernelSmoothingShape(this%idDim1,:) = 1/this%maxKernelShape
+            kernelSmoothingShape(this%idDim2,:) = this%maxKernelShape
+          end where
+        case(3)
+          where( roughnessXXArray .lt. this%minLimitRoughness ) 
+            roughnessXXArray = this%minLimitRoughness
+          end where
+          where( roughnessYYArray .lt. this%minLimitRoughness ) 
+            roughnessYYArray = this%minLimitRoughness
+          end where
+          where( roughnessZZArray .lt. this%minLimitRoughness ) 
+            roughnessZZArray = this%minLimitRoughness
+          end where
+          kernelSmoothingShape(1,:) = (roughnessYYArray*roughnessZZArray/(roughnessXXArray**2d0))**( 0.166 )
+          kernelSmoothingShape(2,:) = (roughnessXXArray*roughnessZZArray/(roughnessYYArray**2d0))**( 0.166 )
+          kernelSmoothingShape(3,:) = (roughnessXXArray*roughnessYYArray/(roughnessZZArray**2d0))**( 0.166 )
+          where( kernelSmoothingShape(1,:).gt.this%maxKernelShape )
+            kernelSmoothingShape(1,:) = this%maxKernelShape
+            kernelSmoothingShape(2,:) = 1/sqrt(this%maxKernelShape)
+            kernelSmoothingShape(3,:) = 1/sqrt(this%maxKernelShape)
+          end where
+          where( kernelSmoothingShape(2,:).gt.this%maxKernelShape )
+            kernelSmoothingShape(1,:) = 1/sqrt(this%maxKernelShape)
+            kernelSmoothingShape(2,:) = this%maxKernelShape
+            kernelSmoothingShape(3,:) = 1/sqrt(this%maxKernelShape)
+          end where
+          where( kernelSmoothingShape(3,:).gt.this%maxKernelShape )
+            kernelSmoothingShape(1,:) = 1/sqrt(this%maxKernelShape)
+            kernelSmoothingShape(2,:) = 1/sqrt(this%maxKernelShape)
+            kernelSmoothingShape(3,:) = this%maxKernelShape
+          end where
+      end select
+
+      ! The product of the shape factors should be one
+      if ( .not. all(abs(product(kernelSmoothingShape,dim=1)-1d0).lt.0.99) ) then
+        write(*,*) 'Error: the product of kernelSmoothingShape factors is not one. Verify shape calculation.'
+        stop
+      end if 
+
+      ! Once shape factors are valid, compute smoothing
+      do nd=1,3
+        if( this%dimensionMask(nd).eq.0 ) kernelSmoothing(nd,:) = 0d0
+        if( this%dimensionMask(nd).eq.1 ) kernelSmoothing(nd,:) = kernelSmoothingShape(nd,:)*kernelSmoothingScale
+      end do
 
       ! Done 
       return
-
 
     end subroutine prComputeOptimalSmoothingAndShape
 
