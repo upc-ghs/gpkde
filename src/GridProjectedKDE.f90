@@ -3346,12 +3346,16 @@ module GridProjectedKDEModule
                                             kernelSmoothing, kernelSmoothingOld, & 
                                   kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                            kernelSmoothingShape  )
-      !------------------------------------------------------------------------------
+      !----------------------------------------------------------------------------
+      ! Determines optimal smoothing based on the shape factors obtained 
+      ! from roughesses. 
       ! 
+      ! Replaces Eq. 20b in Sole-Mari et al. (2019) for methods following 
+      ! Eq. (C9) and (C11) in Sole-Mari & Fernàndez-Garcia (2018).
       !
-      !------------------------------------------------------------------------------
+      !----------------------------------------------------------------------------
       ! Specifications 
-      !------------------------------------------------------------------------------
+      !----------------------------------------------------------------------------
       implicit none
       class( GridProjectedKDEType) :: this
       doubleprecision, dimension(:), intent(in)      :: nEstimate 
@@ -3367,9 +3371,10 @@ module GridProjectedKDEModule
       doubleprecision, dimension(:), pointer :: roughness11Array
       doubleprecision, dimension(:), pointer :: roughness22Array
       integer :: nd
-      !------------------------------------------------------------------------------
+      !----------------------------------------------------------------------------
 
-      ! Compute smoothing scale. 
+      ! Compute smoothing scale !
+
       ! For the cases of really low roughness, use the limit
       ! value to keep bound the smoothing scale
       kernelSmoothingScale = 0d0
@@ -3380,72 +3385,9 @@ module GridProjectedKDEModule
         kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( 1d0/( nDim + 4d0 ) )
       end where
 
-      ! Roughness scale is set as netRoughness
-      ! Replaces Eq. 20b in Sole-Mari et al. (2019)
-      !roughnessScale = 1d0
-      !do nd=1,3
-      !  if ( this%dimensionMask(nd) .eq. 1 ) then
-      !    select case (nd) 
-      !      case (1)  
-      !        roughnessScale = roughnessScale*roughnessXXActive
-      !      case (2) 
-      !        roughnessScale = roughnessScale*roughnessYYActive
-      !      case (3) 
-      !        roughnessScale = roughnessScale*roughnessZZActive
-      !    end select
-      !  end if
-      !end do
-      !roughnessScale = roughnessScale**( 1d0/nDim )
-
-      !! Limit roughness max roughness scale ?
-      !where ( roughnessScale .gt. this%maxLimitRoughness ) 
-      !  roughnessScale = this%maxLimitRoughness
-      !end where 
-
-      ! The fact that roughnessScale can be zero
-      ! indicate that one or more kernel dimensions 
-      ! where compressed
-
-      ! Compute shape factors and kernelSmoothing
+      ! Shape determination based on roughnesses ! 
       kernelSmoothing = 0d0
       kernelSmoothingShape = 1d0
-      do nd=1,3
-        if ( this%dimensionMask(nd) .eq. 1 ) then
-          ! For anisotropic kernels
-          select case (nd) 
-            case (1)   
-              where (  netRoughness .gt. this%minLimitRoughness ) 
-                kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessXXActive )**( 0.25 )
-              end where
-            case (2) 
-              where (  netRoughness .gt. this%minLimitRoughness ) 
-                kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessYYActive )**( 0.25 )
-              end where
-            case (3) 
-              where (  netRoughness .gt. this%minLimitRoughness ) 
-                kernelSmoothingShape( nd, : ) = ( netRoughness/roughnessZZActive )**( 0.25 )
-              end where
-          end select
-
-
-          !! Control kernel shapes, notice that roughnesses
-          !! could be close to zero 
-          !where( kernelSmoothingShape(nd,:) .lt. this%minKernelShape )
-          !  kernelSmoothingShape(nd,:) = this%minKernelShape
-          !end where
-          !where( kernelSmoothingShape(nd,:) .gt. this%maxKernelShape )
-          !  kernelSmoothingShape(nd,:) = this%maxKernelShape
-          !end where
-          !kernelSmoothing( nd, : ) = kernelSmoothingShape( nd, : )*kernelSmoothingScale
-
-          !where ( kernelSmoothingScale .gt. 0d0 ) 
-          !  kernelSmoothingShape(nd,:) = kernelSmoothing(nd,:)/kernelSmoothingScale
-          !end where  
-
-        end if
-      end do
-    
-      ! Compute shape factors
       select case(nDim)
         case(1)
           continue
@@ -3466,14 +3408,18 @@ module GridProjectedKDEModule
             case(3)
               roughness22Array => roughnessZZArray
           end select
-          where( roughness11Array .lt. this%minLimitRoughness ) 
-            roughness11Array = this%minLimitRoughness
+          ! If the surface is fully uniform in one dimension, 
+          ! let's say, there is a non-zero curvature in x
+          ! but zero curvature in y, then smoothing and shape 
+          ! are controlled by the curvature x, defaults to isotropic.
+          ! Shape factors make sense only when both roughnesses
+          ! are competing.
+          where(&
+            (roughness11Array.gt.this%minLimitRoughness).and.&
+            (roughness22Array.gt.this%minLimitRoughness) ) 
+            kernelSmoothingShape(this%idDim1,:) = (roughness22Array/roughness11Array)**( 0.25 )
+            kernelSmoothingShape(this%idDim2,:) = (roughness11Array/roughness22Array)**( 0.25 )
           end where
-          where( roughness22Array .lt. this%minLimitRoughness ) 
-            roughness22Array = this%minLimitRoughness
-          end where
-          kernelSmoothingShape(this%idDim1,:) = (roughness22Array/roughness11Array)**( 0.25 )
-          kernelSmoothingShape(this%idDim2,:) = (roughness11Array/roughness22Array)**( 0.25 )
           where( kernelSmoothingShape(this%idDim1,:).gt.this%maxKernelShape )
             kernelSmoothingShape(this%idDim1,:) = this%maxKernelShape
             kernelSmoothingShape(this%idDim2,:) = 1/this%maxKernelShape
@@ -3483,18 +3429,18 @@ module GridProjectedKDEModule
             kernelSmoothingShape(this%idDim2,:) = this%maxKernelShape
           end where
         case(3)
-          where( roughnessXXArray .lt. this%minLimitRoughness ) 
-            roughnessXXArray = this%minLimitRoughness
+          ! Something more sophisticated could be done for 3D with 
+          ! uniformity on a given dimension, like default to the 
+          ! 2D x,y shape determination if roughness on the z 
+          ! dimension is zero. 
+          where(&
+            (roughnessXXArray.gt.this%minLimitRoughness).and.&
+            (roughnessYYArray.gt.this%minLimitRoughness).and.&
+            (roughnessZZArray.gt.this%minLimitRoughness) ) 
+            kernelSmoothingShape(1,:) = (roughnessYYArray*roughnessZZArray/(roughnessXXArray**2d0))**( 0.166 )
+            kernelSmoothingShape(2,:) = (roughnessXXArray*roughnessZZArray/(roughnessYYArray**2d0))**( 0.166 )
+            kernelSmoothingShape(3,:) = (roughnessXXArray*roughnessYYArray/(roughnessZZArray**2d0))**( 0.166 )
           end where
-          where( roughnessYYArray .lt. this%minLimitRoughness ) 
-            roughnessYYArray = this%minLimitRoughness
-          end where
-          where( roughnessZZArray .lt. this%minLimitRoughness ) 
-            roughnessZZArray = this%minLimitRoughness
-          end where
-          kernelSmoothingShape(1,:) = (roughnessYYArray*roughnessZZArray/(roughnessXXArray**2d0))**( 0.166 )
-          kernelSmoothingShape(2,:) = (roughnessXXArray*roughnessZZArray/(roughnessYYArray**2d0))**( 0.166 )
-          kernelSmoothingShape(3,:) = (roughnessXXArray*roughnessYYArray/(roughnessZZArray**2d0))**( 0.166 )
           where( kernelSmoothingShape(1,:).gt.this%maxKernelShape )
             kernelSmoothingShape(1,:) = this%maxKernelShape
             kernelSmoothingShape(2,:) = 1/sqrt(this%maxKernelShape)
