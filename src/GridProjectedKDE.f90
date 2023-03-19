@@ -21,9 +21,9 @@ module GridProjectedKDEModule
   logical, parameter :: defaultFlatKernelDatabase   = .true.
   logical, parameter :: defaultDatabaseOptimization = .true.
   logical, parameter :: defaultLogKernelDatabase    = .true.
-  doubleprecision, parameter :: defaultMaxHOverLambda   = 10
-  doubleprecision, parameter :: defaultMinHOverLambda   = 0.1
-  doubleprecision, parameter :: defaultDeltaHOverLambda = 0.1
+  doubleprecision, parameter :: defaultMaxHOverLambda   = 15
+  doubleprecision, parameter :: defaultMinHOverLambda   = 0.3
+  doubleprecision, parameter :: defaultDeltaHOverLambda = 0.3
   doubleprecision, parameter :: defaultDensityRelativeConvergence = 0.01
   doubleprecision, parameter :: defaultRelaxedDensityRelativeConvergence = 0.05
 
@@ -145,10 +145,15 @@ module GridProjectedKDEModule
     doubleprecision               :: varSigmaScale
     doubleprecision               :: hSigmaScale
 
-    ! Limit kernel size to fit consistently inside 
+    ! Limit max kernel size to fit consistently inside 
     ! the reconstruction grid
     doubleprecision, dimension(3) :: maxKernelSize   
     doubleprecision, dimension(3) :: maxKernelSDSize
+    ! Limit min kernel size to at least have 2 cells 
+    ! of positive shape. Otherwise, very small sizes
+    ! can lead to zero kernel. 
+    doubleprecision, dimension(3) :: minKernelSize   
+    doubleprecision, dimension(3) :: minKernelSDSize
 
     ! Report to outUnit
     logical            :: reportToOutUnit = .false.
@@ -445,17 +450,17 @@ contains
       this%flatKernelDatabase = defaultFlatKernelDatabase
     end if
     ! Process kernel database discretization parameters 
-    if ( present( maxHOverLambda ) ) then 
+    if ( present( maxHOverLambda ) .and. (maxHOverLambda.gt.0d0) ) then 
       this%maxHOverLambda = maxHOverLambda
     else 
       this%maxHOverLambda = defaultMaxHOverLambda
     end if
-    if ( present( minHOverLambda ) ) then 
+    if ( present( minHOverLambda ) .and. (minHOverLambda.gt.0d0) ) then 
       this%minHOverLambda = minHOverLambda
     else 
       this%minHOverLambda = defaultMinHOverLambda
     end if
-    if ( present( deltaHOverLambda ) ) then 
+    if ( present( deltaHOverLambda ) .and. (deltaHOverLambda.gt.0d0) ) then 
       this%deltaHOverLambda = deltaHOverLambda
     else 
       this%deltaHOverLambda = defaultDeltaHOverLambda
@@ -583,7 +588,21 @@ contains
       if ( this%dimensionMask(nd).eq.0 ) cycle
       this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%histogram%nBins(nd) - 1)/real(defaultKernelSDRange))
     end do
-
+    ! Assign min kernel sizes, to avoid
+    ! zero size kernels. Both minHOverLambda
+    ! and kernel range are somehow related.
+    this%minKernelSize(:) = 0d0
+    do nd=1,3
+      if ( this%dimensionMask(nd).eq.0 ) cycle
+      ! Consider something with minHOverLambda
+      this%minKernelSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelRange)
+    end do
+    this%minKernelSDSize(:) = 0d0
+    do nd=1,3
+      if ( this%dimensionMask(nd).eq.0 ) cycle
+      ! Consider something with minHOverLambda
+      this%minKernelSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelSDRange)
+    end do
 
     ! Logging
     if ( this%reportToOutUnit ) then 
@@ -2349,7 +2368,7 @@ contains
 
     ! Set min limit roughness
     this%minLimitRoughness = this%minRelativeRoughness*(this%histogram%maxRawDensity**2)
-!pnt *, 'THE LIMIT ROUGHNESS', this%minLimitRoughness
+
     ! Assign distribution statistics as initial smoothing, Silverman (1986)
     if ( this%initialSmoothingSelection .eq. 0 ) then 
       this%initialSmoothing(:) = this%hSigmaScale
@@ -3301,10 +3320,16 @@ contains
     ! Limit support size based on limits imposed by domain  
     ! This kernel is isotropic so get the most restrictive condition
     maxDimId = minloc( this%maxKernelSize, dim=1, mask=(this%maxKernelSize.gt.0d0) )
-    
     where( kernelSigmaSupportScale.gt.this%maxKernelSize(maxDimId) ) 
       kernelSigmaSupportScale = this%maxKernelSize(maxDimId)
     end where
+
+    ! Verify
+    maxDimId = maxloc( this%minKernelSize, dim=1, mask=(this%minKernelSize.gt.0d0) )
+    where( kernelSigmaSupportScale.lt.this%minKernelSize(maxDimId) ) 
+      kernelSigmaSupportScale = this%minKernelSize(maxDimId)
+    end where
+
 
     ! Done
     return
@@ -3385,6 +3410,9 @@ contains
         ! Limit size based on domain restrictions
         where( curvatureBandwidth(nd,:).gt.this%maxKernelSDSize(nd) ) 
           curvatureBandwidth(nd,:) = this%maxKernelSDSize(nd)
+        end where
+        where( curvatureBandwidth(nd,:).lt.this%minKernelSDSize(nd) ) 
+          curvatureBandwidth(nd,:) = this%minKernelSDSize(nd)
         end where
 
       end if
@@ -3554,6 +3582,13 @@ contains
         ! Limit the size based on domain restrictions
         where( kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) 
           kernelSmoothing(nd,:) = this%maxKernelSize(nd)
+        end where
+      end if
+      if ( any(kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) ) then
+        updateScale = .true.
+        ! Limit the size based on bin restrictions
+        where( kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) 
+          kernelSmoothing(nd,:) = this%minKernelSize(nd)
         end where
       end if
     end do

@@ -296,16 +296,6 @@ program GPKDE
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'GPKDE will compute raw kernels.'
     end if
-    !! Read kernel params
-    !! - min   h/lambda
-    !! - max   h/lambda
-    !read(simUnit, '(a)') line
-    !icol = 1
-    !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    !kernelParams(1) = r
-    !kernelParams(2) = 0d0 ! NOT USED
-    !call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    !kernelParams(3) = r
     kernelParams(:) = 0d0
   end if 
 
