@@ -1414,17 +1414,17 @@ contains
     roughness22Array  = 0d0 
     netRoughnessArray = 0d0
 
-    ! 11
+    ! Net roughness
     !$omp parallel do schedule( dynamic, 1 ) &
     !$omp default( none )                    &
     !$omp shared( this )                     &
     !$omp shared( activeGridCells )          &
     !$omp shared( curvature1 )               &
-    !$omp shared( roughness11Array )         &
     !$omp shared( curvature2 )               &
+    !$omp shared( curvature12 )              &
+    !$omp shared( roughness11Array )         &
     !$omp shared( roughness22Array )         &
     !$omp firstprivate( kernelSigma )        &
-    !$omp shared( curvature12 )              &
     !$omp shared( netRoughnessArray )        & 
     !$omp shared( kernelSigmaSupport )       &
     !$omp private( gc )
@@ -1433,10 +1433,9 @@ contains
       ! Assign pointer 
       gc => activeGridCells(n)
 
-      ! Notice this stage: kernelSigma is used in following loops
       call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
-      ! Compute roughness grid estimates
+      ! Compute roughness estimates
       roughness11Array( n ) = sum(&
           curvature1(&
               gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
@@ -1446,7 +1445,6 @@ contains
               gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
               gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
               gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
-      ! Compute roughness grid estimates
       roughness22Array( n ) = sum(&
           curvature2(&
               gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
@@ -1485,7 +1483,6 @@ contains
   end subroutine prComputeNetRoughness2D
 
 
-  ! NEEDS UPDATE !
   ! NET ROUGHNESS
   ! net roughness
   ! 3D
@@ -1513,58 +1510,31 @@ contains
     doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
     doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
     doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
-    doubleprecision, dimension(:), intent(inout)   :: netRoughnessArray
+    doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
     ! local 
     type( GridCellType ), pointer :: gc => null()
-    doubleprecision, dimension(:,:,:), pointer :: curvature
-    doubleprecision, dimension(:,:,:), pointer :: roughness
     doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureX
     doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureY
     doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXX
     doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXY
     doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYY
     doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureZZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXX
-    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXY
-    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessXZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYY
-    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessYZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  roughnessZZ
-    integer :: n, nr  
-    integer :: iX, iY, iZ 
+    type( KernelMultiGaussianType )                        ::  kernelSigma
+    doubleprecision :: roughnessXY, roughnessXZ, roughnessYZ 
+    integer :: n  
     !------------------------------------------------------------------------------
-    allocate(          curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(          curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(          curvatureZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         curvatureXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         curvatureXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         curvatureXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         curvatureYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         curvatureYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         curvatureZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         roughnessXX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         roughnessXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         roughnessXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         roughnessYY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         roughnessYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
-    allocate(         roughnessZZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate(  curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate(  curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate(  curvatureZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate( curvatureXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate( curvatureXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate( curvatureYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
     !------------------------------------------------------------------------------
-
 
     ! Initialize 
     curvatureX  = 0d0
     curvatureY  = 0d0
     curvatureZ  = 0d0
-    roughnessXX = 0d0 
-    roughnessYY = 0d0
-    roughnessZZ = 0d0
-    roughnessXY = 0d0
-    roughnessXZ = 0d0
-    roughnessYZ = 0d0
-
 
     ! Curvatures, kappa
     !$omp parallel do schedule( dynamic, 1 )           & 
@@ -1590,7 +1560,7 @@ contains
       ! Set kernels        
       call this%SetKernelSD3D( gc, kernelSDX, kernelSDY, kernelSDZ, curvatureBandwidth( :, n ) )
 
-      ! Compute curvature
+      ! Compute curvatures
       curvatureX( &
               gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
               gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
@@ -1605,8 +1575,6 @@ contains
                       gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
                       gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
               )
-
-      ! Compute curvature
       curvatureY( &
               gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
               gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
@@ -1621,8 +1589,6 @@ contains
                       gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
                       gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
                  )
-      
-      ! Compute curvature 
       curvatureZ( &
               gc%kernelSD3XGSpan(1):gc%kernelSD3XGSpan(2), &
               gc%kernelSD3YGSpan(1):gc%kernelSD3YGSpan(2), & 
@@ -1637,7 +1603,9 @@ contains
                       gc%kernelSD3YMSpan(1):gc%kernelSD3YMSpan(2), & 
                       gc%kernelSD3ZMSpan(1):gc%kernelSD3ZMSpan(2)  & 
               )
-  
+      deallocate( gc%kernelSD1Matrix )
+      deallocate( gc%kernelSD2Matrix )
+      deallocate( gc%kernelSD3Matrix )
     end do
     !$omp end parallel do
     curvatureX = curvatureX/this%histogram%binVolume
@@ -1649,127 +1617,130 @@ contains
     curvatureZ = curvatureZ/( this%binSize(3)**2 )
 
     ! Compute curvatures product
-    curvatureXX = curvatureX*curvatureX
-    curvatureYY = curvatureY*curvatureY
-    curvatureZZ = curvatureZ*curvatureZ
+    curvatureX  = curvatureX*curvatureX
+    curvatureY  = curvatureY*curvatureY
+    curvatureZ  = curvatureZ*curvatureZ
     curvatureXY = curvatureX*curvatureY
     curvatureXZ = curvatureX*curvatureZ
     curvatureYZ = curvatureY*curvatureZ
 
-    ! Compute roughnesses
-    do nr = 1, 6
-      select case(nr) 
-        case (1)
-          roughness => roughnessXX
-          curvature => curvatureXX
-        case (2)
-          roughness => roughnessYY
-          curvature => curvatureYY
-        case (3)
-          roughness => roughnessZZ
-          curvature => curvatureZZ
-        case (4)
-          roughness => roughnessXY
-          curvature => curvatureXY
-        case (5)
-          roughness => roughnessXZ
-          curvature => curvatureXZ
-        case (6)
-          roughness => roughnessYZ
-          curvature => curvatureYZ
-      end select
-
-      !$omp parallel do schedule( dynamic, 1 ) &
-      !$omp default( none )                    &
-      !$omp shared( this )                     &
-      !$omp shared( activeGridCells )          &
-      !$omp shared( curvature )                &
-      !$omp shared( roughness )                & 
-      !$omp private( gc )
-      do n = 1, this%nComputeBins
-
-        ! Assign pointer 
-        gc => activeGridCells(n)
-
-        ! Compute roughness grid estimates
-        roughness( gc%id(1), gc%id(2), gc%id(3) ) = sum(&
-            curvature(&
-                gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
-                gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
-                gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
-            )*gc%kernelSigmaMatrix(&
-                gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
-                gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
-
-      end do
-      !$omp end parallel do 
-    end do
+    ! Initialize kernelSigma
+    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
 
     ! Net roughness
     roughnessXXArray  = 0d0 
     roughnessYYArray  = 0d0 
     roughnessZZArray  = 0d0 
     netRoughnessArray = 0d0
+    roughnessXY       = 0d0
+    roughnessXZ       = 0d0
+    roughnessYZ       = 0d0
     !$omp parallel do schedule( dynamic, 1 ) &
     !$omp default( none )                    &
     !$omp shared( this )                     &
     !$omp shared( activeGridCells )          &
-    !$omp shared( roughnessXX, roughnessYY ) &
-    !$omp shared( roughnessZZ, roughnessXY ) &
-    !$omp shared( roughnessXZ, roughnessYZ ) &
+    !$omp shared( curvatureX )               &
+    !$omp shared( curvatureY )               &
+    !$omp shared( curvatureZ )               &
+    !$omp shared( curvatureXY )              &
+    !$omp shared( curvatureYZ )              &
+    !$omp shared( curvatureXZ )              &
     !$omp shared( roughnessXXArray )         &
     !$omp shared( roughnessYYArray )         &
     !$omp shared( roughnessZZArray )         &
     !$omp shared( netRoughnessArray )        &
-    !$omp private( gc )                      & 
-    !$omp private( iX, iY, iZ )  
+    !$omp firstprivate( roughnessXY )        &
+    !$omp firstprivate( roughnessXZ )        &
+    !$omp firstprivate( roughnessYZ )        &
+    !$omp firstprivate( kernelSigma )        &
+    !$omp shared( kernelSigmaSupport )       &
+    !$omp private( gc )                       
     do n = 1, this%nComputeBins
 
       ! Assign pointer 
       gc => activeGridCells(n)
 
-      iX = gc%id(1)
-      iY = gc%id(2)
-      iZ = gc%id(3)
+      call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
 
-      ! Assign info for needed arrays 
-      roughnessXXArray( n ) = roughnessXX(iX,iY,iZ)
-      roughnessYYArray( n ) = roughnessYY(iX,iY,iZ)
-      roughnessZZArray( n ) = roughnessZZ(iX,iY,iZ)
+      ! Compute roughness estimates
+      roughnessXXArray( n ) = sum(&
+        curvatureX(&
+            gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+            gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+            gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+        )*gc%kernelSigmaMatrix(&
+            gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+            gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+            gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+      roughnessYYArray( n ) = sum(&
+        curvatureY(&
+            gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+            gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+            gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+        )*gc%kernelSigmaMatrix(&
+            gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+            gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+            gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+      roughnessZZArray( n ) = sum(&
+        curvatureZ(&
+            gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+            gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+            gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+        )*gc%kernelSigmaMatrix(&
+            gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+            gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+            gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+
+      roughnessXY = sum(&
+        curvatureXY(&
+            gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+            gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+            gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+        )*gc%kernelSigmaMatrix(&
+            gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+            gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+            gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+      roughnessXZ = sum(&
+        curvatureXZ(&
+            gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+            gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+            gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+        )*gc%kernelSigmaMatrix(&
+            gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+            gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+            gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+      roughnessYZ = sum(&
+        curvatureYZ(&
+            gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+            gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+            gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+        )*gc%kernelSigmaMatrix(&
+            gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+            gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+            gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
 
       ! Compute net roughness
-      ! 3D
-      ! ISOTROPIC
-      netRoughnessArray( n ) = roughnessXX(iX,iY,iZ) + 2*roughnessXY(iX,iY,iZ) + 2*roughnessXZ(iX,iY,iZ) + &
-                                     roughnessYY(iX,iY,iZ) + 2*roughnessYZ(iX,iY,iZ) + roughnessZZ(iX,iY,iZ)
+      netRoughnessArray( n ) = roughnessXXArray(n) + 2d0*roughnessXY + 2d0*roughnessXZ + &
+                               roughnessYYArray(n) + 2d0*roughnessYZ + roughnessZZArray(n)
 
-      ! ANISOTROPIC
-      !netRoughnessArray( n ) = 3*( roughnessXX(iX,iY,iZ)*roughnessYY(iX,iY,iZ)*roughnessZZ(iX,iY,iZ) )**(1d0/3d0) + &
-      !    2*roughnessYZ(iX,iY,iZ)*( roughnessXX(iX,iY,iZ)**2/roughnessYY(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
-      !    2*roughnessXZ(iX,iY,iZ)*( roughnessYY(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessZZ(iX,iY,iZ) )**(1d0/6d0) + &
-      !    2*roughnessXY(iX,iY,iZ)*( roughnessZZ(iX,iY,iZ)**2/roughnessXX(iX,iY,iZ)/roughnessYY(iX,iY,iZ) )**(1d0/6d0)
+      ! Anisotropic
+      !netRoughnessArray( n ) = 3d0*( roughnessXXArray(n)*roughnessYYArray(n)*roughnessZZArray(n) )**(1d0/3d0) + &
+      !    2d0*roughnessYZ*( roughnessXXArray(n)**2/roughnessYYArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
+      !    2d0*roughnessXZ*( roughnessYYArray(n)**2/roughnessXXArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
+      !    2d0*roughnessXY*( roughnessZZArray(n)**2/roughnessXXArray(n)/roughnessYYArray(n) )**(1d0/6d0)
 
-      ! NEED COMBINED !
+      deallocate( gc%kernelSigmaMatrix ) 
     end do
     !$omp end parallel do
-    
+   
+
     ! Deallocate
-    deallocate(          curvatureX )
-    deallocate(          curvatureY )
-    deallocate(          curvatureZ )
-    deallocate(         curvatureXX )
-    deallocate(         curvatureXY )
-    deallocate(         curvatureXZ )
-    deallocate(         curvatureYY )
-    deallocate(         curvatureYZ )
-    deallocate(         curvatureZZ )
-    deallocate(         roughnessXX )
-    deallocate(         roughnessXY )
-    deallocate(         roughnessXZ )
-    deallocate(         roughnessYY )
-    deallocate(         roughnessYZ )
-    deallocate(         roughnessZZ )
+    deallocate(  curvatureX )
+    deallocate(  curvatureY )
+    deallocate(  curvatureZ )
+    deallocate( curvatureXY )
+    deallocate( curvatureXZ )
+    deallocate( curvatureYZ )
 
 
     ! Done
@@ -2504,7 +2475,6 @@ contains
     integer            :: softConvergenceCount
     integer            :: zeroDensityCount    
     character(len=500) :: varsOutputFileName
-    !character(len=500) :: errorOutputFileName
     character(len=20)  :: loopId
     logical            :: exportVariables, skipErrorBreak
     logical            :: exportLoopError
@@ -2539,9 +2509,6 @@ contains
     doubleprecision :: nFractionDensity
     doubleprecision :: nFractionRoughness
     doubleprecision :: nFractionSmoothing
-    !character(len=16) :: helpChar
-    !integer :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
-    !doubleprecision :: elapsedTime
     !------------------------------------------------------------------------------
 
     ! Initialize vars
