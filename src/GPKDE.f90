@@ -28,7 +28,7 @@ program GPKDE
   logical            :: exportOptimizationVariables
   ! urword
   character(len=200) :: line
-  integer            :: icol,istart,istop,n
+  integer            :: icol,istart,istop,n, iostatus
   doubleprecision    :: r
   ! clock
   doubleprecision    :: elapsedTime
@@ -384,28 +384,36 @@ program GPKDE
   ! Export optimization variables 
   ! 0: does not export 
   ! 1: export data, one file per loop for active bins 
-  read(simUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  select case(n)
-  case(0)
+  read(simUnit, '(a)', iostat=iostatus) line
+  if ( iostatus.lt.0 ) then
+    ! Not given, take as zero
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'Will not export optimization variables.'
     end if
     exportOptimizationVariables = .false.
-  case(1)
-    if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'Will export optimization variables, one file per loop.'
-    end if
-    exportOptimizationVariables = .true.
-  case default
-    ! Defaults to false
-    if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'Will not export optimization variables.'
-    end if
-    exportOptimizationVariables = .false.
-  end select
-
+  else
+    icol = 1
+    call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+    select case(n)
+    case(0)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Will not export optimization variables.'
+      end if
+      exportOptimizationVariables = .false.
+    case(1)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Will export optimization variables, one file per loop.'
+      end if
+      exportOptimizationVariables = .true.
+    case default
+      ! Defaults to false
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Will not export optimization variables.'
+      end if
+      exportOptimizationVariables = .false.
+    end select
+  end if 
+ 
 
   ! Read data into arrays for reconstruction
   if ( logUnit.gt.0 ) then 
