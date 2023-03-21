@@ -123,7 +123,6 @@ contains
         this%matrixRange = defaultKernelRange 
       end if
 
-
       if ( present( dimensionMask ) ) then 
         this%dimensionMask = dimensionMask
         nDim = sum( this%dimensionMask )
@@ -148,9 +147,8 @@ contains
           end do
         end if 
       else
-          this%dimensionMask = (/1,1,1/)
+        this%dimensionMask = (/1,1,1/)
       end if
-
 
     end subroutine prInitialize
 

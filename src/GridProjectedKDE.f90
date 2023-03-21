@@ -351,7 +351,7 @@ contains
     ! Brute optimization, no kernel database
     logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
     ! General use, indexes
-    integer :: n, nd
+    integer :: nd
     ! Limit roughness
     doubleprecision ::  minHRoughness, maxHRoughness, nDensityScale
     ! The analog to a listUnit, reports
@@ -537,8 +537,8 @@ contains
     end select
     ! Fix to be consistent with dimensions 
     do nd=1,3
-      if ( dimensionMask(n) .eq. 0 ) then 
-        this%initialSmoothing(n) = 0d0
+      if ( dimensionMask(nd) .eq. 0 ) then 
+        this%initialSmoothing(nd) = 0d0
       end if 
     end do
     ! TO BE DEPRECATED !
@@ -1005,6 +1005,7 @@ contains
         !$omp shared( curvatureBandwidth )       &
         !$omp reduction( +:curvature1 )          &
         !$omp firstprivate( kernelSDX )          &
+        !$omp private( n )                       &
         !$omp private( gc )                       
         do n = 1, this%nComputeBins
   
@@ -1045,6 +1046,7 @@ contains
         !$omp shared( curvatureBandwidth )       &
         !$omp reduction( +:curvature1 )          &
         !$omp firstprivate( kernelSDY )          &
+        !$omp private( n )                       &
         !$omp private( gc )                       
         do n = 1, this%nComputeBins
   
@@ -1085,6 +1087,7 @@ contains
         !$omp shared( curvatureBandwidth )       &
         !$omp reduction( +:curvature1 )          &
         !$omp firstprivate( kernelSDZ )          &
+        !$omp private( n )                       &
         !$omp private( gc )                       
         do n = 1, this%nComputeBins
   
@@ -1137,6 +1140,7 @@ contains
     !$omp shared( roughness11Array )         &
     !$omp shared( kernelSigmaSupport )       & 
     !$omp firstprivate( kernelSigma )        &
+    !$omp private( n )                       &
     !$omp private( gc )
     do n = 1, this%nComputeBins
 
@@ -1204,8 +1208,8 @@ contains
     doubleprecision, dimension(:,:,:), allocatable :: curvature1
     doubleprecision, dimension(:,:,:), allocatable :: curvature2
     doubleprecision, dimension(:,:,:), allocatable :: curvature12
+    type( KernelMultiGaussianType )                :: kernelSigma
     integer :: n
-    type( KernelMultiGaussianType ) :: kernelSigma
     !-----------------------------------------------------------------------------
     allocate( curvature1( this%nBins(1), this%nBins(2), this%nBins(3)  )) 
     allocate( curvature2( this%nBins(1), this%nBins(2), this%nBins(3)  )) 
@@ -1230,6 +1234,7 @@ contains
       !$omp reduction( +:curvature2 )          &
       !$omp firstprivate( kernelSDX )          &
       !$omp firstprivate( kernelSDY )          &
+      !$omp private( n )                       &
       !$omp private( gc )                       
       do n = 1, this%nComputeBins
   
@@ -1289,6 +1294,7 @@ contains
       !$omp reduction( +:curvature2 )          &
       !$omp firstprivate( kernelSDX )          &
       !$omp firstprivate( kernelSDZ )          &
+      !$omp private( n )                       &
       !$omp private( gc )                       
       do n = 1, this%nComputeBins
   
@@ -1348,6 +1354,7 @@ contains
       !$omp reduction( +:curvature2 )          &
       !$omp firstprivate( kernelSDY )          &
       !$omp firstprivate( kernelSDZ )          &
+      !$omp private( n )                       &
       !$omp private( gc )                       
       do n = 1, this%nComputeBins
   
@@ -1427,6 +1434,7 @@ contains
     !$omp firstprivate( kernelSigma )        &
     !$omp shared( netRoughnessArray )        & 
     !$omp shared( kernelSigmaSupport )       &
+    !$omp private( n )                       &
     !$omp private( gc )
     do n = 1, this%nComputeBins
 
@@ -1513,13 +1521,13 @@ contains
     doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
     ! local 
     type( GridCellType ), pointer :: gc => null()
-    doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureX
-    doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureY
-    doubleprecision, dimension(:,:,:), allocatable, target ::   curvatureZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXY
-    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureXZ
-    doubleprecision, dimension(:,:,:), allocatable, target ::  curvatureYZ
-    type( KernelMultiGaussianType )                        ::  kernelSigma
+    doubleprecision, dimension(:,:,:), allocatable ::  curvatureX
+    doubleprecision, dimension(:,:,:), allocatable ::  curvatureY
+    doubleprecision, dimension(:,:,:), allocatable ::  curvatureZ
+    doubleprecision, dimension(:,:,:), allocatable :: curvatureXY
+    doubleprecision, dimension(:,:,:), allocatable :: curvatureXZ
+    doubleprecision, dimension(:,:,:), allocatable :: curvatureYZ
+    type( KernelMultiGaussianType )                :: kernelSigma
     doubleprecision :: roughnessXY, roughnessXZ, roughnessYZ 
     integer :: n  
     !------------------------------------------------------------------------------
@@ -1532,22 +1540,23 @@ contains
     !------------------------------------------------------------------------------
 
     ! Initialize 
-    curvatureX  = 0d0
-    curvatureY  = 0d0
-    curvatureZ  = 0d0
+    curvatureX(:,:,:)  = 0d0
+    curvatureY(:,:,:)  = 0d0
+    curvatureZ(:,:,:)  = 0d0
 
     ! Curvatures, kappa
-    !$omp parallel do schedule( dynamic, 1 )           & 
-    !$omp default( none )                              &
-    !$omp shared( this )                               &
-    !$omp shared( activeGridCells )                    &
-    !$omp reduction( +:curvatureX )                    &
-    !$omp reduction( +:curvatureY )                    &
-    !$omp reduction( +:curvatureZ )                    &
-    !$omp shared( curvatureBandwidth )                 &
-    !$omp firstprivate( kernelSDX )                    &
-    !$omp firstprivate( kernelSDY )                    &
-    !$omp firstprivate( kernelSDZ )                    &
+    !$omp parallel do schedule( dynamic, 1 ) & 
+    !$omp default( none )                    &
+    !$omp shared( this )                     &
+    !$omp shared( activeGridCells )          &
+    !$omp shared( curvatureBandwidth )       &
+    !$omp firstprivate( kernelSDX )          &
+    !$omp firstprivate( kernelSDY )          &
+    !$omp firstprivate( kernelSDZ )          &
+    !$omp reduction( +:curvatureX )          &
+    !$omp reduction( +:curvatureY )          &
+    !$omp reduction( +:curvatureZ )          &
+    !$omp private( n )                       &
     !$omp private( gc )                       
     do n = 1, this%nComputeBins
   
@@ -1603,11 +1612,12 @@ contains
                       gc%kernelSD3YMSpan(1):gc%kernelSD3YMSpan(2), & 
                       gc%kernelSD3ZMSpan(1):gc%kernelSD3ZMSpan(2)  & 
               )
-      deallocate( gc%kernelSD1Matrix )
-      deallocate( gc%kernelSD2Matrix )
-      deallocate( gc%kernelSD3Matrix )
+      if( allocated( gc%kernelSD1Matrix ) ) deallocate( gc%kernelSD1Matrix )
+      if( allocated( gc%kernelSD2Matrix ) ) deallocate( gc%kernelSD2Matrix )
+      if( allocated( gc%kernelSD3Matrix ) ) deallocate( gc%kernelSD3Matrix )
     end do
     !$omp end parallel do
+
     curvatureX = curvatureX/this%histogram%binVolume
     curvatureY = curvatureY/this%histogram%binVolume
     curvatureZ = curvatureZ/this%histogram%binVolume
@@ -1654,6 +1664,7 @@ contains
     !$omp firstprivate( roughnessYZ )        &
     !$omp firstprivate( kernelSigma )        &
     !$omp shared( kernelSigmaSupport )       &
+    !$omp private( n )                       &
     !$omp private( gc )                       
     do n = 1, this%nComputeBins
 
@@ -1869,6 +1880,7 @@ contains
       !$omp shared( localKernelRange )         &
       !$omp reduction( +:kernelDBMemory )      &
       !$omp private( kernelMatrixMemory )      &
+      !$omp private( n )                       &
       !$omp private( inputSmoothing )
       do n = 1, nDelta
         inputSmoothing(:) = 0
@@ -1897,6 +1909,7 @@ contains
       !$omp shared( localKernelSDRange )       &
       !$omp reduction( +:kernelSDDBMemory )    &
       !$omp private( kernelMatrixMemory )      &
+      !$omp private( n )                       &
       !$omp private( inputSmoothing )
       do n = 1, nDelta
         inputSmoothing(:) = 0
@@ -1957,6 +1970,7 @@ contains
       !$omp private( m, dbi )                  &
       !$omp reduction( +:kernelDBMemory )      &
       !$omp private( kernelMatrixMemory )      &
+      !$omp private( n )                       &
       !$omp private( inputSmoothing )
       do n = 1, nDelta
         do m = 1, min( n, nDelta )
@@ -1989,6 +2003,7 @@ contains
       !$omp shared( localKernelSDRange )       &
       !$omp reduction( +:kernelSDDBMemory )    &
       !$omp private( kernelMatrixMemory )      &
+      !$omp private( n )                       &
       !$omp private( inputSmoothing )
       do n = 1, nDelta
         inputSmoothing(:) = 0
@@ -2035,6 +2050,7 @@ contains
       !$omp private( n, m, dbi )               &
       !$omp reduction( +:kernelDBMemory )      &
       !$omp private( kernelMatrixMemory )      &
+      !$omp private( o )                       &
       !$omp private( inputSmoothing )
       do o = 1, nDelta
         do n = 1, nDelta
@@ -2067,6 +2083,7 @@ contains
       !$omp shared( localKernelSDRange )       &
       !$omp reduction( +:kernelSDDBMemory )    &
       !$omp private( kernelMatrixMemory )      &
+      !$omp private( n )                       &
       !$omp private( inputSmoothing )
       do n = 1, nDelta
         inputSmoothing = (/ hOverLambda(n), hOverLambda(n), hOverLambda(n) /)
@@ -2243,11 +2260,14 @@ contains
     if ( (locWeightedHistogram).and.(.not.present(weights)) ) then 
       write(*,*) 'ERROR: weightedHistogram requires weights and were not given. Stop.'
       stop
-    end if 
+    end if
+    ! Verify weights size for weighted reconstruction
     dataPointsShape = shape(dataPoints)
-    if ( (locWeightedHistogram).and.(size(weights).ne.dataPointsShape(1)) ) then 
-      write(*,*) 'ERROR: given weights are not the same length than datapoints. Stop.'
-      stop
+    if ( locWeightedHistogram ) then
+      if ( size(weights).ne.dataPointsShape(1) ) then 
+        write(*,*) 'ERROR: given weights are not the same length than datapoints. Stop.'
+        stop
+      end if
     end if
     if ( dataPointsShape(1).lt.1 ) then 
       write(*,*) 'ERROR: data points is empty. Stop.'
@@ -2583,9 +2603,11 @@ contains
 
     ! Initialize active grid cells
     ! and compute rawDensity
+    ! Necessary ?
     rawDensity = 0d0
     !$omp parallel do schedule(dynamic,1) &
-    !$omp private(gc) 
+    !$omp private( n )                    &
+    !$omp private( gc ) 
     do n = 1, this%nComputeBins
       gc => activeGridCellsMod(n)
       call gc%Initialize( this%computeBinIds( :, n ) )
@@ -2638,6 +2660,7 @@ contains
     !$omp shared( kernelSmoothing )           & 
     !$omp reduction( +: densityEstimateGrid ) & 
     !$omp firstprivate( kernel )              & 
+    !$omp private( n )                        &                       
     !$omp private( gc )                        
     do n = 1, this%nComputeBins
         
@@ -2754,6 +2777,7 @@ contains
       !$omp shared( nEstimateArray )                              &
       !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
       !$omp firstprivate( kernelSigma )                           &
+      !$omp private( n )                                          &            
       !$omp private( gc )            
       do n = 1, this%nComputeBins
 
@@ -2803,6 +2827,7 @@ contains
       !$omp shared( nEstimateArray )                              &
       !$omp shared( kernelSigmaSupport, kernelSigmaSupportScale ) &
       !$omp firstprivate( kernelSigma )                           &
+      !$omp private( n )                                          &
       !$omp private( gc )
       do n = 1, this%nComputeBins
 
@@ -2851,6 +2876,7 @@ contains
       !$omp shared( kernelSmoothing )           & 
       !$omp reduction( +: densityEstimateGrid ) & 
       !$omp firstprivate( kernel )              & 
+      !$omp private( n )                        & 
       !$omp private( gc )                        
       do n = 1, this%nComputeBins
 
@@ -2936,7 +2962,8 @@ contains
       !$omp shared(relativeSmoothingChange)   &
       !$omp reduction(+:nDensityConvergence)  &
       !$omp reduction(+:nRoughnessConvergence)&
-      !$omp reduction(+:nSmoothingConvergence)
+      !$omp reduction(+:nSmoothingConvergence)&
+      !$omp private( n )                      
       do n = 1, this%nComputeBins
         if ( relativeDensityChange(n) < errorMetricConvergence ) then 
           nDensityConvergence = nDensityConvergence + 1
