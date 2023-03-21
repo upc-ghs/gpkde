@@ -2314,8 +2314,6 @@ contains
     end do 
     this%stdSigmaScale = product( this%stdCoords, mask=(this%dimensionMask.eq.1))
     this%stdSigmaScale = this%stdSigmaScale**(1d0/nDim)
-    !this%hSigmaScale   = minval(this%stdCoords, mask=(this%stdCoords.gt.0d0))*(&
-    !        4d0/((nDim + 2d0)*this%histogram%nEffective) )**(1d0/(nDim+4d0))
     this%hSigmaScale   = this%stdSigmaScale*( 4d0/((nDim + 2d0)*this%histogram%nEffective) )**(1d0/(nDim+4d0))
     if( this%stdSigmaScale.ne.0d0 ) this%varSigmaScale = 1d0/((4d0*pi)**nDim*this%histogram%nEffective*this%stdSigmaScale)
     if( this%stdSigmaScale .eq. 0d0 ) then 
@@ -2605,6 +2603,12 @@ contains
     call kernelSDZ%Initialize(   this%binSize, matrixRange=defaultKernelSDRange )
 
     ! Initial smoothing
+    ! 
+    ! For a second run, consider something 
+    ! to detect previous smoothing values and start 
+    ! from there, although the distribution of active/inactive 
+    ! bins may change for a second time 
+    !
     kernelSmoothing = spread( this%initialSmoothing, 2, this%nComputeBins )
     call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
     kernelSigmaSupportScale = 3d0*kernelSmoothingScale
@@ -2668,7 +2672,8 @@ contains
       deallocate( gc%kernelMatrix )
     end do
     !$omp end parallel do 
-    densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
+    densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
+
     ! Transfer grid density to array
     do n = 1, this%nComputeBins
       gc => activeGridCells(n)
@@ -2696,7 +2701,7 @@ contains
     nSmoothingConvergence = 0
     do n = 1, this%nComputeBins
       if ( relativeSmoothingChange(n) < errorMetricConvergence ) then 
-          nSmoothingConvergence = nSmoothingConvergence + 1
+        nSmoothingConvergence = nSmoothingConvergence + 1
       end if
     end do
     errorMetricSmoothing = sqrt(sum(relativeSmoothingChange**2)/this%nComputeBins)
@@ -2884,7 +2889,8 @@ contains
         deallocate( gc%kernelMatrix ) 
       end do
       !$omp end parallel do
-      densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume 
+      densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
+
       ! Transfer grid density to array
       do n = 1, this%nComputeBins
         gc => activeGridCells(n)
@@ -2979,118 +2985,14 @@ contains
           ! Break
           exit
         end if
-
-        !! NOTE: a new criteria could consider the 
-        !! densityGrid in order to include in the error 
-        !! estimate those cells without particles/mass.
-        !if (  ( errorMetric .lt. errorMetricConvergence ) ) then
-        !  ! Criteria:
-        !  ! Break optimization loop if 
-        !  ! relative density change lower than 
-        !  ! a given convergence
-        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-        !  if ( this%reportToOutUnit ) then 
-        !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
-        !  end if 
-        !  ! Break
-        !  exit
-        !end if 
-        !if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
-        !  ! Criteria:
-        !  ! Break optimization loop if 
-        !  ! relative smoothing change lower than 
-        !  ! a given convergence
-        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-        !  !print *, '!! SMOOTHING CONVERGENCE !!'
-        !  if ( this%reportToOutUnit ) then 
-        !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
-        !  end if
-        !  ! Break
-        !  exit
-        !end if 
-        !if ( (errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
-        !        (errorRMSE .gt. errorRMSEOld ) .and.               &
-        !        (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then 
-        !  ! Criteria
-        !  ! If both RMSE and ALMISE are increasing
-        !  ! and density convergence is below the relaxed limit, 
-        !  ! return previous density and leave
-        !  densityEstimateGrid = densityGridOld
-        !  ! Transfer grid density to array
-        !  do n = 1, this%nComputeBins
-        !    ! Assign gc pointer 
-        !    gc => activeGridCells(n)
-        !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-        !  end do
-        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-        !  !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
-        !  if ( this%reportToOutUnit ) then 
-        !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
-        !  end if 
-        !  ! Break
-        !  exit
-        !end if 
-        !if ( & 
-        !  (errorRMSE .lt. errorRMSEOld) .and. ( errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
-        !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence )   ) then
-        !  ! Criteria
-        !  ! If the RMSE versus the histogram decreases, 
-        !  ! but the ALMISE increases it is probably and indication 
-        !  ! of high resolution in the particle model. 
-        !  ! This has been observed for high number of particles 
-        !  ! and error indicators oscillate.
-        !  if ( this%reportToOutUnit ) then 
-        !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetric
-        !  end if 
-        !  !print *, '!! INCREASED ALMISE DECREASE RMSE AND SOFT CONVERGENCE !!'
-        !  ! Break
-        !  exit
-        !end if 
-        !if ( (errorMetric .gt. errorMetricOld) .and. & 
-        !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then
-        !  ! Criteria
-        !  ! If the relative change in density increased with 
-        !  ! respect to previous value, return previous density and leave
-        !  ! This could be complemented with maximum density analysis, 
-        !  ! requires mass. 
-        !  densityEstimateGrid = densityGridOld
-        !  ! Transfer grid density to array
-        !  do n = 1, this%nComputeBins
-        !    gc => activeGridCells(n)
-        !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-        !  end do
-        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
-        !  !print *, '!! INCREASED RELATIVE DENSITY CHANGE AND SOFT CONVERGENCE !!'
-        !  if ( this%reportToOutUnit ) then 
-        !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
-        !  end if 
-        !  ! Break
-        !  exit
-        !end if
-        !if ( nFractionDensity .gt. 0.98 ) then 
-        !  ! Criteria
-        !  ! If the fraction of cells that is presenting changes in 
-        !  ! density below the convergence criteria is close to the total 
-        !  ! number of cells, exit.
-        !  !print *, '!! NFRACTIONDENSITY !!'
-        !  if ( this%reportToOutUnit ) then 
-        !  write( this%outFileUnit, '(A)' ) '    - nFractionDensity '
-        !  end if 
-        !  ! Break
-        !  exit
-        !end if  
-        !if ( nFractionSmoothing .gt. 0.98 ) then 
-        !  ! Criteria
-        !  ! If the fraction of cells that is presenting changes in 
-        !  ! smoothing below the convergence criteria is close to the total 
-        !  ! number of cells, exit.
-        !  !print *, '!! NFRACTIONSMOOTHING !!'
-        !  if ( this%reportToOutUnit ) then 
-        !  write( this%outFileUnit, '(A)' ) '    - nFractionSmoothing '
-        !  end if 
-        !  ! Break
-        !  exit
-        !end if  
+        ! Smoothing convergence
+        if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
+          if ( this%reportToOutUnit ) then 
+            write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+          end if
+          ! Break
+          exit
+        end if 
       end if
 
       ! Continue to next loop !
@@ -3135,56 +3037,8 @@ contains
     if ( this%histogram%isWeighted ) then 
       ! Fix histogram
       this%histogram%counts = this%histogram%counts*this%histogram%effectiveMass
-
-      ! Update density
-      densityEstimateGrid = 0d0
-      !$omp parallel do schedule( dynamic, 1 )  &
-      !$omp default( none )                     &
-      !$omp shared( this )                      &
-      !$omp shared( activeGridCells )           & 
-      !$omp shared( kernelSmoothing )           & 
-      !$omp reduction( +: densityEstimateGrid ) & 
-      !$omp firstprivate( kernel )              & 
-      !$omp private( gc )                        
-      do n = 1, this%nComputeBins
-
-        ! Any smoothing < 0 or NaN, skip
-        if ( ( any( kernelSmoothing( :, n ) .lt. 0d0 ) ) .or.             &
-            ( any( kernelSmoothing( :, n ) /= kernelSmoothing( :, n ) ) ) ) then
-          cycle
-        end if
-
-        ! Assign pointer 
-        gc => activeGridCells(n)
-
-        ! Set kernel
-        call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
-
-        ! Compute estimate
-        densityEstimateGrid(                         &
-              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-          ) = densityEstimateGrid(                   &
-              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
-              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
-              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
-          ) + this%histogram%counts(                 &
-              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
-                   gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
-                   gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
-                   gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
-          )
-
-        !! Cannot be done here ! Reduction !
-        ! Assign into array   
-        !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-
-        deallocate( gc%kernelMatrix )
-      end do
-      !$omp end parallel do
-      densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
-
+      ! Fix density
+      densityEstimateGrid = densityEstimateGrid*this%histogram%effectiveMass
     end if 
 
     ! Clean
@@ -3404,8 +3258,7 @@ contains
     ! Determines optimal smoothing based on the shape factors obtained 
     ! from roughesses. 
     ! 
-    ! Replaces Eq. 20b in Sole-Mari et al. (2019) for a modified 
-    ! form employing netRoughness for determining kernel shapes 
+    ! Eq. 20b in Sole-Mari et al. (2019)
     !
     !----------------------------------------------------------------------------
     ! Specifications 
@@ -3501,9 +3354,6 @@ contains
           (roughnessXXArray.gt.this%minLimitRoughness).and.&
           (roughnessYYArray.gt.this%minLimitRoughness).and.&
           (roughnessZZArray.gt.this%minLimitRoughness) ) 
-          !kernelSmoothingShape(1,:) = (roughnessYYArray*roughnessZZArray/(roughnessXXArray**2d0))**( 0.166 )
-          !kernelSmoothingShape(2,:) = (roughnessXXArray*roughnessZZArray/(roughnessYYArray**2d0))**( 0.166 )
-          !kernelSmoothingShape(3,:) = (roughnessXXArray*roughnessYYArray/(roughnessZZArray**2d0))**( 0.166 )
           kernelSmoothingShape(1,:) = (netRoughness/roughnessXXArray)**( 0.25 )
           kernelSmoothingShape(2,:) = (netRoughness/roughnessYYArray)**( 0.25 )
           kernelSmoothingShape(3,:) = (netRoughness/roughnessZZArray)**( 0.25 )
@@ -4566,3 +4416,117 @@ contains
 
 
 end module GridProjectedKDEModule
+
+
+! TEMP TRASH
+        !! NOTE: a new criteria could consider the 
+        !! densityGrid in order to include in the error 
+        !! estimate those cells without particles/mass.
+        !if (  ( errorMetric .lt. errorMetricConvergence ) ) then
+        !  ! Criteria:
+        !  ! Break optimization loop if 
+        !  ! relative density change lower than 
+        !  ! a given convergence
+        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+        !  if ( this%reportToOutUnit ) then 
+        !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetric
+        !  end if 
+        !  ! Break
+        !  exit
+        !end if 
+        !if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
+        !  ! Criteria:
+        !  ! Break optimization loop if 
+        !  ! relative smoothing change lower than 
+        !  ! a given convergence
+        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+        !  !print *, '!! SMOOTHING CONVERGENCE !!'
+        !  if ( this%reportToOutUnit ) then 
+        !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+        !  end if
+        !  ! Break
+        !  exit
+        !end if 
+        !if ( (errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
+        !        (errorRMSE .gt. errorRMSEOld ) .and.               &
+        !        (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then 
+        !  ! Criteria
+        !  ! If both RMSE and ALMISE are increasing
+        !  ! and density convergence is below the relaxed limit, 
+        !  ! return previous density and leave
+        !  densityEstimateGrid = densityGridOld
+        !  ! Transfer grid density to array
+        !  do n = 1, this%nComputeBins
+        !    ! Assign gc pointer 
+        !    gc => activeGridCells(n)
+        !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+        !  end do
+        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+        !  !print *, '!! INCREASED RMSE/ALMISE AND SOFT CONVERGENCE !!'
+        !  if ( this%reportToOutUnit ) then 
+        !  write( this%outFileUnit, '(A,es13.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
+        !  end if 
+        !  ! Break
+        !  exit
+        !end if 
+        !if ( & 
+        !  (errorRMSE .lt. errorRMSEOld) .and. ( errorALMISEProxy .gt. errorALMISEProxyOld ) .and. & 
+        !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence )   ) then
+        !  ! Criteria
+        !  ! If the RMSE versus the histogram decreases, 
+        !  ! but the ALMISE increases it is probably and indication 
+        !  ! of high resolution in the particle model. 
+        !  ! This has been observed for high number of particles 
+        !  ! and error indicators oscillate.
+        !  if ( this%reportToOutUnit ) then 
+        !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetric
+        !  end if 
+        !  !print *, '!! INCREASED ALMISE DECREASE RMSE AND SOFT CONVERGENCE !!'
+        !  ! Break
+        !  exit
+        !end if 
+        !if ( (errorMetric .gt. errorMetricOld) .and. & 
+        !  (errorMetric .lt. defaultRelaxedDensityRelativeConvergence) ) then
+        !  ! Criteria
+        !  ! If the relative change in density increased with 
+        !  ! respect to previous value, return previous density and leave
+        !  ! This could be complemented with maximum density analysis, 
+        !  ! requires mass. 
+        !  densityEstimateGrid = densityGridOld
+        !  ! Transfer grid density to array
+        !  do n = 1, this%nComputeBins
+        !    gc => activeGridCells(n)
+        !    densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+        !  end do
+        !  this%averageKernelSmoothing = sum( kernelSmoothing, dim=2 )/this%nComputeBIns
+        !  !print *, '!! INCREASED RELATIVE DENSITY CHANGE AND SOFT CONVERGENCE !!'
+        !  if ( this%reportToOutUnit ) then 
+        !  write( this%outFileUnit, '(A,es10.4e2)' ) '    - Relaxed density convergence ', errorMetricOld
+        !  end if 
+        !  ! Break
+        !  exit
+        !end if
+        !if ( nFractionDensity .gt. 0.98 ) then 
+        !  ! Criteria
+        !  ! If the fraction of cells that is presenting changes in 
+        !  ! density below the convergence criteria is close to the total 
+        !  ! number of cells, exit.
+        !  !print *, '!! NFRACTIONDENSITY !!'
+        !  if ( this%reportToOutUnit ) then 
+        !  write( this%outFileUnit, '(A)' ) '    - nFractionDensity '
+        !  end if 
+        !  ! Break
+        !  exit
+        !end if  
+        !if ( nFractionSmoothing .gt. 0.98 ) then 
+        !  ! Criteria
+        !  ! If the fraction of cells that is presenting changes in 
+        !  ! smoothing below the convergence criteria is close to the total 
+        !  ! number of cells, exit.
+        !  !print *, '!! NFRACTIONSMOOTHING !!'
+        !  if ( this%reportToOutUnit ) then 
+        !  write( this%outFileUnit, '(A)' ) '    - nFractionSmoothing '
+        !  end if 
+        !  ! Break
+        !  exit
+        !end if  
