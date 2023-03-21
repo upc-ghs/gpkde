@@ -1612,9 +1612,9 @@ contains
                       gc%kernelSD3YMSpan(1):gc%kernelSD3YMSpan(2), & 
                       gc%kernelSD3ZMSpan(1):gc%kernelSD3ZMSpan(2)  & 
               )
-      if( allocated( gc%kernelSD1Matrix ) ) deallocate( gc%kernelSD1Matrix )
-      if( allocated( gc%kernelSD2Matrix ) ) deallocate( gc%kernelSD2Matrix )
-      if( allocated( gc%kernelSD3Matrix ) ) deallocate( gc%kernelSD3Matrix )
+      deallocate( gc%kernelSD1Matrix )
+      deallocate( gc%kernelSD2Matrix )
+      deallocate( gc%kernelSD3Matrix )
     end do
     !$omp end parallel do
 
@@ -1701,7 +1701,6 @@ contains
             gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
             gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
             gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
-
       roughnessXY = sum(&
         curvatureXY(&
             gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
@@ -1730,15 +1729,17 @@ contains
             gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
             gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
 
-      ! Compute net roughness
-      netRoughnessArray( n ) = roughnessXXArray(n) + 2d0*roughnessXY + 2d0*roughnessXZ + &
-                               roughnessYYArray(n) + 2d0*roughnessYZ + roughnessZZArray(n)
-
-      ! Anisotropic
-      !netRoughnessArray( n ) = 3d0*( roughnessXXArray(n)*roughnessYYArray(n)*roughnessZZArray(n) )**(1d0/3d0) + &
-      !    2d0*roughnessYZ*( roughnessXXArray(n)**2/roughnessYYArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
-      !    2d0*roughnessXZ*( roughnessYYArray(n)**2/roughnessXXArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
-      !    2d0*roughnessXY*( roughnessZZArray(n)**2/roughnessXXArray(n)/roughnessYYArray(n) )**(1d0/6d0)
+      if ( (roughnessXXArray(n).gt.0d0) .and. (roughnessYYArray(n).gt.0d0) .and. (roughnessZZArray(n).gt.0d0) ) then 
+        ! Anisotropic
+        netRoughnessArray( n ) = 3d0*( roughnessXXArray(n)*roughnessYYArray(n)*roughnessZZArray(n) )**(1d0/3d0) + &
+            2d0*roughnessYZ*( roughnessXXArray(n)**2/roughnessYYArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
+            2d0*roughnessXZ*( roughnessYYArray(n)**2/roughnessXXArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
+            2d0*roughnessXY*( roughnessZZArray(n)**2/roughnessXXArray(n)/roughnessYYArray(n) )**(1d0/6d0)
+      else
+        ! Compute net roughness
+        netRoughnessArray( n ) = roughnessXXArray(n) + 2d0*roughnessXY + 2d0*roughnessXZ + &
+                                 roughnessYYArray(n) + 2d0*roughnessYZ + roughnessZZArray(n)
+      end if 
 
       deallocate( gc%kernelSigmaMatrix ) 
     end do
@@ -2388,6 +2389,7 @@ contains
       end if 
     end if 
 
+
     ! Density optimization 
     if ( this%databaseOptimization ) then
       ! Initialize database if not allocated
@@ -2399,6 +2401,7 @@ contains
       end if
       ! Compute density
       call this%ComputeDensityOptimization(                              &
+              !density,                                  &
               this%densityEstimateGrid,                                  &
               nOptimizationLoops=localNOptimizationLoops,                &
               exportOptimizationVariables=locExportOptimizationVariables,&
@@ -2467,7 +2470,7 @@ contains
     implicit none
     ! input
     class( GridProjectedKDEType ), target:: this
-    doubleprecision, dimension(:,:,:), intent(inout) :: densityEstimateGrid
+    doubleprecision, dimension(:,:,:), allocatable, intent(inout) :: densityEstimateGrid
     integer, intent(in), optional         :: nOptimizationLoops
     logical, intent(in), optional         :: exportOptimizationVariables
     logical, intent(in), optional         :: skipErrorConvergence
@@ -2649,19 +2652,19 @@ contains
     end do
     kernelSmoothingOld = kernelSmoothing
     kernelSmoothingScaleOld = kernelSmoothingScale
-
+  
     ! Initialize density grid
-    densityEstimateGrid = 0d0
-    densityEstimateArray = 0d0
+    densityEstimateGrid(:,:,:) = 0d0
+    densityEstimateArray(:) = 0d0
     !$omp parallel do schedule( dynamic, 1 )  &
     !$omp default( none )                     &
     !$omp shared( this )                      &
     !$omp shared( activeGridCells )           & 
     !$omp shared( kernelSmoothing )           & 
-    !$omp reduction( +: densityEstimateGrid ) & 
+    !$omp private( gc )                       & 
+    !$omp private( n )                        & 
     !$omp firstprivate( kernel )              & 
-    !$omp private( n )                        &                       
-    !$omp private( gc )                        
+    !$omp reduction( +: densityEstimateGrid )  
     do n = 1, this%nComputeBins
         
       ! Assign gc pointer 
@@ -2687,7 +2690,6 @@ contains
                  gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
                  gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
         )
-
       !! Cannot be done here ! Reduction !
       ! Assign into array   
       !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
@@ -2696,7 +2698,6 @@ contains
     end do
     !$omp end parallel do 
     densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
-
     ! Transfer grid density to array
     do n = 1, this%nComputeBins
       gc => activeGridCells(n)
@@ -3054,6 +3055,19 @@ contains
 
     end do
     ! End optimization loop ! 
+
+    !! Deallocate sigma kernels !
+    !!$omp parallel do schedule(dynamic,1) &
+    !!$omp default(none)                   &
+    !!$omp shared(this)                    &
+    !!$omp shared(activeGridCells)         &
+    !!$omp private(n,gc)             
+    !do n = 1, this%nComputeBins
+    !  ! Assign gc pointer 
+    !  gc => activeGridCells(n)
+    !  deallocate( gc%kernelSigmaMatrix ) 
+    !end do 
+    !!$omp end parallel do
 
     ! Report if max loops
     if ( ((m-1).eq.nOptLoops).and.this%reportToOutUnit ) then 
