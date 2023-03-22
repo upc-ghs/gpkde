@@ -13,11 +13,16 @@ module GridCellModule
         logical               :: convergence = .false.
 
         ! Kernel matrices
-        doubleprecision, dimension(:,:,:), allocatable :: kernelSigmaMatrix
-        doubleprecision, dimension(:,:,:), allocatable :: kernelMatrix
-        doubleprecision, dimension(:,:,:), allocatable :: kernelSD1Matrix
-        doubleprecision, dimension(:,:,:), allocatable :: kernelSD2Matrix
-        doubleprecision, dimension(:,:,:), allocatable :: kernelSD3Matrix
+        doubleprecision, dimension(:,:,:), pointer :: kernelSigmaMatrix
+        doubleprecision, dimension(:,:,:), pointer :: kernelMatrix
+        doubleprecision, dimension(:,:,:), pointer :: kernelSD1Matrix
+        doubleprecision, dimension(:,:,:), pointer :: kernelSD2Matrix
+        doubleprecision, dimension(:,:,:), pointer :: kernelSD3Matrix
+        !doubleprecision, dimension(:,:,:), allocatable :: kernelSigmaMatrix
+        !doubleprecision, dimension(:,:,:), allocatable :: kernelMatrix
+        !doubleprecision, dimension(:,:,:), allocatable :: kernelSD1Matrix
+        !doubleprecision, dimension(:,:,:), allocatable :: kernelSD2Matrix
+        !doubleprecision, dimension(:,:,:), allocatable :: kernelSD3Matrix
 
         ! Kernel indexes
         integer, dimension(3) :: kernelDBIndexes      = 0
