@@ -12,9 +12,10 @@ module KernelMultiGaussianModule
   integer, parameter         :: defaultKernelSDRange = 4
 
   ! Common vars, will be updated according to init function
-  integer                    :: nDim          = 3
-  integer, dimension(3)      :: dimensionMask = (/1,1,1/)
-  integer                    :: idDim1, idDim2
+  integer                            :: nDim          = 3
+  integer, dimension(3)              :: dimensionMask = (/1,1,1/)
+  integer                            :: idDim1, idDim2
+  integer, dimension(:), allocatable :: dimensions
 
   ! Set default access status to private
   private
@@ -33,15 +34,18 @@ module KernelMultiGaussianModule
   contains 
       
     ! Procedures
-    procedure, non_overridable :: Initialize                => prInitialize 
-    procedure, non_overridable :: Reset                     => prReset      
-    procedure, non_overridable :: ResetMatrix               => prResetMatrix
-    procedure, non_overridable :: ComputeGridSpans          => prComputeGridSpans
-    procedure, non_overridable :: ComputeGridSpansTranspose => prComputeGridSpansTranspose
-    procedure, non_overridable :: GenerateZeroPositiveGrid  => prGenerateZeroPositiveGrid
-    procedure, non_overridable :: UnfoldZeroPositiveMatrix  => prUnfoldZeroPositiveMatrix
-    procedure, non_overridable :: SetupMatrix               => prSetupMatrix
-    procedure, non_overridable :: CopyFrom                  => prCopyFrom
+    procedure, non_overridable :: Initialize                   => prInitialize 
+    procedure, non_overridable :: Reset                        => prReset      
+    procedure, non_overridable :: ResetMatrix                  => prResetMatrix
+    procedure, non_overridable :: ResetMatrixOld               => prResetMatrixOld
+    procedure, non_overridable :: ComputeSpansBounded          => prComputeSpansBounded
+    procedure, non_overridable :: ComputeSpansBoundedTranspose => prComputeSpansBoundedTranspose
+    procedure, non_overridable :: ComputeGridSpans             => prComputeGridSpans
+    procedure, non_overridable :: ComputeGridSpansTranspose    => prComputeGridSpansTranspose
+    procedure, non_overridable :: GenerateZeroPositiveGrid     => prGenerateZeroPositiveGrid
+    procedure, non_overridable :: UnfoldZeroPositiveMatrix     => prUnfoldZeroPositiveMatrix
+    procedure, non_overridable :: SetupMatrix                  => prSetupMatrix
+    procedure, non_overridable :: CopyFrom                     => prCopyFrom
     procedure( ComputeKernelMatrix ), deferred  :: ComputeMatrix 
 
   end type
@@ -149,9 +153,26 @@ contains
     if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
 
   end subroutine prReset
- 
+
 
   subroutine prResetMatrix( this )
+    !------------------------------------------------------------------------------
+    !
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none
+    class( KernelType ) :: this 
+    !------------------------------------------------------------------------------
+
+    if ( allocated( this%matrix ) ) deallocate( this%matrix )
+    this%bandwidth = 0d0
+    this%matrixPositiveShape = 0
+
+  end subroutine prResetMatrix
+
+
+  subroutine prResetMatrixOld( this )
     !------------------------------------------------------------------------------
     !
     !------------------------------------------------------------------------------
@@ -168,7 +189,7 @@ contains
     this%matrixPositiveShape = 0
 
 
-  end subroutine prResetMatrix
+  end subroutine prResetMatrixOld
 
 
   subroutine prCopyFrom( this, source )
@@ -182,14 +203,259 @@ contains
     class( KernelType ), intent(in)   :: source 
     !------------------------------------------------------------------------------
 
-    this%binSize             = source%binSize
-    this%bandwidth           = source%bandwidth
-    this%matrixRange         = source%matrixRange
+    !this%binSize             = source%binSize
+    !this%bandwidth           = source%bandwidth
+    !this%matrixRange         = source%matrixRange
     this%matrixPositiveShape = source%matrixPositiveShape
     this%matrix              = source%matrix
-    this%shouldIntegrateOne  = source%shouldIntegrateOne
+    !this%shouldIntegrateOne  = source%shouldIntegrateOne
 
   end subroutine prCopyFrom
+
+
+  subroutine prComputeSpansBounded( this, gridIndexes, gridShape, &
+                                 xGridSpan, yGridSpan, zGridSpan, &
+                           xKernelSpan, yKernelSpan, zKernelSpan  )
+    !------------------------------------------------------------------------------
+    ! Calculate both grid and kernel spans and apply 
+    ! reflection boundary correction if necessary
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none
+    class( KernelType )                  :: this
+    integer, dimension(3), intent(in)    :: gridShape
+    integer, dimension(3), intent(in)    :: gridIndexes
+    integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
+    integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
+    logical, dimension(3)                :: isBoundary
+    integer, dimension(3)                :: boundDir
+    integer, dimension(3)                :: boundLoc
+    integer                              :: nd, did
+    !------------------------------------------------------------------------------
+
+    ! Spans in grid (ORIGINAL) 
+    xGridSpan(1) = max( gridIndexes(1) - this%matrixPositiveShape(1), 1)
+    xGridSpan(2) = min( gridIndexes(1) + this%matrixPositiveShape(1), gridShape(1) )
+    yGridSpan(1) = max( gridIndexes(2) - this%matrixPositiveShape(2), 1)
+    yGridSpan(2) = min( gridIndexes(2) + this%matrixPositiveShape(2), gridShape(2) )
+    zGridSpan(1) = max( gridIndexes(3) - this%matrixPositiveShape(3), 1)
+    zGridSpan(2) = min( gridIndexes(3) + this%matrixPositiveShape(3), gridShape(3) )
+
+    ! Spans in kernel matrix
+    xKernelSpan = xGridSpan + this%matrixPositiveShape(1) - gridIndexes(1) + 1
+    yKernelSpan = yGridSpan + this%matrixPositiveShape(2) - gridIndexes(2) + 1
+    zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
+
+    isBoundary = .false.
+    boundLoc   = 0
+    boundDir   = 0
+    do nd=1,nDim
+      did = dimensions(nd)
+      if ( ( gridIndexes(did) - this%matrixPositiveShape(did) ) .lt. 1 ) then 
+        isBoundary(did) = .true.
+        boundLoc(did)   = 1 - gridIndexes(did) + this%matrixPositiveShape(did)
+        boundDir(did)   = 1
+      else if ( ( gridIndexes(did) + this%matrixPositiveShape(did) ) .gt. gridShape(did) ) then 
+        isBoundary(did) = .true.
+        boundLoc(did)   = 2*this%matrixPositiveShape(did) + 1 &
+          - ( gridIndexes(did) + this%matrixPositiveShape(did) - gridShape(did) ) + 1 
+        boundDir(did)   = 2
+      end if 
+    end do 
+
+    if ( any( isBoundary ) ) then 
+      call prKernelReflection( this, gridIndexes, gridShape, &
+                            xGridSpan, yGridSpan, zGridSpan, &
+                      xKernelSpan, yKernelSpan, zKernelSpan, &
+                             isBoundary, boundLoc, boundDir  )
+    end if 
+
+  end subroutine prComputeSpansBounded
+
+
+  subroutine prKernelReflection( this, gridIndexes, gridShape,  &
+                              xGridSpan, yGridSpan, zGridSpan,  &
+                         xKernelSpan, yKernelSpan, zKernelSpan, & 
+                                 isBoundary, boundLoc, boundDir )
+    !------------------------------------------------------------------------------
+    ! Apply kernel reflection directly on this%matrix 
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none
+    class( KernelType ) :: this
+    integer, dimension(3), intent(in)    :: gridShape
+    integer, dimension(3), intent(in)    :: gridIndexes
+    integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
+    integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
+    logical, dimension(3), intent(in)    :: isBoundary 
+    integer, dimension(3), intent(in)    :: boundLoc
+    integer, dimension(3), intent(in)    :: boundDir
+    integer, dimension(:), allocatable   :: kernelShape
+    integer                              :: lenb, nd, did
+    !------------------------------------------------------------------------------
+
+    ! If boundary
+    kernelShape  = shape(this%matrix)
+
+    ! Kernel reflection ! 
+    do nd=1,nDim
+      did = dimensions(nd)
+      if ( .not. isBoundary(did) ) cycle
+      select case(did)
+      case(1)
+        ! Reflection X
+        select case( boundDir(did) ) 
+        case(1)
+          ! WEST
+          lenb = boundLoc(did)
+          this%matrix( boundLoc(did) + 1: boundLoc(did) + lenb, :, :) = &
+          this%matrix( boundLoc(did) + 1: boundLoc(did) + lenb, :, :) + &
+          this%matrix( boundLoc(did):1:-1, :, :)
+          this%matrix( :boundLoc(did), :, :) = 0
+        case(2)
+          ! EAST 
+          lenb = kernelShape(did) - boundLoc(did) + 1 
+          this%matrix( boundLoc(did) - lenb: boundLoc(did) - 1, :, :) = &
+          this%matrix( boundLoc(did) - lenb: boundLoc(did) - 1, :, :) + &
+          this%matrix( kernelShape(did): boundLoc(did) :-1, :, :)
+          this%matrix( boundLoc(did):, :, :) = 0
+        end select    
+      case(2)
+        ! Reflection Y
+        select case( boundDir(did) ) 
+        case(1)
+          ! SOUTH
+          lenb = boundLoc(did)
+          this%matrix( :, boundLoc(did) + 1: boundLoc(did) + lenb, :) = &
+          this%matrix( :, boundLoc(did) + 1: boundLoc(did) + lenb, :) + &
+          this%matrix( :, boundLoc(did):1:-1, :)
+          this%matrix( :, :boundLoc(did), :) = 0
+        case(2)
+          ! NORTH
+          lenb = kernelShape(did) - boundLoc(did) + 1 
+          this%matrix( :, boundLoc(did) - lenb: boundLoc(did) - 1, :) = &
+          this%matrix( :, boundLoc(did) - lenb: boundLoc(did) - 1, :) + &
+          this%matrix( :, kernelShape(did): boundLoc(did) :-1, :)
+          this%matrix( :, boundLoc(did):, :) = 0
+        end select    
+      case(3)
+        ! Reflection Z
+        select case( boundDir(did) ) 
+        case(1)
+          ! BOTTOM
+          lenb = boundLoc(did)
+          this%matrix( :, :, boundLoc(did) + 1: boundLoc(did) + lenb) = &
+          this%matrix( :, :, boundLoc(did) + 1: boundLoc(did) + lenb) + &
+          this%matrix( :, :, boundLoc(did):1:-1)
+          this%matrix( :, :, :boundLoc(did)) = 0
+        case(2)
+          ! TOP
+          lenb = kernelShape(did) - boundLoc(did) + 1 
+          this%matrix( :, :, boundLoc(did) - lenb: boundLoc(did) - 1) = &
+          this%matrix( :, :, boundLoc(did) - lenb: boundLoc(did) - 1) + &
+          this%matrix( :, :, kernelShape(did): boundLoc(did) :-1)
+          this%matrix( :, :, boundLoc(did):) = 0
+        end select
+      end select
+    end do 
+
+
+  end subroutine prKernelReflection 
+
+
+  subroutine prComputeSpansBoundedTranspose( this, gridIndexes, gridShape, &
+                                          xGridSpan, yGridSpan, zGridSpan, &
+                                    xKernelSpan, yKernelSpan, zKernelSpan  ) 
+    !------------------------------------------------------------------------------
+    !  
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none
+    class( KernelType ) :: this
+    integer, dimension(3), intent(in) :: gridShape
+    integer, dimension(3), intent(in) :: gridIndexes
+    integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
+    integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
+    logical, dimension(3)                :: isBoundary
+    integer, dimension(3)                :: boundDir
+    integer, dimension(3)                :: boundLoc
+    !integer                              :: nd, did
+    !------------------------------------------------------------------------------
+
+    ! Spans in grid
+    !( notice the switch in matrixPositiveShape indexes,
+    !  compare against ComputeGridSpans )
+    xGridSpan(1) = max( gridIndexes(1) - this%matrixPositiveShape(2), 1)
+    xGridSpan(2) = min( gridIndexes(1) + this%matrixPositiveShape(2), gridShape(1) )
+    yGridSpan(1) = max( gridIndexes(2) - this%matrixPositiveShape(1), 1)
+    yGridSpan(2) = min( gridIndexes(2) + this%matrixPositiveShape(1), gridShape(2) )
+    zGridSpan(1) = max( gridIndexes(3) - this%matrixPositiveShape(3), 1)
+    zGridSpan(2) = min( gridIndexes(3) + this%matrixPositiveShape(3), gridShape(3) )
+
+    ! Spans in transposed kernel matrix
+    xKernelSpan = xGridSpan + this%matrixPositiveShape(2) - gridIndexes(1) + 1
+    yKernelSpan = yGridSpan + this%matrixPositiveShape(1) - gridIndexes(2) + 1
+    zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
+
+    isBoundary = .false.
+    boundLoc   = 0
+    boundDir   = 0
+
+    ! X
+    if ( dimensionMask(1) .eq. 1 ) then 
+      if ( ( gridIndexes(1) - this%matrixPositiveShape(2) ) .lt. 1 ) then 
+        isBoundary(1)  = .true.
+        boundLoc(1)    = 1 - gridIndexes(1) + this%matrixPositiveShape(2)
+        boundDir(1)    = 1
+      else if ( ( gridIndexes(1) + this%matrixPositiveShape(2) ) .gt. gridShape(1) ) then 
+        isBoundary(1)  = .true.
+        boundLoc(1)    = 2*this%matrixPositiveShape(2) + 1 &
+            - ( gridIndexes(1) + this%matrixPositiveShape(2) - gridShape(1) ) + 1
+        boundDir(1)    = 2
+      end if 
+    end if 
+
+    ! Y
+    if ( dimensionMask(2) .eq. 1 ) then 
+      if ( ( gridIndexes(2) - this%matrixPositiveShape(1) ) .lt. 1 ) then 
+        isBoundary(2)  = .true.
+        boundLoc(2)    = 1 - gridIndexes(2) + this%matrixPositiveShape(1)
+        boundDir(2)    = 1
+      else if ( ( gridIndexes(2) + this%matrixPositiveShape(1) ) .gt. gridShape(2) ) then 
+        isBoundary(2)  = .true.
+        boundLoc(2)    = 2*this%matrixPositiveShape(1) + 1 &
+            - ( gridIndexes(2) + this%matrixPositiveShape(1) - gridShape(2) ) + 1
+        boundDir(2)    = 2
+      end if 
+    end if 
+
+    ! Z
+    if ( dimensionMask(3) .eq. 1 ) then 
+      if ( ( gridIndexes(3) - this%matrixPositiveShape(3) ) .lt. 1 ) then 
+        isBoundary(3)  = .true.
+        boundLoc(3)    = 1 - gridIndexes(3) + this%matrixPositiveShape(3)
+        boundDir(3)    = 1
+      else if ( ( gridIndexes(3) + this%matrixPositiveShape(3) ) .gt. gridShape(3) ) then 
+        isBoundary(3)  = .true.
+        boundLoc(3)    = 2*this%matrixPositiveShape(3) + 1 &
+            - ( gridIndexes(3) + this%matrixPositiveShape(3) - gridShape(3) ) + 1
+        boundDir(3)    = 2
+      end if 
+    end if 
+
+    call prTransposeXYMatrix( this ) 
+    if ( any( isBoundary ) ) then 
+      call prKernelReflection( this, gridIndexes, gridShape, &
+                            xGridSpan, yGridSpan, zGridSpan, &
+                      xKernelSpan, yKernelSpan, zKernelSpan, &
+                             isBoundary, boundLoc, boundDir  )
+    end if 
+
+
+  end subroutine prComputeSpansBoundedTranspose
 
 
 
@@ -231,6 +497,7 @@ contains
     yKernelSpan = yGridSpan + this%matrixPositiveShape(2) - gridIndexes(2) + 1
     zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
 
+    ! The old way
     if ( present( dimensionMask ) ) then 
 
       ! Identify boundary faces
@@ -287,6 +554,9 @@ contains
       ! Writes corrected kernel matrix in 
       ! this%bmatrix in order to avoid rewriting
       ! matrix at databases
+
+      ! Notice that now with the CopyFrom method, bmatrix becomes
+      ! unnecessary
       this%bmatrix = this%matrix
       call prVerifyBoundary( this, gridIndexes, gridShape, &
                           xGridSpan, yGridSpan, zGridSpan, &
@@ -296,6 +566,7 @@ contains
                           boundDirX, boundDirY, boundDirZ, &
                              dimensionMask = dimensionMask )
    end if  
+
 
   end subroutine prComputeGridSpans
 
@@ -342,7 +613,7 @@ contains
     ! Kernel reflection ! 
 
     ! X
-    if ( dimensionMask(1) .eq. 1 ) then 
+    !if ( dimensionMask(1) .eq. 1 ) then 
       if ( isBoundaryX ) then 
         ! Do the process 
         select case( boundDirX ) 
@@ -362,10 +633,10 @@ contains
             this%bmatrix( boundLocX:, :, :) = 0
         end select    
       end if 
-    end if 
+    !end if 
 
     ! Y
-    if( dimensionMask(2) .eq. 1 ) then 
+    !if( dimensionMask(2) .eq. 1 ) then 
       if ( isBoundaryY ) then 
         ! Do the process 
         select case( boundDirY ) 
@@ -385,10 +656,10 @@ contains
             this%bmatrix( :, boundLocY:, :) = 0
         end select    
       end if
-    end if 
+    !end if 
 
     ! Z 
-    if ( dimensionMask(3) .eq. 1 ) then 
+    !if ( dimensionMask(3) .eq. 1 ) then 
       if ( isBoundaryZ ) then 
         ! Do the process 
         select case( boundDirZ ) 
@@ -408,15 +679,15 @@ contains
             this%bmatrix( :, :, boundLocZ:) = 0
         end select
       end if 
-    end if 
+    !end if 
 
 
-    if ( this%shouldIntegrateOne ) then 
-      if ( ( abs( sum(this%bmatrix) ) .lt. 0.99 ) ) then  
-        write(*,*) 'Kernel does not integrate one and it should. Integral: ', sum(this%bmatrix)
-        stop
-      end if
-    end if 
+    !if ( this%shouldIntegrateOne ) then 
+    !  if ( ( abs( sum(this%bmatrix) ) .lt. 0.99 ) ) then  
+    !    write(*,*) 'Kernel does not integrate one and it should. Integral: ', sum(this%bmatrix)
+    !    stop
+    !  end if
+    !end if 
 
 
   end subroutine prVerifyBoundary 
@@ -669,6 +940,36 @@ contains
   end function prComputeXYTranspose
 
 
+  subroutine prTransposeXYMatrix( this )
+    !------------------------------------------------------------------------------
+    !
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none 
+    class( KernelType ), target :: this
+    doubleprecision, dimension(:,:,:), pointer :: sourceMatrix
+    doubleprecision, dimension(:,:,:), allocatable :: transposedMatrix
+    ! local
+    integer, dimension(3) :: sourceShape
+    integer :: n
+    !------------------------------------------------------------------------------
+    
+    sourceMatrix => this%matrix
+    sourceShape = shape( sourceMatrix )
+    allocate( transposedMatrix( sourceShape(2), sourceShape(1), sourceShape(3) ) )
+    do n = 1, sourceShape(3)
+      transposedMatrix(:,:,n) = transpose( sourceMatrix(:,:,n) )
+    end do
+ 
+    call move_alloc( transposedMatrix, this%matrix ) 
+
+    return 
+
+  end subroutine prTransposeXYMatrix
+
+
+
   ! Module methods
   subroutine InitializeKernelDimensions( inDimensionMask )
     !------------------------------------------------------------------------------
@@ -678,12 +979,23 @@ contains
     !------------------------------------------------------------------------------
     implicit none
     integer, dimension(:), intent(in) :: inDimensionMask
-    integer :: nd
+    integer :: nd, dcount
     !------------------------------------------------------------------------------
 
     dimensionMask = inDimensionMask
     nDim          = sum( dimensionMask )
 
+    ! Save dim mask into dimensions 
+    if ( allocated( dimensions ) ) deallocate( dimensions )
+    allocate( dimensions( nDim  ) )
+    dcount= 0
+    do nd = 1, 3
+      if ( dimensionMask(nd) .eq. 0 ) cycle
+      dcount = dcount + 1
+      dimensions(dcount) = nd
+    end do
+
+    ! The old way of detecting dims
     if ( nDim .eq. 1 ) then 
       do nd=1,3
         if ( dimensionMask(nd) .eq. 1 ) then 
@@ -705,7 +1017,9 @@ contains
       end do
     end if 
 
+
   end subroutine InitializeKernelDimensions
+
 
   subroutine ResetKernelDimensions( )
     !------------------------------------------------------------------------------
@@ -718,6 +1032,7 @@ contains
 
     dimensionMask = (/1,1,1/)
     nDim          = 3 
+    if( allocated( dimensions ) ) deallocate( dimensions ) 
 
   end subroutine ResetKernelDimensions
 

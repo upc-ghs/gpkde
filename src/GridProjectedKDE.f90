@@ -37,7 +37,7 @@ module GridProjectedKDEModule
   doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
   ! Optimization
   doubleprecision, parameter :: defaultInitialSmoothingFactor = 2d0
-  doubleprecision, parameter :: defaultMinRelativeRoughness   = 1d-6
+  doubleprecision, parameter :: defaultMinRelativeRoughness   = 1d-5
   doubleprecision, parameter :: defaultMaxKernelShape         = 10d0
   doubleprecision :: defaultMinLimitRoughness = 1d-5
 
@@ -207,7 +207,7 @@ module GridProjectedKDEModule
     procedure :: DropKernelDatabase              => prDropKernelDatabase
     procedure :: ComputeDensity                  => prComputeDensity
     procedure :: ComputeDensityOptimization      => prComputeDensityOptimization
-    procedure :: ComputeSupportScale             => prComputeSupportScale
+    !procedure :: ComputeSupportScale             => prComputeSupportScale
     procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
     procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
     procedure :: ExportDensity                   => prExportDensity
@@ -248,7 +248,7 @@ module GridProjectedKDEModule
     ! NetRoughness
     subroutine ComputeNetRoughness( this, activeGridCells, curvatureBandwidth, &
                          roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                        netRoughnessArray, kernelSigmaSupport, &
+                                   netRoughnessArray, kernelSigmaSupportScale, &
                                                kernelSDX, kernelSDY, kernelSDZ ) 
       import GridProjectedKDEType
       import GridCellType
@@ -263,7 +263,7 @@ module GridProjectedKDEModule
       doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
       doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
       doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
-      doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
+      doubleprecision, dimension(:), intent(in)              :: kernelSigmaSupportScale
       type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
       type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
       type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
@@ -970,7 +970,7 @@ contains
       end if 
     end if
     if ( nDim .eq. 3 ) then 
-      !this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
+      this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
       if ( this%databaseOptimization ) then 
         this%SetKernelSD3D => prSetKernelSD3DFromDatabase
       else
@@ -989,7 +989,7 @@ contains
   ! 1D
   subroutine prComputeNetRoughness1D( this, activeGridCells, curvatureBandwidth, &
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                          netRoughnessArray, kernelSigmaSupport, &
+                                     netRoughnessArray, kernelSigmaSupportScale, &
                                                  kernelSDX, kernelSDY, kernelSDZ ) 
     !-----------------------------------------------------------------------------
     ! Net roughness in 1D
@@ -1000,24 +1000,25 @@ contains
     ! Specifications 
     !-----------------------------------------------------------------------------
     !input
-    class( GridProjectedKDEType ), target                   :: this
-    type( GridCellType ), dimension(:), intent(in), target  :: activeGridCells
-    doubleprecision, dimension(:,:), intent(in)             :: curvatureBandwidth
-    doubleprecision, dimension(:,:), intent(in)             :: kernelSigmaSupport
-    type( KernelSecondDerivativeXType ), intent(inout)      :: kernelSDX
-    type( KernelSecondDerivativeYType ), intent(inout)      :: kernelSDY
-    type( KernelSecondDerivativeZType ), intent(inout)      :: kernelSDZ
+    class( GridProjectedKDEType ), target                  :: this
+    type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
+    doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
+    doubleprecision, dimension(:), intent(in)              :: kernelSigmaSupportScale
+    type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
+    type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
+    type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
     ! out
-    doubleprecision, dimension(:), intent(inout), target :: roughnessXXArray
-    doubleprecision, dimension(:), intent(inout), target :: roughnessYYArray
-    doubleprecision, dimension(:), intent(inout), target :: roughnessZZArray
-    doubleprecision, dimension(:), intent(inout)         :: netRoughnessArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
+    doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
     ! local 
-    type( GridCellType ), pointer :: gc => null()
-    doubleprecision, dimension(:), pointer :: roughness11Array
+    type( GridCellType ), pointer                          :: gc => null()
+    doubleprecision, dimension(:), pointer                 :: roughness11Array
     doubleprecision, dimension(:,:,:), allocatable, target :: curvature1
+    type( KernelMultiGaussianType )                        :: kernelSigma
+    doubleprecision, dimension(3)                          :: smoothingCarrier
     integer :: n
-    type( KernelMultiGaussianType ) :: kernelSigma
     !-----------------------------------------------------------------------------
     allocate( curvature1(  this%nBins(1), this%nBins(2), this%nBins(3) )) 
     !-----------------------------------------------------------------------------
@@ -1164,14 +1165,16 @@ contains
     ! Net roughness
     roughness11Array  = 0d0 
     netRoughnessArray = 0d0
+    smoothingCarrier  = 0d0
     !$omp parallel do schedule( dynamic, 1 ) &
     !$omp default( none )                    &
     !$omp shared( this )                     &
     !$omp shared( activeGridCells )          &
     !$omp shared( curvature1 )               &
     !$omp shared( roughness11Array )         &
-    !$omp shared( kernelSigmaSupport )       & 
+    !$omp shared( kernelSigmaSupportScale )  & 
     !$omp firstprivate( kernelSigma )        &
+    !$omp firstprivate( smoothingCarrier )   &
     !$omp private( n )                       &
     !$omp private( gc )
     do n = 1, this%nComputeBins
@@ -1179,7 +1182,8 @@ contains
       ! Assign pointer 
       gc => activeGridCells(n)
 
-      call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
+      smoothingCarrier(:) = kernelSigmaSupportScale(n)
+      call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
 
       ! Compute roughness grid estimates
       roughness11Array( n ) = sum(&
@@ -1209,7 +1213,7 @@ contains
   ! 2D
   subroutine prComputeNetRoughness2D( this, activeGridCells, curvatureBandwidth, &
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                          netRoughnessArray, kernelSigmaSupport, &
+                                     netRoughnessArray, kernelSigmaSupportScale, &
                                                  kernelSDX, kernelSDY, kernelSDZ ) 
     !-----------------------------------------------------------------------------
     ! Net roughness in 2D
@@ -1223,23 +1227,24 @@ contains
     class( GridProjectedKDEType ), target                  :: this
     type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
     doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
-    doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
+    doubleprecision, dimension(:), intent(in)              :: kernelSigmaSupportScale
     type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
     type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
     type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
     ! out
-    doubleprecision, dimension(:), intent(inout), target :: roughnessXXArray
-    doubleprecision, dimension(:), intent(inout), target :: roughnessYYArray
-    doubleprecision, dimension(:), intent(inout), target :: roughnessZZArray
-    doubleprecision, dimension(:), intent(inout)         :: netRoughnessArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
+    doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
     ! local
-    type( GridCellType ), pointer :: gc => null()
-    doubleprecision, dimension(:), pointer         :: roughness11Array
-    doubleprecision, dimension(:), pointer         :: roughness22Array
-    doubleprecision, dimension(:,:,:), allocatable :: curvature1
-    doubleprecision, dimension(:,:,:), allocatable :: curvature2
-    doubleprecision, dimension(:,:,:), allocatable :: curvature12
-    type( KernelMultiGaussianType )                :: kernelSigma
+    type( GridCellType ), pointer                          :: gc => null()
+    doubleprecision, dimension(:), pointer                 :: roughness11Array
+    doubleprecision, dimension(:), pointer                 :: roughness22Array
+    doubleprecision, dimension(:,:,:), allocatable         :: curvature1
+    doubleprecision, dimension(:,:,:), allocatable         :: curvature2
+    doubleprecision, dimension(:,:,:), allocatable         :: curvature12
+    type( KernelMultiGaussianType )                        :: kernelSigma
+    doubleprecision, dimension(3)                          :: smoothingCarrier
     integer :: n
     !-----------------------------------------------------------------------------
     allocate( curvature1( this%nBins(1), this%nBins(2), this%nBins(3)  )) 
@@ -1269,47 +1274,45 @@ contains
       !$omp private( gc )                       
       do n = 1, this%nComputeBins
   
-          ! Assign gc pointer 
-          gc => activeGridCells(n)
+        ! Assign gc pointer 
+        gc => activeGridCells(n)
   
-          if ( ( any( curvatureBandwidth(:,n) .lt. 0d0 ) ) .or. & 
-               ( any( curvatureBandwidth(:,n) /= curvatureBandwidth(:,n) ) ) ) cycle
+        if ( ( any( curvatureBandwidth(:,n) .lt. 0d0 ) ) .or. & 
+             ( any( curvatureBandwidth(:,n) /= curvatureBandwidth(:,n) ) ) ) cycle
 
-          ! Set kernels        
-          call this%SetKernelSD2D( gc, kernelSDX, kernelSDY, curvatureBandwidth( :, n ) )
+        ! Set kernels        
+        call this%SetKernelSD2D( gc, kernelSDX, kernelSDY, curvatureBandwidth( :, n ) )
 
-          ! Compute curvature
-          curvature1( &
-                  gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
-                  gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
-                  gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-              ) = curvature1( &
-                  gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
-                  gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
-                  gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
-              ) + this%histogram%counts(                               &
-                     gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
-                          gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
-                          gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
-                          gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
-                     )
-          ! Compute curvature
-          curvature2( &
-                  gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
-                  gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
-                  gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-              ) = curvature2( &
-                  gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
-                  gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
-                  gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
-              ) + this%histogram%counts(                               &
-                     gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
-                          gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
-                          gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
-                          gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
-                     )
-        deallocate( gc%kernelSD1Matrix )
-        deallocate( gc%kernelSD2Matrix )
+        ! Compute curvature
+        curvature1( &
+                gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
+                gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
+                gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
+            ) = curvature1( &
+                gc%kernelSD1XGSpan(1):gc%kernelSD1XGSpan(2), &
+                gc%kernelSD1YGSpan(1):gc%kernelSD1YGSpan(2), & 
+                gc%kernelSD1ZGSpan(1):gc%kernelSD1ZGSpan(2)  & 
+            ) + this%histogram%counts(                               &
+                   gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD1Matrix(&
+                        gc%kernelSD1XMSpan(1):gc%kernelSD1XMSpan(2), &
+                        gc%kernelSD1YMSpan(1):gc%kernelSD1YMSpan(2), & 
+                        gc%kernelSD1ZMSpan(1):gc%kernelSD1ZMSpan(2)  & 
+                   )
+        ! Compute curvature
+        curvature2( &
+                gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
+                gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
+                gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
+            ) = curvature2( &
+                gc%kernelSD2XGSpan(1):gc%kernelSD2XGSpan(2), &
+                gc%kernelSD2YGSpan(1):gc%kernelSD2YGSpan(2), & 
+                gc%kernelSD2ZGSpan(1):gc%kernelSD2ZGSpan(2)  & 
+            ) + this%histogram%counts(                               &
+                   gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSD2Matrix(&
+                        gc%kernelSD2XMSpan(1):gc%kernelSD2XMSpan(2), &
+                        gc%kernelSD2YMSpan(1):gc%kernelSD2YMSpan(2), & 
+                        gc%kernelSD2ZMSpan(1):gc%kernelSD2ZMSpan(2)  & 
+                   )
       end do
       !$omp end parallel do
     else if ( ( this%idDim1 .eq. 1 ) .and. ( this%idDim2 .eq. 3 ) ) then
@@ -1447,12 +1450,11 @@ contains
     ! Initialize kernelSigma
     call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
 
-    ! Reset roughness
+    ! Net roughness
     roughness11Array  = 0d0 
     roughness22Array  = 0d0 
     netRoughnessArray = 0d0
-
-    ! Net roughness
+    smoothingCarrier  = 0d0
     !$omp parallel do schedule( dynamic, 1 ) &
     !$omp default( none )                    &
     !$omp shared( this )                     &
@@ -1463,8 +1465,9 @@ contains
     !$omp shared( roughness11Array )         &
     !$omp shared( roughness22Array )         &
     !$omp firstprivate( kernelSigma )        &
+    !$omp firstprivate( smoothingCarrier )   &
     !$omp shared( netRoughnessArray )        & 
-    !$omp shared( kernelSigmaSupport )       &
+    !$omp shared( kernelSigmaSupportScale )  &
     !$omp private( n )                       &
     !$omp private( gc )
     do n = 1, this%nComputeBins
@@ -1472,7 +1475,8 @@ contains
       ! Assign pointer 
       gc => activeGridCells(n)
 
-      call this%SetKernelSigma( gc, kernelSigma, kernelSigmaSupport( :, n ) )
+      smoothingCarrier(:) = kernelSigmaSupportScale(n)
+      call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
 
       ! Compute roughness estimates
       roughness11Array( n ) = sum(&
@@ -1509,6 +1513,7 @@ contains
           /) )
     end do
     !$omp end parallel do 
+    call kernelSigma%ResetMatrix() 
 
     ! Deallocate
     deallocate( curvature1  ) 
@@ -1526,8 +1531,7 @@ contains
   ! 3D
   subroutine prComputeNetRoughness3D( this, activeGridCells, curvatureBandwidth, &
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                          netRoughnessArray, kernelSigmaSupportScale, &
-                                          !netRoughnessArray, kernelSigmaSupport, &
+                                     netRoughnessArray, kernelSigmaSupportScale, &
                                                  kernelSDX, kernelSDY, kernelSDZ ) 
     !-----------------------------------------------------------------------------
     ! Net roughness in 3D
@@ -1542,7 +1546,6 @@ contains
     type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
     doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
     doubleprecision, dimension(:), intent(in)              :: kernelSigmaSupportScale
-    !doubleprecision, dimension(:,:), intent(in)            :: kernelSigmaSupport
     type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
     type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
     type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
@@ -1552,17 +1555,17 @@ contains
     doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
     doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
     ! local 
-    type( GridCellType ), pointer :: gc => null()
-    doubleprecision, dimension(:,:,:), allocatable ::  curvatureX
-    doubleprecision, dimension(:,:,:), allocatable ::  curvatureY
-    doubleprecision, dimension(:,:,:), allocatable ::  curvatureZ
-    doubleprecision, dimension(:,:,:), allocatable :: curvatureXY
-    doubleprecision, dimension(:,:,:), allocatable :: curvatureXZ
-    doubleprecision, dimension(:,:,:), allocatable :: curvatureYZ
-    type( KernelMultiGaussianType )                :: kernelSigma
-    doubleprecision :: roughnessXY, roughnessXZ, roughnessYZ 
+    type( GridCellType ), pointer                          :: gc => null()
+    doubleprecision, dimension(:,:,:), allocatable         ::  curvatureX
+    doubleprecision, dimension(:,:,:), allocatable         ::  curvatureY
+    doubleprecision, dimension(:,:,:), allocatable         ::  curvatureZ
+    doubleprecision, dimension(:,:,:), allocatable         :: curvatureXY
+    doubleprecision, dimension(:,:,:), allocatable         :: curvatureXZ
+    doubleprecision, dimension(:,:,:), allocatable         :: curvatureYZ
+    type( KernelMultiGaussianType )                        :: kernelSigma
+    doubleprecision, dimension(3)                          :: smoothingCarrier
     integer :: n 
-    doubleprecision, dimension(3) :: smoothingCarrier 
+    doubleprecision :: roughnessXY, roughnessXZ, roughnessYZ 
     !------------------------------------------------------------------------------
     allocate(  curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
     allocate(  curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
@@ -2854,14 +2857,10 @@ contains
                           kernelSmoothing, kernelSmoothingScale, kernelSmoothingShape, & 
                                            kernelSigmaSupportScale, curvatureBandwidth )
       ! Net roughness
-      call prComputeNetRoughness3D(this,activeGridCells, curvatureBandwidth, &
+      call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                      netRoughnessArray, kernelSigmaSupportScale, &
                                                  kernelSDX, kernelSDY, kernelSDZ )
-      !call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
-      !                     roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-      !                                    netRoughnessArray, kernelSigmaSupport, &
-      !                                           kernelSDX, kernelSDY, kernelSDZ )
       ! Optimal smoothing
       call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                               roughnessXXArray, roughnessYYArray, roughnessZZArray, &
@@ -3206,12 +3205,10 @@ contains
         where( kernelSmoothingShape(nd,:) .ne. 0d0 ) 
           shapeTerm( nd, : ) = (                                           &
             ( oneOverNDimPlusFour/( kernelSmoothingShape( nd, : )**4d0 ) )* &
-            !( 1d0/( nDim + 4d0 )/( kernelSmoothingShape( nd, : )**4d0 ) )* &
                 (                                                          &
                     shapeTermSum                                           &
                 )                                                          &
             )**( minusOneOverNDimPlusSix )
-            !)**( -1d0/( nDim + 6d0 ) )
         end where
 
         curvatureBandwidth( nd, : ) = &
@@ -3434,7 +3431,7 @@ contains
     ! Compute index value if required 
     ! because active dimension
     do nd = 1, 3
-      if ( smoothing( nd ) .le. 0d0 ) cycle
+      if ( (smoothing( nd ).le.0d0).or.(this%dimensionMask(nd).eq.0) ) cycle
       indexes(nd) = min(&
         max(&
           floor(&
@@ -3628,7 +3625,7 @@ contains
     doubleprecision, dimension(3), intent(in)   :: smoothing
     !---------------------------------------------------------------------
 
-    ! Restart kernel matrices
+    ! Restart kernel matrix
     call kernel%ResetMatrix()
 
     ! Compute indexes on kernel database
@@ -3639,22 +3636,16 @@ contains
     call kernel%CopyFrom(& 
       this%kernelDatabaseFlat( gridCell%kernelDBFlatIndexes(1), gridCell%kernelDBFlatIndexes(2) ) )
 
-    if ( gridCell%transposeKernel ) then
-      ! Determine spans ( internally computes transpose )
-      call kernel%ComputeGridSpansTranspose( gridCell%id, this%nBins,        &
+    if ( .not. gridCell%transposeKernel ) then
+      call kernel%ComputeSpansBounded( gridCell%id, this%nBins, &
         gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-        gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, &
-                                                         this%dimensionMask  )
+        gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan  ) 
     else
-      ! Determine spans
-      call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+      call kernel%ComputeSpansBoundedTranspose( gridCell%id, this%nBins,     &
         gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-        gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, & 
-                                                         this%dimensionMask  )
+        gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan  )
     end if 
-
-    ! For boundaries 
-    gridCell%kernelMatrix => kernel%bmatrix
+    gridCell%kernelMatrix => kernel%matrix
 
     ! Done
     return
@@ -3688,12 +3679,11 @@ contains
       this%kernelDatabaseFlat( gridCell%kernelSigmaDBFlatIndexes(1), gridCell%kernelSigmaDBFlatIndexes(2) ) )
 
     ! Determine spans
-    call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
-      gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan, &
-                                                                       this%dimensionMask )
-    ! For boundaries 
-    gridCell%kernelSigmaMatrix => kernel%bmatrix
+      gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan  )
+
+    gridCell%kernelSigmaMatrix => kernel%matrix
 
     ! Done
     return
@@ -3724,12 +3714,11 @@ contains
     call kernel%CopyFrom( this%kernelSDDatabase1( gridCell%kernelSDDBIndexes(this%idDim1) ) )
 
     ! Determine spans
-    call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
-      gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, &
-                                                             this%dimensionMask  ) 
-    ! For boundaries
-    gridCell%kernelSD1Matrix => kernel%bmatrix
+      gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan  )
+
+    gridCell%kernelSD1Matrix => kernel%matrix
 
     ! Done
     return
@@ -3762,23 +3751,20 @@ contains
     call kernel1%CopyFrom( this%kernelSDDatabase1( gridCell%kernelSDDBIndexes(this%idDim1) ) )
 
     ! Determine spans
-    call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel1%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
-                                                                 this%dimensionMask  ) 
+      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  )
 
     ! Copy kernel from database
     call kernel2%CopyFrom( this%kernelSDDatabase2( gridCell%kernelSDDBIndexes(this%idDim2) ) )
 
     ! Determine spans
-    call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel2%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
-                                                                 this%dimensionMask  ) 
+      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  )
 
-    ! For boundaries
-    gridCell%kernelSD1Matrix => kernel1%bmatrix
-    gridCell%kernelSD2Matrix => kernel2%bmatrix
+    gridCell%kernelSD1Matrix => kernel1%matrix
+    gridCell%kernelSD2Matrix => kernel2%matrix
 
     ! Done
     return
@@ -3801,40 +3787,41 @@ contains
     doubleprecision, dimension(3), intent(in)  :: smoothing
     !---------------------------------------------------------------------
 
+    ! Restart kernel matrices
+    call kernel1%ResetMatrix()
+    call kernel2%ResetMatrix()
+    call kernel3%ResetMatrix()
+
     ! Compute indexes on kernel database
     gridCell%kernelSDDBIndexes = this%ComputeKernelDatabaseIndexes( smoothing )
 
     ! Copy kernel from database
     call kernel1%CopyFrom( this%kernelSDXDatabase( gridCell%kernelSDDBIndexes(1) ) )
 
-    ! Determine spans
-    call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+    ! Determine spans bounded
+    call kernel1%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, &
-                                                                this%dimensionMask  )
+      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  )
 
     ! Copy kernel from database
     call kernel2%CopyFrom( this%kernelSDYDatabase( gridCell%kernelSDDBIndexes(2) ) )
 
-    ! Determine spans
-    call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+    ! Determine spans bounded
+    call kernel2%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, &
-                                                                this%dimensionMask  )
+      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  )
 
     ! Copy kernel from database
     call kernel3%CopyFrom( this%kernelSDZDatabase( gridCell%kernelSDDBIndexes(3) ) )
 
-    ! Determine spans
-    call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
+    ! Determine spans bounded
+    call kernel3%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-      gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, &
-                                                                this%dimensionMask  )
+      gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan  )
 
-    ! For boundaries
-    gridCell%kernelSD1Matrix => kernel1%bmatrix
-    gridCell%kernelSD2Matrix => kernel2%bmatrix
-    gridCell%kernelSD3Matrix => kernel3%bmatrix
+    gridCell%kernelSD1Matrix => kernel1%matrix
+    gridCell%kernelSD2Matrix => kernel2%matrix
+    gridCell%kernelSD3Matrix => kernel3%matrix
 
     ! Done
     return
@@ -3862,12 +3849,11 @@ contains
     call kernel%SetupMatrix( smoothing )
 
     ! Determine spans
-    call kernel%ComputeGridSpans( gridCell%id, this%nBins   , &
+    call kernel%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelXGSpan, gridCell%kernelYGSpan, gridCell%kernelZGSpan, & 
-      gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan, &
-                                                       this%dimensionMask  )
-    ! For boundaries 
-    gridCell%kernelMatrix => kernel%bmatrix
+      gridCell%kernelXMSpan, gridCell%kernelYMSpan, gridCell%kernelZMSpan )
+
+    gridCell%kernelMatrix => kernel%matrix
 
     ! Done 
     return
@@ -3895,12 +3881,11 @@ contains
     call kernel%SetupMatrix( smoothing )
 
     ! Determine spans
-    call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSigmaXGSpan, gridCell%kernelSigmaYGSpan, gridCell%kernelSigmaZGSpan, & 
-      gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan, &
-                                                                       this%dimensionMask )
-    ! For boundaries
-    gridCell%kernelSigmaMatrix => kernel%bmatrix
+      gridCell%kernelSigmaXMSpan, gridCell%kernelSigmaYMSpan, gridCell%kernelSigmaZMSpan  )
+
+    gridCell%kernelSigmaMatrix => kernel%matrix
 
     ! Done
     return
@@ -3928,12 +3913,11 @@ contains
     call kernel%SetupMatrix( smoothing )
 
     ! Determine spans
-    call kernel%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSDXGSpan, gridCell%kernelSDYGSpan, gridCell%kernelSDZGSpan, & 
-      gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan, & 
-                                                              this%dimensionMask )
-    ! For boundaries
-    gridCell%kernelSD1Matrix => kernel%bmatrix
+      gridCell%kernelSDXMSpan, gridCell%kernelSDYMSpan, gridCell%kernelSDZMSpan  )
+
+    gridCell%kernelSD1Matrix => kernel%matrix
 
     ! Done
     return
@@ -3969,10 +3953,9 @@ contains
     call kernel1%SetupMatrix( locSmoothing )
 
     ! Determine spans
-    call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel1%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
-                                                                 this%dimensionMask )
+      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  ) 
 
     ! Fill smoothing, curvature kernel is isotropic
     locSmoothing = 0d0
@@ -3983,14 +3966,13 @@ contains
     call kernel2%SetupMatrix( locSmoothing )
 
     ! Determine spans
-    call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel2%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
-                                                                 this%dimensionMask )
+      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  ) 
 
     ! For boundaries
-    gridCell%kernelSD1Matrix => kernel1%bmatrix
-    gridCell%kernelSD2Matrix => kernel2%bmatrix
+    gridCell%kernelSD1Matrix => kernel1%matrix
+    gridCell%kernelSD2Matrix => kernel2%matrix
 
     ! Done
     return
@@ -4022,33 +4004,30 @@ contains
     call kernel1%SetupMatrix( (/smoothing(1),smoothing(1),smoothing(1)/) )
 
     ! Determine spans
-    call kernel1%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel1%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD1XGSpan, gridCell%kernelSD1YGSpan, gridCell%kernelSD1ZGSpan, & 
-      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan, & 
-                                                                 this%dimensionMask )
+      gridCell%kernelSD1XMSpan, gridCell%kernelSD1YMSpan, gridCell%kernelSD1ZMSpan  ) 
 
     ! Compute matrix
     call kernel2%SetupMatrix( (/smoothing(2),smoothing(2),smoothing(2)/) )
 
     ! Determine spans
-    call kernel2%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel2%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD2XGSpan, gridCell%kernelSD2YGSpan, gridCell%kernelSD2ZGSpan, & 
-      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan, & 
-                                                                 this%dimensionMask )
+      gridCell%kernelSD2XMSpan, gridCell%kernelSD2YMSpan, gridCell%kernelSD2ZMSpan  ) 
 
     ! Compute matrix
     call kernel3%SetupMatrix( (/smoothing(3),smoothing(3),smoothing(3)/) )
 
     ! Determine spans
-    call kernel3%ComputeGridSpans( gridCell%id, this%nBins, &
+    call kernel3%ComputeSpansBounded( gridCell%id, this%nBins, &
       gridCell%kernelSD3XGSpan, gridCell%kernelSD3YGSpan, gridCell%kernelSD3ZGSpan, & 
-      gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan, & 
-                                                                 this%dimensionMask )
+      gridCell%kernelSD3XMSpan, gridCell%kernelSD3YMSpan, gridCell%kernelSD3ZMSpan  ) 
 
     ! For boundaries
-    gridCell%kernelSD1Matrix => kernel1%bmatrix
-    gridCell%kernelSD2Matrix => kernel2%bmatrix
-    gridCell%kernelSD3Matrix => kernel3%bmatrix
+    gridCell%kernelSD1Matrix => kernel1%matrix
+    gridCell%kernelSD2Matrix => kernel2%matrix
+    gridCell%kernelSD3Matrix => kernel3%matrix
 
     ! Done
     return
