@@ -26,6 +26,7 @@ program GPKDE
   doubleprecision    :: initialSmoothingFactor
   integer            :: initialSmoothingSelection 
   logical            :: exportOptimizationVariables
+  doubleprecision    :: uniformMass
   ! urword
   character(len=200) :: line
   integer            :: icol,istart,istop,n, iostatus
@@ -136,7 +137,7 @@ program GPKDE
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 0, n, r, 0, 0)
-  dataFile = line
+  dataFile = line(istart:istop)
   ! Check existence 
   exists = .false.
   inquire (file=dataFile, exist=exists)
@@ -168,6 +169,19 @@ program GPKDE
   if ( nlines.lt.1 ) then 
     call ustop('Data file does not have entries. Stop.')
   end if 
+
+  ! Looks for a uniform mass next to file name in case input format is only (x,y,z)
+  if (inputDataFormat.eq.0) then 
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    if ( r .gt. 0d0 ) then
+      uniformMass = r 
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,es18.9e3)') 'Given a uniform mass for the particle distribution: ', uniformMass 
+      end if
+    else
+      uniformMass = 1d0 
+    end if 
+  end if  
 
   ! Before loading the data, read the 
   ! reconstruction parameters and perform 
@@ -493,7 +507,9 @@ program GPKDE
      dataCarrier,                       &
      outputFileUnit    = outputUnit,    &
      computeRawDensity = .true.,        &
-     skipErrorConvergence = skipErrorConvergence, &
+     scalingFactor     = uniformMass,   & 
+     histogramScalingFactor = uniformMass, & ! For consistency with smoothed density 
+     skipErrorConvergence   = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence,  &
      exportOptimizationVariables = exportOptimizationVariables &
     )
