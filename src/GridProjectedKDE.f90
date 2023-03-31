@@ -2477,6 +2477,7 @@ contains
      if ( this%reportToOutUnit ) then
        write(this%outFileUnit, *     ) '  Mean raw density  :',& 
          sum(this%histogram%counts)/this%histogram%binVolume/this%nComputeBins
+       write(this%outFileUnit, *     ) '  Active bins       :', this%nComputeBins
        write(this%outFileUnit, *  )
      end if 
     end if 
@@ -2561,11 +2562,10 @@ contains
               ' -- Specie: ', trim(adjustl(spcChar))
       else
         write( this%outFileUnit, *     )
-        write( this%outFileUnit, '(A)' )'-----------------------------------------'
-        write( this%outFileUnit, '(A)' )'| Optimization ' 
+        write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
+        write( this%outFileUnit, '(A)' )'| Optimization                                              |'
       end if 
     end if 
-
 
     ! Density optimization 
     if ( this%databaseOptimization ) then
