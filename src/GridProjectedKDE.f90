@@ -37,8 +37,8 @@ module GridProjectedKDEModule
   doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
   ! Optimization
   doubleprecision, parameter :: defaultInitialSmoothingFactor = 2d0
-  doubleprecision, parameter :: defaultMinRelativeRoughness   = 1d-5
-  doubleprecision, parameter :: defaultMaxKernelShape         = 10d0
+  doubleprecision, parameter :: defaultMinRelativeRoughness   = 1e-5
+  doubleprecision, parameter :: defaultMaxKernelShape         = 5d0
   doubleprecision :: defaultMinLimitRoughness = 1d-5
 
   ! DEPRECATED
@@ -142,6 +142,7 @@ module GridProjectedKDEModule
     doubleprecision :: minKernelShape
     doubleprecision :: maxKernelShape
 
+    logical :: isotropic = .false.
     logical :: firstRun = .true. ! NOT USED, COULD BE DEPRECATED
     integer, allocatable, dimension(:,:) :: outputBinIds
     doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0 ! TO BE DEPRECATED
@@ -594,7 +595,7 @@ contains
     this%maxKernelSize(:) = 0d0
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%histogram%nBins(nd) - 1)/real(defaultKernelRange))
+      this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.9*this%histogram%nBins(nd) - 1)/real(defaultKernelRange))
     end do
     ! As the sigma kernel is isotropic, the maxSizeDimId 
     ! is given by the more restrictive dimension. 
@@ -602,7 +603,7 @@ contains
     this%maxKernelSDSize(:) = 0d0
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%histogram%nBins(nd) - 1)/real(defaultKernelSDRange))
+      this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.9*this%histogram%nBins(nd) - 1)/real(defaultKernelSDRange))
     end do
 
     ! Assign min kernel sizes, to avoid
@@ -612,7 +613,13 @@ contains
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
       ! Consider something with minHOverLambda
-      this%minKernelSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelRange)
+      !this%minKernelSize(nd) = 3d0*this%binSize(nd)
+      !this%minKernelSize(nd) = 2.1d0*this%binSize(nd)/real(defaultKernelRange)
+      !this%minKernelSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelRange)
+      !this%minKernelSize(nd) = 3.0d0*this%binSize(nd)/real(defaultKernelRange)
+      !this%minKernelSize(nd) = 2.5d0*this%binSize(nd)/real(defaultKernelRange)
+      !this%minKernelSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelRange)
+      this%minKernelSize(nd) = 1d0*this%binSize(nd)/real(defaultKernelRange)
     end do
     ! As the sigma kernel is isotropic, the minSizeDimId 
     ! is given by the more restrictive dimension. 
@@ -621,8 +628,15 @@ contains
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
       ! Consider something with minHOverLambda
-      this%minKernelSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelSDRange)
+      !this%minKernelSDSize(nd) = 2.1d0*this%binSize(nd)/real(defaultKernelSDRange)
+      !this%minKernelSDSize(nd) = 3.0d0*this%binSize(nd)/real(defaultKernelSDRange)
+      !this%minKernelSDSize(nd) = 2.5d0*this%binSize(nd)/real(defaultKernelSDRange)
+      !this%minKernelSDSize(nd) = 4.0d0*this%binSize(nd)/real(defaultKernelSDRange)
+      !this%minKernelSDSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelSDRange)
+      this%minKernelSDSize(nd) = 1d0*this%binSize(nd)/real(defaultKernelSDRange)
     end do
+      !print *, 'MIN KERNEL SIZE: ', this%minKernelSize
+      !print *, 'MIN KERNEL SD SIZE: ', this%minKernelSDSize
 
     ! Logging
     if ( this%reportToOutUnit ) then 
@@ -1497,6 +1511,17 @@ contains
               gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
               gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
               gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) ))
+      !! Compute net roughness
+      !netRoughnessArray( n )  = 2d0*sum(&
+      !    curvature12(&
+      !        gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2),     &
+      !        gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2),     & 
+      !        gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)      & 
+      !    )*gc%kernelSigmaMatrix(&
+      !        gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2),     &
+      !        gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2),     & 
+      !        gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+
       ! Compute net roughness
       netRoughnessArray( n )  = 2d0*sum(&
           curvature12(&
@@ -1507,13 +1532,83 @@ contains
               gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2),     &
               gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2),     & 
               gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) + & 
-          maxval( (/ & 
-            roughness11Array(n) + roughness22Array(n),      &
-            2d0*sqrt(roughness11Array(n)*roughness22Array(n)) &
-          /) )
+            !sqrt( (2d0*sqrt(roughness11Array(n)*roughness22Array(n))*(roughness11Array(n) + roughness22Array(n)) ) )
+            !2d0*( 2d0*sqrt(roughness11Array(n)*roughness22Array(n))* &
+            !roughness11Array(n) + roughness22Array(n) )/(&
+            !2d0*sqrt(roughness11Array(n)*roughness22Array(n)) +& 
+            !roughness11Array(n) + roughness22Array(n)  )
+            !0.5*( 2d0*sqrt(roughness11Array(n)*roughness22Array(n)) + &
+            !roughness11Array(n) + roughness22Array(n) )
+            !2d0*sqrt(roughness11Array(n)*roughness22Array(n))
+            ( 0.666*2d0*sqrt(roughness11Array(n)*roughness22Array(n)) + &
+            0.333*(roughness11Array(n) + roughness22Array(n)) )
+          !  roughness11Array(n) + roughness22Array(n)
+          !maxval( (/ & 
+          !  roughness11Array(n) + roughness22Array(n),      &
+          !  2d0*sqrt(roughness11Array(n)*roughness22Array(n)) &
+          !/) )
+
     end do
     !$omp end parallel do 
     call kernelSigma%ResetMatrix() 
+
+    !print *,count(netRoughnessArray.gt.0d0),  count(netRoughnessArray.gt.this%minLimitRoughness), this%nComputeBins
+    !print *,count(netRoughnessArray.le.this%minLimitRoughness), 'THERE ARE THE SMALLERS' 
+    !print *,count(roughnessXXArray .gt.0d0),   count(roughnessXXArray.gt.this%minLimitRoughness)
+    !print *,count(roughnessYYArray .gt.0d0),   count(roughnessYYArray.gt.this%minLimitRoughness)
+    !print *,'SHAPEXX GT MAX :', count( (roughnessXXArray/roughnessYYArray)**(0.25).gt.this%maxKernelShape )
+    !print *,'SHAPEXX LT MIN:', count( (roughnessXXArray/roughnessYYArray)**(0.25).lt.1/this%maxKernelShape )
+    !print *,'----------------------------'
+    !print *,'SHAPEYY GT MAX :', count( (roughnessYYArray/roughnessXXArray)**(0.25).gt.this%maxKernelShape )
+    !print *,'SHAPEYY LT MIN:', count( (roughnessYYArray/roughnessXXArray)**(0.25).lt.1/this%maxKernelShape )
+
+    !where ( roughnessXXArray .gt. this%maxLimitRoughness ) 
+    !  roughnessXXArray = this%maxLimitRoughness
+    !end where
+    !where ( roughnessYYArray .gt. this%maxLimitRoughness ) 
+    !  roughnessYYArray = this%maxLimitRoughness
+    !end where
+
+    !where (& 
+    ! ( (roughnessXXArray/roughnessYYArray)**(0.25).gt.this%maxKernelShape ) .and. & 
+    ! ( (roughnessYYArray/roughnessXXArray)**(0.25).lt.1/this%maxKernelShape ) )
+    !where (& 
+    ! ( (roughnessXXArray/roughnessYYArray).gt.this%maxKernelShape ) .and. & 
+    ! ( (roughnessYYArray/roughnessXXArray).lt.1/this%maxKernelShape ) )
+    !  netRoughnessArray = netRoughnessArray + roughnessXXArray + roughnessYYArray
+    !elsewhere
+    !  ! ISO
+    !  netRoughnessArray = netRoughnessArray + roughness11Array + roughness22Array 
+
+      !! SIMPLE AVERAGE
+      !netRoughnessArray = netRoughnessArray + & 
+      !      0.5*( 2d0*sqrt(roughness11Array*roughness22Array) + &
+      !      roughness11Array + roughness22Array )
+      !! HARMONIC AVERAGE
+      !netRoughnessArray = netRoughnessArray + & 
+      !      2d0*( 2d0*sqrt(roughness11Array*roughness22Array)* &
+      !      roughness11Array + roughness22Array )/(&
+      !       2d0*sqrt(roughness11Array*roughness22Array) + &
+      !      roughness11Array + roughness22Array )
+      ! WEIGHTED AVERAGE
+      !netRoughnessArray = netRoughnessArray + & 
+      !      ( 0.66*2d0*sqrt(roughness11Array*roughness22Array) + &
+      !      0.25*(roughness11Array + roughness22Array) )
+      !netRoughnessArray = netRoughnessArray + & 
+      !      ( 0.666*2d0*sqrt(roughness11Array*roughness22Array) + &
+      !      0.333*(roughness11Array + roughness22Array) )
+      !netRoughnessArray = netRoughnessArray + & 
+      !          2d0*sqrt(roughness11Array*roughness22Array)
+
+        !where ( netRoughnessArray .gt. this%maxLimitRoughness ) 
+        !  netRoughnessArray = this%maxLimitRoughness
+        !end where
+    !end where
+
+
+
+    !call exit(0)
+
 
     ! Deallocate
     deallocate( curvature1  ) 
@@ -2207,7 +2302,7 @@ contains
                               scalingFactor, histogramScalingFactor, &
                                                   computeRawDensity, &
               weightedHistogram, weights, onlyHistogram, exactPoint, &
-                                           relativeErrorConvergence  ) 
+                                relativeErrorConvergence, isotropic  ) 
     !------------------------------------------------------------------------------
     ! 
     !------------------------------------------------------------------------------
@@ -2234,6 +2329,7 @@ contains
     logical, intent(in), optional                       :: exactPoint
     doubleprecision, dimension(:), intent(in), optional :: weights
     doubleprecision, intent(in), optional               :: relativeErrorConvergence
+    logical, intent(in), optional                       :: isotropic
     ! local 
     logical               :: persistKDB
     logical               :: locExportOptimizationVariables
@@ -2246,6 +2342,7 @@ contains
     logical               :: locWeightedHistogram
     logical               :: locOnlyHistogram 
     logical               :: locExactPoint 
+    logical               :: locIsotropic
     integer               :: localNOptimizationLoops
     integer, dimension(2) :: dataPointsShape
     doubleprecision       :: locRelativeErrorConvergence
@@ -2307,6 +2404,9 @@ contains
     end if
     if ( present( exactPoint ) ) then
       locExactPoint = exactPoint
+    end if
+    if ( present( isotropic ) ) then
+      locIsotropic = isotropic  
     end if
     if ( present( relativeErrorConvergence ) ) then
       locRelativeErrorConvergence = relativeErrorConvergence
@@ -2412,7 +2512,29 @@ contains
     end if
 
     ! Set min limit roughness
-    this%minLimitRoughness = this%minRelativeRoughness*(this%histogram%maxRawDensity**2)
+    select case(nDim) 
+    case(1)
+      this%minLimitRoughness = &
+       this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/(this%stdCoords(this%idDim1)**4)
+    case(2)
+      this%minLimitRoughness = &
+       this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/&
+       ( product(this%stdCoords**2,dim=1,mask=(this%stdCoords.ne.0d0)) )
+    case(3)
+      this%minLimitRoughness = &
+       this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/&
+       ( product(this%stdCoords**(0.75),dim=1,mask=(this%stdCoords.ne.0d0)) ) ! 3/4=0.75
+    end select
+
+!!print *, 'MIN LIMIT ROUGHNESS: ', this%minLimitRoughness
+!    this%maxLimitRoughness = &
+!     10d0*(this%histogram%maxRawDensity**2)/&
+!     ( this%stdCoords(1)**2*this%stdCoords(2)**2 )
+!!print *, 'THE OLD MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
+!    this%maxLimitRoughness = &
+!     0.01d0*((this%histogram%maxRawDensity)**2)/&
+!     ( (4*this%binSize(1))**4 )
+!!print *, 'MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
 
     ! Assign distribution statistics as initial smoothing, Silverman (1986)
     if ( this%initialSmoothingSelection .eq. 0 ) then 
@@ -2778,7 +2900,8 @@ contains
     ! Initialize old error trackers
     errorALMISEProxyOld     = errorALMISEProxy
     errorRMSEOld            = errorRMSE
-    errorMetricOld          = 1d10 ! something big
+    errorMetricOld          = 0d0
+    !errorMetricOld          = 1d10 ! something big
     errorMetricSmoothingOld = errorMetricSmoothing
     densityEstimateArrayOld = densityEstimateArray
     kernelSmoothingScaleOld = kernelSmoothingScale
@@ -2826,13 +2949,13 @@ contains
               gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
 
         ! Scale for the support kernel !
-        ! - Eq. 23 in Sole-Mari et al. (2019) 
+        ! - Eq. 23 in Sole-Mari et al. (2019)
         kernelSigmaSupportScale(n) = nEstimateArray(n)**(0.5)*kernelSmoothingScale(n)**onePlusNDimQuarter/&
                        ( ( 4d0*densityEstimateArray(n) )**0.25 )*this%supportDimensionConstant
-        if (kernelSigmaSupportScale(n).gt.this%maxKernelSize(this%maxSizeDimId)) &
-                kernelSigmaSupportScale(n)=this%maxKernelSize(this%maxSizeDimId)
-        if (kernelSigmaSupportScale(n).lt.this%minKernelSize(this%minSizeDimId)) &
-                kernelSigmaSupportScale(n)=this%minKernelSize(this%minSizeDimId)
+        !if (kernelSigmaSupportScale(n).gt.this%maxKernelSize(this%maxSizeDimId)) &
+        !        kernelSigmaSupportScale(n)=this%maxKernelSize(this%maxSizeDimId)
+        !if (kernelSigmaSupportScale(n).lt.this%minKernelSize(this%minSizeDimId)) &
+        !        kernelSigmaSupportScale(n)=this%minKernelSize(this%minSizeDimId)
 
         smoothingCarrier = kernelSigmaSupportScale(n)
         call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
@@ -2861,11 +2984,20 @@ contains
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                      netRoughnessArray, kernelSigmaSupportScale, &
                                                  kernelSDX, kernelSDY, kernelSDZ )
+
+      !! A proxy to error: an estimate of ALMISE
+      !errorMetricArray = 0d0
+      !where ( kernelSmoothingScale .ne. 0d0 ) 
+      !    errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
+      !    0.25*netRoughnessArray*kernelSmoothingScale**4d0)/(this%histogram%nPoints**2)
+      !end where
+      !errorALMISEProxy = sqrt(sum(errorMetricArray**2)/this%nComputeBins)
+      !errorALMISEProxyOld = errorALMISEProxy
+
       ! Optimal smoothing
       call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                               roughnessXXArray, roughnessYYArray, roughnessZZArray, &
-                                               kernelSmoothing,  & 
-                                               !kernelSmoothing, kernelSmoothingOld, & 
+                                                                   kernelSmoothing, & 
                                      kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                                kernelSmoothingShape )
       ! Update density
@@ -3215,12 +3347,12 @@ contains
           this%alphaDimensionConstant*nVirtualPowerBeta*shapeTerm( nd, : )*kernelSmoothingScale
 
         ! Limit size based on domain restrictions
-        where( curvatureBandwidth(nd,:).gt.this%maxKernelSDSize(nd) ) 
-          curvatureBandwidth(nd,:) = this%maxKernelSDSize(nd)
-        end where
-        where( curvatureBandwidth(nd,:).lt.this%minKernelSDSize(nd) ) 
-          curvatureBandwidth(nd,:) = this%minKernelSDSize(nd)
-        end where
+        !where( curvatureBandwidth(nd,:).gt.this%maxKernelSDSize(nd) ) 
+        !  curvatureBandwidth(nd,:) = this%maxKernelSDSize(nd)
+        !end where
+        !where( curvatureBandwidth(nd,:).lt.this%minKernelSDSize(nd) ) 
+        !  curvatureBandwidth(nd,:) = this%minKernelSDSize(nd)
+        !end where
 
       end if
     end do 
@@ -3238,7 +3370,6 @@ contains
   subroutine prComputeOptimalSmoothingAndShape( this, nEstimate, netRoughness, &
                       roughnessXXActive, roughnessYYActive, roughnessZZActive, &
                                                               kernelSmoothing, & 
-                                          !kernelSmoothing, kernelSmoothingOld, & 
                                 kernelSmoothingScale, kernelSmoothingScaleOld, & 
                                                          kernelSmoothingShape  )
     !----------------------------------------------------------------------------
@@ -3258,13 +3389,14 @@ contains
     doubleprecision, dimension(:),   intent(in)    :: roughnessYYActive 
     doubleprecision, dimension(:),   intent(in)    :: roughnessZZActive 
     doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothing
-    !doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingOld
     doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScale
     doubleprecision, dimension(:),   intent(inout) :: kernelSmoothingScaleOld
     doubleprecision, dimension(:,:), intent(inout) :: kernelSmoothingShape
     doubleprecision, dimension(:),   pointer       :: roughness11Array
     doubleprecision, dimension(:),   pointer       :: roughness22Array
     doubleprecision, dimension(:),   allocatable   :: normRoughness
+    doubleprecision, dimension(:,:), allocatable   :: kernelSmoothingShape1
+    doubleprecision, dimension(:,:), allocatable   :: kernelSmoothingShape2
     integer :: nd
     logical :: updateScale
     !----------------------------------------------------------------------------
@@ -3274,11 +3406,12 @@ contains
     ! For the cases of really low roughness, use the limit
     ! value to keep bound the smoothing scale
     kernelSmoothingScale(:) = 0d0
-    where (abs( netRoughness ) .gt. this%minLimitRoughness )
-      kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*netRoughness ) )**( oneOverNDimPlusFour )
-    elsewhere
-      ! Estimate a scale based on minLimitRoughness
-      kernelSmoothingScale = ( nDim*nEstimate/( ( 4*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( oneOverNDimPlusFour )
+    where ( netRoughness .gt. 0d0 )
+    !where ( netRoughness .gt. this%minLimitRoughness )
+      kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*netRoughness ) )**( oneOverNDimPlusFour )
+    !elsewhere
+    !  ! Estimate a scale based on minLimitRoughness
+    !  kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( oneOverNDimPlusFour )
     end where
 
     ! Shape determination based on roughnesses ! 
@@ -3310,18 +3443,118 @@ contains
         ! are controlled by the curvature x, defaults to isotropic.
         ! Shape factors make sense only when both roughnesses
         ! are competing.
-        where( &
-         (roughness11Array.gt.this%minLimitRoughness ) .and.&
-         (roughness22Array.gt.this%minLimitRoughness ) ) 
+        !where( &
+        ! (roughness11Array.gt.this%minLimitRoughness ) .and.&
+        ! (roughness22Array.gt.this%minLimitRoughness ) )
+        !print *, this%minLimitRoughness, count( netRoughness.gt.this%minLimitRoughness )
+        !print *, this%minLimitRoughness, count(&
+        !               (roughness11Array.gt.this%minLimitRoughness ) .and.&
+        !               (roughness22Array.gt.this%minLimitRoughness ) )
+
+        !where( &
+        ! (roughness11Array.gt.this%minLimitRoughness ) .and.&
+        ! (roughness22Array.gt.this%minLimitRoughness ) )
+        !if ( allocated( kernelSmoothingShape1 ) ) deallocate( kernelSmoothingShape1 ) 
+        !if ( allocated( kernelSmoothingShape2 ) ) deallocate( kernelSmoothingShape2 ) 
+        !allocate( kernelSmoothingShape1, mold=kernelSmoothingShape ) 
+        !allocate( kernelSmoothingShape2, mold=kernelSmoothingShape ) 
+        !kernelSmoothingShape1 = 1d0
+        !kernelSmoothingShape2 = 1d0
+        !print *, this%idDim1, this%idDim2
+        !print *, shape(kernelSmoothingShape)
+        if( & 
+          count( roughness11Array .gt. roughness22Array ) .gt. count( roughness22Array .gt. roughness11Array ) ) then
+          !print *, 'YES'
           kernelSmoothingShape(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
+          kernelSmoothingShape(this%idDim2,:) = 1/kernelSmoothingShape(this%idDim1,:)
+        else
+          !print *, 'NO'
           kernelSmoothingShape(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
-        end where
-        normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
-        ! Should not happen, but for precaution
-        where( normRoughness.gt.0d0 )
-          kernelSmoothingShape(this%idDim1,:) = kernelSmoothingShape(this%idDim1,:)/normRoughness
-          kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)/normRoughness
-        end where  
+          kernelSmoothingShape(this%idDim1,:) = 1/kernelSmoothingShape(this%idDim2,:)
+        end if 
+        !print *, maxval( kernelSmoothingShape(this%idDim1, : ) ), minval( kernelSmoothingShape(this%idDim1, : ) ) 
+        !print *, maxval( kernelSmoothingShape(this%idDim2, : ) ), minval( kernelSmoothingShape(this%idDim2, : ) )
+        !print *, maxval( kernelSmoothingShape(this%idDim1, : )/kernelSmoothingShape(this%idDim1, : ) ) 
+        !print *, maxval( kernelSmoothingShape(this%idDim2, : )/kernelSmoothingShape(this%idDim1, : ) ) 
+        !print *, maxval( kernelSmoothingShape(this%idDim2, : ) ), minval( kernelSmoothingShape(this%idDim2, : ) )
+
+
+        !where( roughness11Array .ge. netRoughness ) 
+        !where( roughness11Array .gt. 0d0 ) 
+        !  kernelSmoothingShape1(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
+        !  kernelSmoothingShape1(this%idDim2,:) = 1/kernelSmoothingShape1(this%idDim1,:)
+        !end where
+        !where( roughness22Array .gt. 0d0 ) 
+        !  kernelSmoothingShape2(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
+        !  kernelSmoothingShape2(this%idDim1,:) = 1/kernelSmoothingShape2(this%idDim2,:)
+        !end where
+        !where( roughness11Array .ge. roughness22Array ) 
+        !  kernelSmoothingShape1(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
+        !  kernelSmoothingShape1(this%idDim2,:) = 1/kernelSmoothingShape1(this%idDim1,:)
+        !elsewhere
+        !  kernelSmoothingShape2(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
+        !  kernelSmoothingShape2(this%idDim1,:) = 1/kernelSmoothingShape2(this%idDim2,:)
+        !end where
+        !kernelSmoothingShape  = 2d0*(kernelSmoothingShape1*kernelSmoothingShape2 )/(kernelSmoothingShape1 + kernelSmoothingShape2 )
+        !kernelSmoothingShape  = 0.5*(kernelSmoothingShape1 + kernelSmoothingShape2 )
+
+        !if ( allocated(normRoughness) ) deallocate( normRoughness )
+        !allocate( normRoughness, mold=netRoughness ) 
+
+        !normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
+        !! Should not happen, but for precaution
+        !where( normRoughness.gt.0d0 )
+        !  kernelSmoothingShape(this%idDim1,:) = kernelSmoothingShape(this%idDim1,:)/normRoughness
+        !  kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)/normRoughness
+        !end where 
+
+        !print *, count( kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:).eq.1d0 ), this%nComputeBins
+        !print *, count(&
+        !  abs( kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:)-1d0).lt.1d-10 ), this%nComputeBins
+
+        !where( roughness11Array.gt.0d0 )  
+        !!where( roughness11Array.gt.this%minLimitRoughness )  
+        !  kernelSmoothingShape(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
+        !  kernelSmoothingShape(this%idDim2,:) = 1/kernelSmoothingShape(this%idDim1,:)
+        !end where
+
+        !!normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
+        !if ( allocated(normRoughness) ) deallocate( normRoughness )
+        !allocate( normRoughness, mold=netRoughness ) 
+        !normRoughness = 1d0 
+        !where( roughness22Array.gt.0d0 )
+        !!where( roughness22Array.gt.this%minLimitRoughness )
+        !  !normRoughness = (netRoughness/roughness22Array)**( 0.25 )
+        !  !!kernelSmoothingShape(this%idDim2,:) = 0.5*( normRoughness  + kernelSmoothingShape(this%idDim2,:) )
+        !  !!kernelSmoothingShape(this%idDim1,:) = 0.5*( 1/normRoughness + kernelSmoothingShape(this%idDim1,:) )
+        !  !kernelSmoothingShape(this%idDim2,:) = 2d0*(normRoughness*kernelSmoothingShape(this%idDim2,:))/(&
+        !  !        normRoughness  + kernelSmoothingShape(this%idDim2,:) )
+        !  !kernelSmoothingShape(this%idDim1,:) = 2d0*(& 
+        !  ! 1/normRoughness* kernelSmoothingShape(this%idDim1,:)       & 
+        !  !        )/( 1/normRoughness + kernelSmoothingShape(this%idDim1,:) )
+        !  normRoughness = (netRoughness/roughness22Array)**( 0.25 )
+        !  kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)*normRoughness
+        !  kernelSmoothingShape(this%idDim1,:) = kernelSmoothingShape(this%idDim1,:)/normRoughness
+        !end where
+        !kernelSmoothingShape = sqrt(kernelSmoothingShape) 
+
+        !where( roughness22Array.gt.this%minLimitRoughness )  
+        !  kernelSmoothingShape(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
+        !  !kernelSmoothingShape(this%idDim1,:) = 1/kernelSmoothingShape(this%idDim2,:)
+        !end where
+        !normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
+        !!where( netRoughness.gt.this%minLimitRoughness )  
+        !!  kernelSmoothingShape(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
+        !!  kernelSmoothingShape(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
+        !!end where
+
+        !normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
+        !! Should not happen, but for precaution
+        !where( normRoughness.gt.0d0 )
+        !  kernelSmoothingShape(this%idDim1,:) = kernelSmoothingShape(this%idDim1,:)/normRoughness
+        !  kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)/normRoughness
+        !end where 
+
         ! Some control on kernel anisotropy
         where( kernelSmoothingShape(this%idDim1,:).gt.this%maxKernelShape )
           kernelSmoothingShape(this%idDim1,:) = this%maxKernelShape
@@ -3331,7 +3564,7 @@ contains
           kernelSmoothingShape(this%idDim1,:) = 1/this%maxKernelShape
           kernelSmoothingShape(this%idDim2,:) = this%maxKernelShape
         end where
-        deallocate(normRoughness)
+        !deallocate(normRoughness)
       case(3)
         ! Something more sophisticated could be done for 3D with 
         ! uniformity on a given dimension, like default to the 
@@ -3381,20 +3614,20 @@ contains
     do nd=1,3
       if( this%dimensionMask(nd).eq.0 ) cycle
       kernelSmoothing(nd,:) = kernelSmoothingShape(nd,:)*kernelSmoothingScale
-      if ( any(kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) ) then
-        updateScale = .true.
-        ! Limit the size based on domain restrictions
-        where( kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) 
-          kernelSmoothing(nd,:) = this%maxKernelSize(nd)
-        end where
-      end if
-      if ( any(kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) ) then
-        updateScale = .true.
-        ! Limit the size based on bin restrictions
-        where( kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) 
-          kernelSmoothing(nd,:) = this%minKernelSize(nd)
-        end where
-      end if
+      !if ( any(kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) ) then
+      !  updateScale = .true.
+      !  ! Limit the size based on domain restrictions
+      !  where( kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) 
+      !    kernelSmoothing(nd,:) = this%maxKernelSize(nd)
+      !  end where
+      !end if
+      !if ( any(kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) ) then
+      !  updateScale = .true.
+      !  ! Limit the size based on bin restrictions
+      !  where( kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) 
+      !    kernelSmoothing(nd,:) = this%minKernelSize(nd)
+      !  end where
+      !end if
     end do
     if ( updateScale ) then 
       call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
