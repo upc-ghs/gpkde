@@ -19,6 +19,7 @@ program GPKDE
   doubleprecision    :: relativeErrorConvergence
   logical            :: exists
   logical            :: kernelDatabase
+  logical            :: isotropicKernels
   logical            :: skipErrorConvergence
   integer            :: nlines, io, id
   integer            :: inputDataFormat
@@ -289,6 +290,25 @@ program GPKDE
   case default
      call ustop('Kernel specification kind not available. It should be 0 or 1 . Stop.')
   end select
+ 
+  ! Isotropic kernels
+  ! 0: default, anisotropic
+  ! 1: isotropic
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    isotropicKernels = .false.
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Defaults to anisotropic kernels.'
+    end if
+  case(1)
+    isotropicKernels = .true.
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will employ isotropic kernels.'
+    end if
+  case default
+     call ustop('Kernel anisotropy specification not available. It should be 0 or 1 . Stop.')
+  end select
 
   if ( kernelDatabase ) then
     if ( logUnit.gt.0 ) then 
@@ -509,6 +529,7 @@ program GPKDE
      computeRawDensity = .true.,        &
      scalingFactor     = uniformMass,   & 
      histogramScalingFactor = uniformMass, & ! For consistency with smoothed density 
+     isotropic              = isotropicKernels, & 
      skipErrorConvergence   = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence,  &
      exportOptimizationVariables = exportOptimizationVariables &
@@ -521,6 +542,7 @@ program GPKDE
      computeRawDensity = .true.,        &
      weightedHistogram = .true.,        &
      weights           = weightsCarrier,&
+     isotropic         = isotropicKernels, & 
      skipErrorConvergence = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence, &
      exportOptimizationVariables = exportOptimizationVariables &

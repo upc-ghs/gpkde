@@ -6,3 +6,6 @@ make/objtemp
 make/gpkde*
 make/*.csv
 make/*output*
+*.png*
+*.out*
+*.log*
