@@ -1,8 +1,8 @@
 module HistogramModule
   !------------------------------------------------------------------------------
-  ! Histogram related operations
-  !  - Count elements on a regular grid
-  !  - Count weighted elements on a regular grid 
+  ! Histogram on a regular grid
+  !  - Count elements as individual points
+  !  - Count weighted elements 
   !------------------------------------------------------------------------------
   implicit none
 
@@ -21,6 +21,7 @@ module HistogramModule
     integer, dimension(:,:), allocatable :: boundingBoxBinIds
     integer                              :: nBBoxBins 
     doubleprecision, dimension(3)        :: domainOrigin ! of the reconstruction grid 
+    doubleprecision, dimension(3)        :: gridOrigin   ! while allocating from dataset 
     integer, dimension(:), allocatable   :: dimensions
     integer                              :: nDim
     integer                              :: nPoints 
@@ -31,13 +32,13 @@ module HistogramModule
     doubleprecision                      :: maxRawDensity
   contains
     ! Procedures
-    procedure :: Initialize    => prInitialize
-    procedure :: Reset         => prReset
-    procedure :: ComputeCounts => prComputeCounts
+    procedure :: Initialize            => prInitialize
+    procedure :: Reset                 => prReset
+    procedure :: ComputeCounts         => prComputeCounts
     procedure :: ComputeCountsWeighted => prComputeCountsWeighted
-    procedure :: Export        => prExport
-    procedure :: ComputeActiveBinIds => prComputeActiveBinIds
-    procedure :: ComputeBoundingBox  => prComputeBoundingBox
+    procedure :: Export                => prExport
+    procedure :: ComputeActiveBinIds   => prComputeActiveBinIds
+    procedure :: ComputeBoundingBox    => prComputeBoundingBox
   end type 
 
 contains
@@ -108,12 +109,13 @@ contains
     end if
 
     ! Initialize variables
-    this%nBins     = nBins
-    this%binSize   = binSize
-    this%binVolume = product( binSize, mask=(binSize.gt.0d0) ) 
+    this%nBins       = nBins
+    this%binSize     = binSize
+    this%binVolume   = product( binSize, mask=(binSize.gt.0d0) ) 
     this%binDistance = ( this%binVolume )**(1d0/this%nDim)
 
     ! Allocate and initialize histogram counts
+    ! Only if brute-force allocating the whole grid.
     allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
     this%counts = 0
 
@@ -184,7 +186,7 @@ contains
       ! binSize is non zero.
       do nd = 1,this%nDim
         did = this%dimensions(nd)
-        gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + exactIndex
+        gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
         if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
             (gridIndexes(did) .le. 0) ) then
           inside = .false. 
@@ -248,7 +250,7 @@ contains
       ! binSize is non zero.
       do nd = 1,this%nDim
         did = this%dimensions(nd)
-        gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did))/this%binSize(did)) + exactIndex
+        gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
         if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
             (gridIndexes(did) .le. 0) ) then
           inside = .false. 
@@ -268,9 +270,9 @@ contains
     this%effectiveMass = this%totalMass/this%nEffective
 
     ! Tranform mass counts into n counts
-    this%counts     = this%counts/this%effectiveMass
-    this%nPoints    = size(weights)
-    this%isWeighted = .true.
+    this%counts        = this%counts/this%effectiveMass
+    this%nPoints       = size(weights)
+    this%isWeighted    = .true.
     this%maxCount      = maxval(this%counts)
     this%maxRawDensity = this%maxCount/this%binVolume
 

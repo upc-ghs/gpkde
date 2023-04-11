@@ -317,12 +317,11 @@ module GridProjectedKDEModule
   end interface
 
 
-! Module contains
+! GridProjectedKDEModule contains
 contains
+  ! Subroutines !
 
-
-  ! Subroutines
-  ! Some arguments candidates to be deprecated in Initialize
+  ! Some arguments candidates to be deprecated
   ! - logKernelDatabase
   ! - anisotropicSigmaSupport
   ! - densityScale
@@ -375,7 +374,6 @@ contains
     integer :: isThisFileOpen
     !---------------------------------------------------------------------------
 
-
     ! Enable reporting to outUnit if given 
     if( present( outFileName ) ) then
       isThisFileOpen = -1
@@ -393,12 +391,15 @@ contains
       write( this%outFileUnit, '(A)' ) '------------------------------'
       write( this%outFileUnit, '(A)' ) ' GPKDE module is initializing '
     end if 
+
+    ! Reconstruction grid parameters !
+
     ! Stop if all bin sizes are zero
     if ( all( binSize .lt. 0d0 ) ) then 
       write(*,*) 'Error while initializing GPKDE, all binSizes are .lt. 0d0. Stop.'
       stop 
     end if 
-    ! Initialize reconstruction grid 
+    ! Initialize reconstruction grid parameters 
     where( binSize .ne. 0d0 ) 
       !this%nBins = ceiling( domainSize/binSize )
       this%nBins = int( domainSize/binSize + 0.5 )
@@ -412,7 +413,6 @@ contains
     end if
     this%binSize    = binSize
     this%domainSize = domainSize
-
     ! domainOrigin
     if ( present( domainOrigin ) ) then 
       this%domainOrigin = domainOrigin
@@ -420,17 +420,15 @@ contains
       this%domainOrigin = (/0,0,0/)
     end if
 
-    ! Depending on nBins, is the number of dimensions 
-    ! of the  GPDKE reconstruction process. If any nBins is 1, 
-    ! then that dimension is compressed. e.g. nBins = (10,1,20),
-    ! then it is a 2D reconstruction process where dimensions
-    ! x and z define the 2D plane. This is not necessarily the 
-    ! same for the computation of Histograms, where determination 
-    ! of a particle inside the grid is related to the 
-    ! binSize. If a given binSize is zero, then histogram computation 
-    ! does not consider this dimension. If nBins .eq. 1 and binSize .gt. 0
-    ! then dimension is considered as valid, and compared against the
-    ! origin.
+    ! Depending on nBins, is the number of dimensions of the GPDKE
+    ! reconstruction process. If any nBins is 1, then that dimension
+    ! is compressed. e.g. nBins = (10,1,20), then it is a 2D reconstruction
+    ! process where dimensions 'x' and 'z' define the 2D plane. This is not
+    ! necessarily the same for the computation of histograms, where determination 
+    ! of a particle inside the grid is related to the binSize. If a given binSize
+    ! is zero, then histogram computation does not consider this dimension.
+    ! If nBins .eq. 1 and binSize .gt. 0 then dimension is considered as valid,
+    ! and compared against the origin.
 
     ! Initialize module dimensions
     call this%InitializeModuleDimensions( nDim, dimensionMask ) 
@@ -452,7 +450,8 @@ contains
       write( this%outFileUnit, *) '  Will compute Histogram considering ', this%histogram%nDim, ' dimensions '
     end if  
     
-    ! Process optional arguments
+    ! Process further optional arguments !
+
     ! Kernel database 
     if ( present( databaseOptimization ) ) then 
       this%databaseOptimization = databaseOptimization
@@ -524,7 +523,7 @@ contains
     else 
       this%nOptimizationLoops = defaultNOptLoops
     end if
-
+    ! initialSmoothing
     if ( present( initialSmoothingSelection ) ) then 
       this%initialSmoothingSelection = initialSmoothingSelection
     else
@@ -596,8 +595,7 @@ contains
     this%maxKernelSize(:) = 0d0
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSize(nd) = (this%binSize(nd)*(0.45*this%histogram%nBins(nd) - 1)/real(defaultKernelRange))
-      !this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%histogram%nBins(nd) - 1)/real(defaultKernelRange))
+      this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%histogram%nBins(nd) - 1)/real(defaultKernelRange))
     end do
     ! As the sigma kernel is isotropic, the maxSizeDimId 
     ! is given by the more restrictive dimension. 
@@ -651,11 +649,9 @@ contains
       end if 
     end if  
 
-
     ! Initialize kernel database
     if ( this%databaseOptimization ) then
-      if ( this%flatKernelDatabase ) then
-        ! Initialize kernel database 
+      if ( this%flatKernelDatabase ) then ! this is always !
         call this%InitializeKernelDatabaseFlat( this%minHOverLambda(1), &
                                                 this%maxHOverLambda(1), &
                                               this%deltaHOverLambda(1), &
@@ -670,15 +666,13 @@ contains
       this%SetKernelSigma => prSetKernelSigmaBrute
     end if 
 
-
     ! Initialize net roughness function
     call this%InitializeNetRoughnessFunction( nDim )
 
-
     ! Allocate matrix for density 
+    ! Depends on whether is automatic determination of grid size ? 
     if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
     allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
-
 
     ! Report intialization
     if ( this%reportToOutUnit ) then 
@@ -2414,6 +2408,17 @@ contains
     character(len=16)     :: timeChar
     character(len=16)     :: spcChar
     integer               :: nd
+    ! DEV SUB DOMAIN
+    doubleprecision, dimension(3) :: minCoords
+    doubleprecision, dimension(3) :: minSubGridCoords
+    doubleprecision, dimension(3) :: maxCoords
+    doubleprecision, dimension(3) :: maxSubGridCoords
+    doubleprecision, dimension(3) :: deltaCoords 
+    doubleprecision               :: borderFraction = 0.05d0
+    doubleprecision, dimension(3) :: subGridSize
+    integer, dimension(3)         :: subGridNBins
+    doubleprecision, dimension(3) :: deltaOriginCoords
+    integer, dimension(3)         :: nDeltaOriginCoords
     !------------------------------------------------------------------------------
 
     ! Initialize optional arguments
@@ -2430,7 +2435,7 @@ contains
     locExactPoint = .false.
     localNOptimizationLoops = this%nOptimizationLoops
 
-    ! Process them
+    ! Process optional arguments !
     if ( present( nOptimizationLoops ) ) then 
       localNOptimizationLoops = nOptimizationLoops
     end if 
@@ -2496,6 +2501,69 @@ contains
       write(*,*) 'ERROR: data points is empty. Stop.'
       stop
     end if
+    
+    !print *, 'MINX:',minval( dataPoints(:,1), dim=1 ) 
+    !print *, 'MINY:',minval( dataPoints(:,2), dim=1 ) 
+    !print *, 'MINZ:',minval( dataPoints(:,3), dim=1 ) 
+    !print *, 'MAXX:',maxval( dataPoints(:,1), dim=1 ) 
+    !print *, 'MAXY:',maxval( dataPoints(:,2), dim=1 ) 
+    !print *, 'MAXX:',maxval( dataPoints(:,3), dim=1 )
+    print *, '-----------------------------------------'
+    print *, 'MAXVAL: ', maxval( dataPoints, dim=1 ) 
+    print *, 'MINVAL: ', minval( dataPoints, dim=1 ) 
+    maxCoords         = maxval( dataPoints, dim=1 ) 
+    minCoords         = minval( dataPoints, dim=1 )
+    deltaCoords       = abs( maxCoords - minCoords )
+    ! deltaOriginCoords = abs( maxCoords - minCoords )
+    subGridSize        = this%domainSize
+    subGridNBins       = 1 
+    minSubGridCoords   = this%domainOrigin
+    maxSubGridCoords   = this%domainSize
+    deltaOriginCoords  = 0d0
+    nDeltaOriginCoords = 0
+    where ( this%binSize .ne. 0d0 )
+      subGridSize  = (1d0+borderFraction)*deltaCoords
+      subGridNBins = int( subGridSize/this%binSize + 0.5 )
+      ! For the minimum coordinates, substract half the border fraction
+      minSubGridCoords   = minCoords - 0.5*borderFraction*deltaCoords
+      ! For the maximum coordinates, add half the border fraction
+      maxSubGridCoords   = maxCoords + 0.5*borderFraction*deltaCoords
+      deltaOriginCoords  = abs( minSubGridCoords-this%domainOrigin )
+      nDeltaOriginCoords = int( deltaOriginCoords/this%binSize + 0.5 )
+    end where
+    !! Alignment between origins
+    !!where ( this%binSize .ne. 0d0 )
+    !  nDeltaOriginCoords = int( deltaOriginCoords/this%binSize + 0.5 )
+    !!elsewhere
+    !  nDeltaOriginCoords = 0
+    !!end where
+
+    print *, 'SUBGRIDSIZE:        ', subGridSize
+    print *, 'SUBGRIDNBINS:       ', subGridNBins
+    print *, 'MINSUBGRIDCOORDS:   ', minSubGridCoords
+    print *, 'MAXSUBGRIDCOORDS:   ', maxSubGridCoords
+    print *, 'VERIFYSUBGRIDSIZE:  ', abs(maxSubGridCoords-minSubGridCoords)
+    print *, 'DELTAORIGINCOORDS:  ', deltaOriginCoords
+    print *, 'NDELTAORIGINCOORDS: ', nDeltaOriginCoords
+    print *, 'DOMAINORIGIN:       ', this%domainOrigin
+    print *, 'DOMAINSIZE:         ', this%domainSize
+
+call exit(0)
+
+
+    !this%nBins = int( abs( maxval( dataPoints, dim=1 ) -  minval( dataPoints, dim=1 ) )*1.05/this%binSize + 0.5 )
+    !nDeltaOriginCoords = 
+    !print *, '-----------------------------------------'
+    !print *, 'NBINS:     ', this%nBins
+    !where ( this%binSize .ne. 0d0 )
+    !this%nBins = int( abs( maxval( dataPoints, dim=1 ) -  minval( dataPoints, dim=1 ) )*1.05/this%binSize + 0.5 )
+    !end where
+    !print *, 'LIVENBINS: ', this%nBins
+
+
+
+
+call exit(0)
 
     if ( locWeightedHistogram ) then 
       ! Cummulative histogram-like quantities
@@ -2697,6 +2765,7 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
       call this%ExportDensity( outputFileName )
     end if
 
+
     ! Done
     return
 
@@ -2805,6 +2874,16 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
     allocate( errorMetricArray(this%nComputeBins) )
     if ( allocated(relativeSmoothingChange) ) deallocate(relativeSmoothingChange) 
     allocate( relativeSmoothingChange(this%nComputeBins) )
+
+    ! Initialize allocated arrays with zeroes
+    kernelSmoothing = 0d0
+    kernelSmoothingScale = 0d0
+    kernelSigmaSupportScale = 0d0
+    netRoughnessArray = 0d0
+    nEstimateArray = 0d0
+    densityEstimateArray = 0d0
+    curvatureBandwidth = 0d0
+
 
     ! Initialize and process arguments
     if ( present( nOptimizationLoops ) ) then 
