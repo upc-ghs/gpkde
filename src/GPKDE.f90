@@ -36,9 +36,12 @@ program GPKDE
   doubleprecision    :: elapsedTime
   integer            :: clockCountStart, clockCountStop
   integer            :: clockCountRate, clockCountMax
+  ! grid
   doubleprecision, dimension(3) :: domainSize  
   doubleprecision, dimension(3) :: binSize     
   doubleprecision, dimension(3) :: domainOrigin
+  logical                       :: adaptToCoords
+  ! kernels
   doubleprecision, dimension(3) :: initialSmoothing
   doubleprecision, dimension(3) :: kernelParams
   !-----------------------------------------------
@@ -221,6 +224,23 @@ program GPKDE
   domainSize(2) = r
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   domainSize(3) = r
+
+  ! Read whether grids allocation for reconstruction should
+  ! 0: follow domain size 
+  ! 1: adapt to given data coordinates
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  adaptToCoords = .false.
+  if ( n .eq. 0 ) then 
+    adaptToCoords = .false.
+    if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'Will allocate grid for reconstruction using domain size.'
+    end if 
+  else if ( n.gt.0 ) then 
+    adaptToCoords = .true.
+    if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'Will allocate grid for reconstruction adapted to given points.'
+    end if 
+  end if 
 
   ! Read binSize
   read(simUnit, '(a)') line
@@ -478,7 +498,8 @@ program GPKDE
   if (logUnit.gt.0) then
     call gpkdeObj%Initialize(& 
       domainSize, binSize,                                  &
-      domainOrigin              = domainOrigin,             & 
+      domainOrigin              = domainOrigin,             &
+      adaptGridToCoords         = adaptToCoords,            & 
       nOptimizationLoops        = nOptLoops,                &
       databaseOptimization      = kernelDatabase,           &
       minHOverLambda            = kernelParams(1),          &
@@ -494,6 +515,7 @@ program GPKDE
     call gpkdeObj%Initialize(& 
       domainSize, binSize,                                  &
       domainOrigin              = domainOrigin,             & 
+      adaptGridToCoords         = adaptToCoords,            & 
       nOptimizationLoops        = nOptLoops,                &
       databaseOptimization      = kernelDatabase,           &
       minHOverLambda            = kernelParams(1),          &

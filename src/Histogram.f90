@@ -12,24 +12,27 @@ module HistogramModule
   type, public :: HistogramType
     ! Properties
     doubleprecision, dimension(:,:,:), allocatable :: counts 
-    integer, dimension(3)                :: nBins
-    doubleprecision, dimension(3)        :: binSize
-    doubleprecision                      :: binVolume
-    doubleprecision                      :: binDistance
-    integer, dimension(:,:), allocatable :: activeBinIds
-    integer                              :: nActiveBins
-    integer, dimension(:,:), allocatable :: boundingBoxBinIds
-    integer                              :: nBBoxBins 
-    doubleprecision, dimension(3)        :: domainOrigin ! of the reconstruction grid 
-    doubleprecision, dimension(3)        :: gridOrigin   ! while allocating from dataset 
-    integer, dimension(:), allocatable   :: dimensions
-    integer                              :: nDim
-    integer                              :: nPoints 
-    doubleprecision                      :: nEffective 
-    doubleprecision                      :: totalMass, effectiveMass 
-    logical                              :: isWeighted
-    doubleprecision                      :: maxCount
-    doubleprecision                      :: maxRawDensity
+    integer, dimension(3)                  :: nBins
+    doubleprecision, dimension(3)          :: binSize
+    doubleprecision                        :: binVolume
+    doubleprecision                        :: binDistance
+    integer, dimension(:,:), allocatable   :: activeBinIds
+    integer                                :: nActiveBins
+    integer, dimension(:,:), allocatable   :: boundingBoxBinIds
+    integer                                :: nBBoxBins 
+    doubleprecision, dimension(3)          :: domainOrigin ! of the reconstruction grid 
+    doubleprecision, dimension(3)          :: gridOrigin   ! while allocating from dataset
+    doubleprecision, dimension(:), pointer :: origin       ! point to the proper origin for indexes 
+    logical                                :: adaptGridToCoords
+    integer, dimension(:), allocatable     :: dimensions
+    integer                                :: nDim
+    integer                                :: nPoints 
+    doubleprecision                        :: nEffective 
+    doubleprecision                        :: totalMass, effectiveMass 
+    logical                                :: isWeighted
+    doubleprecision                        :: maxCount
+    doubleprecision                        :: maxRawDensity
+  ! HistogramType contains
   contains
     ! Procedures
     procedure :: Initialize            => prInitialize
@@ -41,22 +44,25 @@ module HistogramModule
     procedure :: ComputeBoundingBox    => prComputeBoundingBox
   end type 
 
+! HistogramModule contains
 contains
 
-  subroutine prInitialize( this, nBins, binSize, dimensionMask, domainOrigin )
+  subroutine prInitialize( this, nBins, binSize, & 
+                    dimensionMask, domainOrigin, & 
+                              adaptGridToCoords  )
     !------------------------------------------------------------------------------
-    ! 
     !
     !------------------------------------------------------------------------------
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none 
-    class(HistogramType)                      :: this
-    integer, dimension(3), intent(in)         :: nBins
-    doubleprecision, dimension(3), intent(in) :: binSize
-    integer, dimension(3), optional           :: dimensionMask
-    integer, dimension(3)                     :: locDimensionMask
-    doubleprecision, dimension(3), optional   :: domainOrigin
+    class(HistogramType), target                        :: this
+    integer, dimension(3), intent(in)                   :: nBins
+    doubleprecision, dimension(3), intent(in)           :: binSize
+    integer, dimension(3), intent(in), optional         :: dimensionMask
+    integer, dimension(3)                               :: locDimensionMask
+    doubleprecision, dimension(3), intent(in), optional :: domainOrigin
+    logical, intent(in), optional                       :: adaptGridToCoords
     integer :: nd, dcount
     !------------------------------------------------------------------------------
 
@@ -77,6 +83,13 @@ contains
       locDimensionMask = dimensionMask
     else
       locDimensionMask = (/1,1,1/)
+    end if
+
+    ! Allocate grid with nBins ? 
+    if( present(adaptGridToCoords) ) then 
+      this%adaptGridToCoords = adaptGridToCoords
+    else
+      this%adaptGridToCoords = .false.
     end if
 
     ! Assign dim properties
@@ -116,8 +129,11 @@ contains
 
     ! Allocate and initialize histogram counts
     ! Only if brute-force allocating the whole grid.
-    allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
-    this%counts = 0
+    if ( .not. this%adaptGridToCoords ) then 
+      allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
+      this%counts = 0
+      this%origin => this%domainOrigin
+    end if 
 
 
   end subroutine prInitialize
@@ -186,7 +202,8 @@ contains
       ! binSize is non zero.
       do nd = 1,this%nDim
         did = this%dimensions(nd)
-        gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
+        gridIndexes(did) = floor(( dataPoints(np,did) - this%origin(did) )/this%binSize(did)) + exactIndex
+        !gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
         if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
             (gridIndexes(did) .le. 0) ) then
           inside = .false. 
@@ -250,7 +267,8 @@ contains
       ! binSize is non zero.
       do nd = 1,this%nDim
         did = this%dimensions(nd)
-        gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
+        gridIndexes(did) = floor(( dataPoints(np,did) - this%origin(did) )/this%binSize(did)) + exactIndex
+        !gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
         if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
             (gridIndexes(did) .le. 0) ) then
           inside = .false. 
@@ -378,6 +396,7 @@ contains
   end subroutine 
 
 
+  ! POTENTIALLY DEPRECATED
   ! NEEDS UPDATE
   subroutine prExport( this )
     !------------------------------------------------------------------------------

@@ -39,7 +39,8 @@ module GridProjectedKDEModule
   doubleprecision, parameter :: defaultInitialSmoothingFactor = 2d0
   doubleprecision, parameter :: defaultMinRelativeRoughness   = 1e-5
   doubleprecision, parameter :: defaultMaxKernelShape         = 5d0
-  doubleprecision :: defaultMinLimitRoughness = 1d-5
+  doubleprecision            :: defaultMinLimitRoughness = 1d-5
+  logical, parameter         :: defaultAdaptGridToCoords = .false. 
 
   ! DEPRECATED
   logical, parameter ::  defaultBruteOptimization       = .false. 
@@ -101,15 +102,16 @@ module GridProjectedKDEModule
     doubleprecision, dimension(:), pointer     :: roughness11Array
     doubleprecision, dimension(:), pointer     :: roughness22Array
 
-
     ! Grid properties and dimensionality
     doubleprecision, dimension(3) :: binSize
     doubleprecision, dimension(3) :: domainSize
     doubleprecision, dimension(3) :: domainOrigin
-    doubleprecision, dimension(3) :: initialSmoothing
+    integer        , dimension(3) :: domainGridSize
+    integer        , dimension(3) :: deltaBinsOrigin
     integer        , dimension(3) :: nBins
     integer        , dimension(3) :: dimensionMask
-  
+    logical                       :: adaptGridToCoords
+
     ! Variables
     ! Consider replacing some for a common grid, 
     ! replacing values when necessary
@@ -141,6 +143,7 @@ module GridProjectedKDEModule
     doubleprecision :: densityScale
     doubleprecision :: minKernelShape
     doubleprecision :: maxKernelShape
+    doubleprecision, dimension(3) :: initialSmoothing
 
     logical :: isotropic = .false.
 
@@ -327,7 +330,8 @@ contains
   ! - densityScale
   ! - flatKernelDatabase
   ! - bruteOptimization
-  subroutine prInitialize( this, domainSize, binSize, domainOrigin, &
+  subroutine prInitialize( this, &
+              domainSize, binSize, domainOrigin, adaptGridToCoords, &
                        initialSmoothing, initialSmoothingSelection, & 
                         initialSmoothingFactor, nOptimizationLoops, &
         databaseOptimization, flatKernelDatabase,logKernelDatabase, &
@@ -363,6 +367,8 @@ contains
     doubleprecision, intent(in), optional :: minRoughness, maxRoughness
     doubleprecision, intent(in), optional :: minKernelShape, maxKernelShape
     logical, intent(in), optional :: logKernelDatabase
+    ! Grid allocation control
+    logical, intent(in), optional :: adaptGridToCoords
     ! Brute optimization, no kernel database
     logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
     ! General use, indexes
@@ -394,6 +400,13 @@ contains
 
     ! Reconstruction grid parameters !
 
+    ! Set flag for adapting calculation grid allocation to particle coordinates
+    if ( present(adaptGridToCoords) ) then
+      this%adaptGridToCoords = adaptGridToCoords
+    else
+      this%adaptGridToCoords = defaultAdaptGridToCoords
+    end if 
+
     ! Stop if all bin sizes are zero
     if ( all( binSize .lt. 0d0 ) ) then 
       write(*,*) 'Error while initializing GPKDE, all binSizes are .lt. 0d0. Stop.'
@@ -402,13 +415,15 @@ contains
     ! Initialize reconstruction grid parameters 
     where( binSize .ne. 0d0 ) 
       !this%nBins = ceiling( domainSize/binSize )
-      this%nBins = int( domainSize/binSize + 0.5 )
+      !this%nBins = int( domainSize/binSize + 0.5 )
+      this%domainGridSize = int( domainSize/binSize + 0.5 )
     elsewhere
-      this%nBins = 1
+      !this%nBins = 1
+      this%domainGridSize = 1
     end where
-    ! Stop if any nBins .lt. 1
-    if ( any( this%nBins .lt. 1 ) ) then 
-      write(*,*) 'Error while initializing GPKDE, some nBins .lt. 1. Stop.'
+    ! Stop if any the domainGridSize .lt. 1
+    if ( any( this%domainGridSize .lt. 1 ) ) then 
+      write(*,*) 'Error while initializing GPKDE, some domainGridSize  .lt. 1. Stop.'
       stop 
     end if
     this%binSize    = binSize
@@ -440,11 +455,32 @@ contains
       write( this%outFileUnit, '(A)' ) ' GPKDE initializing Histogram '
     end if
 
-    ! Initialize histogram, requires dimension mask 
-    call this%histogram%Initialize( &
-          this%nBins, this%binSize, &
-       dimensionMask=dimensionMask, & 
-     domainOrigin=this%domainOrigin )
+    ! Initialize histogram, requires dimension mask
+    if ( this%adaptGridToCoords ) then
+      ! Skip histogram grid allocation in order 
+      ! to adapt to the given particle coordinates 
+      call this%histogram%Initialize( &
+       this%domainGridSize, this%binSize, &
+             dimensionMask=dimensionMask, & 
+          domainOrigin=this%domainOrigin, &
+                 adaptGridToCoords=.true. )
+      if ( this%reportToOutUnit ) then 
+        write( this%outFileUnit, '(A)' ) ' Histogram grid will not follow domain limits, will adapt to points.'
+      end if
+    else
+      ! Allocate grid according to nBins
+      call this%histogram%Initialize( &
+       this%domainGridSize, this%binSize, &
+             dimensionMask=dimensionMask, & 
+           domainOrigin=this%domainOrigin )
+      ! nBins as domainGridSize
+      this%nBins = this%domainGridSize
+      this%deltaBinsOrigin = 0
+      ! Allocate matrix for density 
+      if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
+      allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+    end if
+
     if ( this%reportToOutUnit ) then 
       write( this%outFileUnit, *) '  Histogram determines dimensions to be analyzed based on binSizes '
       write( this%outFileUnit, *) '  Will compute Histogram considering ', this%histogram%nDim, ' dimensions '
@@ -641,8 +677,8 @@ contains
       write( this%outFileUnit, *) '  binSize            :', this%binSize
       write( this%outFileUnit, *) '  domainSize         :', this%domainSize
       write( this%outFileUnit, *) '  domainOrigin       :', this%domainOrigin
-      write( this%outFileUnit, *) '  Computed nBins     :', this%nBins
-      write( this%outFileUnit, *) '  Dimensionality for reconstruction is determined from nBins '
+      write( this%outFileUnit, *) '  domainGridSize     :', this%domainGridSize
+      write( this%outFileUnit, *) '  Dimensionality for reconstruction is determined from domainGridSize '
       write( this%outFileUnit, *) '  Will perform reconstruction in ', nDim, ' dimensions.'
       if ( this%initialSmoothingSelection.ge.1 ) then 
       write( this%outFileUnit, *) '  initialSmoothing   :', this%initialSmoothing
@@ -668,11 +704,6 @@ contains
 
     ! Initialize net roughness function
     call this%InitializeNetRoughnessFunction( nDim )
-
-    ! Allocate matrix for density 
-    ! Depends on whether is automatic determination of grid size ? 
-    if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
-    allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
     ! Report intialization
     if ( this%reportToOutUnit ) then 
@@ -855,7 +886,8 @@ contains
 
     ! Determine dimensions based on number of bins
     do n = 1,3
-      if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
+    if (this%domainGridSize(n) .eq. 1) dimensionMask(n) = 0 
+      !if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
     end do 
     nDim = sum(dimensionMask)
     this%dimensionMask = dimensionMask
@@ -2417,8 +2449,12 @@ contains
     doubleprecision               :: borderFraction = 0.05d0
     doubleprecision, dimension(3) :: subGridSize
     integer, dimension(3)         :: subGridNBins
-    doubleprecision, dimension(3) :: deltaOriginCoords
+    !doubleprecision, dimension(3) :: deltaOriginCoords
     integer, dimension(3)         :: nDeltaOriginCoords
+    doubleprecision, dimension(3) :: subGridOrigin
+    !doubleprecision, dimension(3) :: subGridLimit
+    integer, dimension(3)         :: subGridOriginIndexes
+    integer, dimension(3)         :: subGridLimitIndexes
     !------------------------------------------------------------------------------
 
     ! Initialize optional arguments
@@ -2501,69 +2537,72 @@ contains
       write(*,*) 'ERROR: data points is empty. Stop.'
       stop
     end if
-    
-    !print *, 'MINX:',minval( dataPoints(:,1), dim=1 ) 
-    !print *, 'MINY:',minval( dataPoints(:,2), dim=1 ) 
-    !print *, 'MINZ:',minval( dataPoints(:,3), dim=1 ) 
-    !print *, 'MAXX:',maxval( dataPoints(:,1), dim=1 ) 
-    !print *, 'MAXY:',maxval( dataPoints(:,2), dim=1 ) 
-    !print *, 'MAXX:',maxval( dataPoints(:,3), dim=1 )
-    print *, '-----------------------------------------'
-    print *, 'MAXVAL: ', maxval( dataPoints, dim=1 ) 
-    print *, 'MINVAL: ', minval( dataPoints, dim=1 ) 
-    maxCoords         = maxval( dataPoints, dim=1 ) 
-    minCoords         = minval( dataPoints, dim=1 )
-    deltaCoords       = abs( maxCoords - minCoords )
-    ! deltaOriginCoords = abs( maxCoords - minCoords )
-    subGridSize        = this%domainSize
-    subGridNBins       = 1 
-    minSubGridCoords   = this%domainOrigin
-    maxSubGridCoords   = this%domainSize
-    deltaOriginCoords  = 0d0
-    nDeltaOriginCoords = 0
-    where ( this%binSize .ne. 0d0 )
-      subGridSize  = (1d0+borderFraction)*deltaCoords
-      subGridNBins = int( subGridSize/this%binSize + 0.5 )
-      ! For the minimum coordinates, substract half the border fraction
-      minSubGridCoords   = minCoords - 0.5*borderFraction*deltaCoords
-      ! For the maximum coordinates, add half the border fraction
-      maxSubGridCoords   = maxCoords + 0.5*borderFraction*deltaCoords
-      deltaOriginCoords  = abs( minSubGridCoords-this%domainOrigin )
-      nDeltaOriginCoords = int( deltaOriginCoords/this%binSize + 0.5 )
-    end where
-    !! Alignment between origins
-    !!where ( this%binSize .ne. 0d0 )
-    !  nDeltaOriginCoords = int( deltaOriginCoords/this%binSize + 0.5 )
-    !!elsewhere
-    !  nDeltaOriginCoords = 0
-    !!end where
+ 
+    ! Compute sub grid parameters if grids
+    ! are to be adapted to the given coordinates 
+    if ( this%adaptGridToCoords ) then
 
-    print *, 'SUBGRIDSIZE:        ', subGridSize
-    print *, 'SUBGRIDNBINS:       ', subGridNBins
-    print *, 'MINSUBGRIDCOORDS:   ', minSubGridCoords
-    print *, 'MAXSUBGRIDCOORDS:   ', maxSubGridCoords
-    print *, 'VERIFYSUBGRIDSIZE:  ', abs(maxSubGridCoords-minSubGridCoords)
-    print *, 'DELTAORIGINCOORDS:  ', deltaOriginCoords
-    print *, 'NDELTAORIGINCOORDS: ', nDeltaOriginCoords
-    print *, 'DOMAINORIGIN:       ', this%domainOrigin
-    print *, 'DOMAINSIZE:         ', this%domainSize
+      maxCoords        = maxval( dataPoints, dim=1 ) 
+      minCoords        = minval( dataPoints, dim=1 )
+      deltaCoords      = abs( maxCoords - minCoords )
+      minSubGridCoords = this%domainOrigin
+      maxSubGridCoords = this%domainSize + this%domainOrigin
+      where ( this%binSize .ne. 0d0 )
+        ! For the minimum coordinates, substract half the border fraction
+        minSubGridCoords   = minCoords - 0.5*borderFraction*deltaCoords
+        ! For the maximum coordinates, add half the border fraction
+        maxSubGridCoords   = maxCoords + 0.5*borderFraction*deltaCoords
+      end where
+      
+      ! Limit these coordinates by domain specs
+      do nd =1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        minSubGridCoords(nd) = max(minSubGridCoords(nd), this%domainOrigin(nd))
+        maxSubGridCoords(nd) = min(maxSubGridCoords(nd), this%domainSize(nd) + this%domainOrigin(nd) )
+      end do
 
-call exit(0)
+      ! Determine sub grid dimensions
+      subGridSize          = this%domainSize
+      subGridNBins         = this%domainGridSize
+      subGridOriginIndexes = 0 ! relative to domain indexation
+      subGridLimitIndexes  = 0 ! same as above 
+      where( this%binSize .gt. 0d0 ) 
+        subGridOriginIndexes = int((minSubGridCoords-this%domainOrigin)/this%binSize)     ! subestimate
+        subGridLimitIndexes  = ceiling((maxSubGridCoords-this%domainOrigin)/this%binSize) ! overestimate
+        subGridNBins         = subGridLimitIndexes - subGridOriginIndexes
+        subGridSize          = subGridNBins*this%binSize
+      end where
+      subGridOrigin = subGridOriginIndexes*this%binSize
 
+      ! Some health control and eventually reporting
+      if ( any(subGridNBins.gt.this%domainGridSize) ) then
+        write(*,*)'Error: Inconsistent size of subgrid, is larger than domain size.'
+        stop
+      end if
+      
+      ! It looks that all these functionalities fit better into the histogram 
+      ! but in the meantime...
+      ! Assign nBins as the size computed for the sub grid
+      this%nBins                = subGridNBins
+      this%histogram%nBins      = subGridNBins
+      this%deltaBinsOrigin      = subGridOriginIndexes
+      this%histogram%gridOrigin = subGridOrigin
+      this%histogram%origin => this%histogram%gridOrigin 
 
-    !this%nBins = int( abs( maxval( dataPoints, dim=1 ) -  minval( dataPoints, dim=1 ) )*1.05/this%binSize + 0.5 )
-    !nDeltaOriginCoords = 
-    !print *, '-----------------------------------------'
-    !print *, 'NBINS:     ', this%nBins
-    !where ( this%binSize .ne. 0d0 )
-    !this%nBins = int( abs( maxval( dataPoints, dim=1 ) -  minval( dataPoints, dim=1 ) )*1.05/this%binSize + 0.5 )
-    !end where
-    !print *, 'LIVENBINS: ', this%nBins
+      ! Allocate the counting grid
+      allocate(this%histogram%counts(subGridNBins(1),subGridNBins(2),subGridNBins(3)))
+      this%histogram%counts = 0
 
 
+      ! Allocate matrix for density 
+      if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
+      allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
+        print *, 'ALLOCATED WITH: ', this%nBins
+        print *, 'SHAPE HISTOGRAM: ', shape(this%histogram%counts)
+        print *, 'HISTORIGIN:', this%histogram%origin
 
-call exit(0)
+    end if
 
     if ( locWeightedHistogram ) then 
       ! Cummulative histogram-like quantities
@@ -2994,7 +3033,6 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
       !! Cannot be done here ! Reduction !
       ! Assign into array   
       !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
-      !deallocate( gc%kernelMatrix )
     end do
     !$omp end parallel do 
     densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
@@ -4588,7 +4626,7 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
 
   subroutine prExportDensityUnit( this, outputUnit, outputDataId, particleGroupId )
     !------------------------------------------------------------------------------
-    ! 
+    ! Export methods report cell indexes with respect to domain grid 
     !------------------------------------------------------------------------------
     ! Specifications 
     !------------------------------------------------------------------------------
@@ -4608,8 +4646,10 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
           do ix = 1, this%nBins(1)
             if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
             write(outputUnit,"(5I8,2es18.9e3)") outputDataId, particleGroupId, &
-                ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), &
-                               this%histogram%counts( ix, iy, iz ) 
+            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            !ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+ 
           end do
         end do
       end do
@@ -4624,9 +4664,12 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
         do iy = 1, this%nBins(2)
           do ix = 1, this%nBins(1)
             if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-            write(outputUnit,"(4I8,2es18.9e3)") dataId, ix, iy, iz, &
-                            this%densityEstimateGrid( ix, iy, iz ), &
-                                this%histogram%counts( ix, iy, iz ) 
+            write(outputUnit,"(4I8,2es18.9e3)") dataId, &
+            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            !write(outputUnit,"(4I8,2es18.9e3)") dataId, ix, iy, iz, &
+            !                this%densityEstimateGrid( ix, iy, iz ), &
+            !                    this%histogram%counts( ix, iy, iz ) 
           end do
         end do
       end do
@@ -4636,9 +4679,12 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
         do iy = 1, this%nBins(2)
           do ix = 1, this%nBins(1)
             if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-            write(outputUnit,"(3I8,2es18.9e3)") ix, iy, iz, &
-                    this%densityEstimateGrid( ix, iy, iz ), &
-                        this%histogram%counts( ix, iy, iz ) 
+            write(outputUnit,"(3I8,2es18.9e3)") &
+            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            !write(outputUnit,"(3I8,2es18.9e3)") ix, iy, iz, &
+            !        this%densityEstimateGrid( ix, iy, iz ), &
+            !            this%histogram%counts( ix, iy, iz ) 
           end do
         end do
       end do
@@ -4648,6 +4694,7 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
   end subroutine prExportDensityUnit
 
 
+  ! TO BE DEPRECATED ?
   subroutine prExportOptimizationVariables( this, outputFileName  , &
     densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
     curvatureBandwidth, nEstimate, netRoughness )
@@ -4693,7 +4740,7 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
 
   end subroutine prExportOptimizationVariables
 
-
+  ! THIS IS BEING USED
   subroutine prExportOptimizationVariablesExtended( this, outputFileName, &
              densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
                            kernelSmoothingShape, kernelSigmaSupportScale, &
@@ -4727,9 +4774,9 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
     open( outputUnit, file=outputFileName, status='replace' )
 
     do n = 1, this%nComputeBins
-      ix = this%computeBinIds( 1, n )
-      iy = this%computeBinIds( 2, n )
-      iz = this%computeBinIds( 3, n )
+      ix = this%computeBinIds( 1, n ) + this%deltaBinsOrigin(1) 
+      iy = this%computeBinIds( 2, n ) + this%deltaBinsOrigin(2)
+      iz = this%computeBinIds( 3, n ) + this%deltaBinsOrigin(3)
       write(outputUnit,"(3I6,17es18.9e3)") ix, iy, iz,& 
         densityEstimateArray( n ),& 
         kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
@@ -4745,7 +4792,7 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
 
   end subroutine prExportOptimizationVariablesExtended
 
-
+  ! TO BE DEPRECATED ?
   subroutine prExportOptimizationVariablesExtendedError( this, outputFileName, &
                   densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
                                 kernelSmoothingShape, kernelSigmaSupportScale, &
