@@ -465,7 +465,7 @@ contains
           domainOrigin=this%domainOrigin, &
                  adaptGridToCoords=.true. )
       if ( this%reportToOutUnit ) then 
-        write( this%outFileUnit, '(A)' ) ' Histogram grid will not follow domain limits, will adapt to points.'
+        write( this%outFileUnit, '(A)' ) '   Histogram grid will not follow domain limits, will adapt to data points.'
       end if
     else
       ! Allocate grid according to nBins
@@ -479,6 +479,9 @@ contains
       ! Allocate matrix for density 
       if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
       allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      if ( this%reportToOutUnit ) then 
+        write( this%outFileUnit, '(A)' ) '   Histogram grid will follow domain grid size.'
+      end if
     end if
 
     if ( this%reportToOutUnit ) then 
@@ -631,7 +634,7 @@ contains
     this%maxKernelSize(:) = 0d0
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%histogram%nBins(nd) - 1)/real(defaultKernelRange))
+      this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelRange))
     end do
     ! As the sigma kernel is isotropic, the maxSizeDimId 
     ! is given by the more restrictive dimension. 
@@ -639,7 +642,7 @@ contains
     this%maxKernelSDSize(:) = 0d0
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%histogram%nBins(nd) - 1)/real(defaultKernelSDRange))
+      this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange))
     end do
 
     ! Assign min kernel sizes, to avoid
@@ -649,12 +652,6 @@ contains
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
       ! Consider something with minHOverLambda
-      !this%minKernelSize(nd) = 3d0*this%binSize(nd)
-      !this%minKernelSize(nd) = 2.1d0*this%binSize(nd)/real(defaultKernelRange)
-      !this%minKernelSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelRange)
-      !this%minKernelSize(nd) = 3.0d0*this%binSize(nd)/real(defaultKernelRange)
-      !this%minKernelSize(nd) = 2.5d0*this%binSize(nd)/real(defaultKernelRange)
-      !this%minKernelSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelRange)
       this%minKernelSize(nd) = 6d0*this%binSize(nd)/real(defaultKernelRange)
     end do
     ! As the sigma kernel is isotropic, the minSizeDimId 
@@ -664,11 +661,6 @@ contains
     do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
       ! Consider something with minHOverLambda
-      !this%minKernelSDSize(nd) = 2.1d0*this%binSize(nd)/real(defaultKernelSDRange)
-      !this%minKernelSDSize(nd) = 3.0d0*this%binSize(nd)/real(defaultKernelSDRange)
-      !this%minKernelSDSize(nd) = 2.5d0*this%binSize(nd)/real(defaultKernelSDRange)
-      !this%minKernelSDSize(nd) = 4.0d0*this%binSize(nd)/real(defaultKernelSDRange)
-      !this%minKernelSDSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelSDRange)
       this%minKernelSDSize(nd) = 8d0*this%binSize(nd)/real(defaultKernelSDRange)
     end do
 
@@ -2440,7 +2432,7 @@ contains
     character(len=16)     :: timeChar
     character(len=16)     :: spcChar
     integer               :: nd
-    ! DEV SUB DOMAIN
+    ! For determination of sub grid
     doubleprecision, dimension(3) :: minCoords
     doubleprecision, dimension(3) :: minSubGridCoords
     doubleprecision, dimension(3) :: maxCoords
@@ -2449,10 +2441,7 @@ contains
     doubleprecision               :: borderFraction = 0.05d0
     doubleprecision, dimension(3) :: subGridSize
     integer, dimension(3)         :: subGridNBins
-    !doubleprecision, dimension(3) :: deltaOriginCoords
-    integer, dimension(3)         :: nDeltaOriginCoords
     doubleprecision, dimension(3) :: subGridOrigin
-    !doubleprecision, dimension(3) :: subGridLimit
     integer, dimension(3)         :: subGridOriginIndexes
     integer, dimension(3)         :: subGridLimitIndexes
     !------------------------------------------------------------------------------
@@ -2538,6 +2527,11 @@ contains
       stop
     end if
  
+    if ( this%reportToOutUnit ) then
+     write(this%outFileUnit, *  )
+     write(this%outFileUnit, '(A)' ) 'GPKDE histogram info '
+    end if 
+
     ! Compute sub grid parameters if grids
     ! are to be adapted to the given coordinates 
     if ( this%adaptGridToCoords ) then
@@ -2584,23 +2578,23 @@ contains
       ! but in the meantime...
       ! Assign nBins as the size computed for the sub grid
       this%nBins                = subGridNBins
-      this%histogram%nBins      = subGridNBins
       this%deltaBinsOrigin      = subGridOriginIndexes
+      this%histogram%gridSize   = subGridNBins
       this%histogram%gridOrigin = subGridOrigin
-      this%histogram%origin => this%histogram%gridOrigin 
+      this%histogram%nBins      => this%histogram%gridSize
+      this%histogram%origin     => this%histogram%gridOrigin 
 
       ! Allocate the counting grid
       allocate(this%histogram%counts(subGridNBins(1),subGridNBins(2),subGridNBins(3)))
       this%histogram%counts = 0
 
-
       ! Allocate matrix for density 
       if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
       allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
-        print *, 'ALLOCATED WITH: ', this%nBins
-        print *, 'SHAPE HISTOGRAM: ', shape(this%histogram%counts)
-        print *, 'HISTORIGIN:', this%histogram%origin
+      if ( this%reportToOutUnit ) then
+       write(this%outFileUnit, * ) '  Allocated size    :', this%nBins
+      end if
 
     end if
 
@@ -2612,9 +2606,8 @@ contains
       call this%histogram%ComputeCounts( dataPoints, locExactPoint )
     end if
 
+    ! More info about the histogram data
     if ( this%reportToOutUnit ) then
-     write(this%outFileUnit, *  )
-     write(this%outFileUnit, '(A)' ) 'GPKDE histogram statistics '
      write(this%outFileUnit, *     ) '  Max count         :', maxval(this%histogram%counts)
      write(this%outFileUnit, *     ) '  Max raw density   :', maxval(this%histogram%counts)/this%histogram%binVolume
      write(this%outFileUnit, *     ) '  Min count         :', minval(this%histogram%counts)
@@ -2687,11 +2680,10 @@ contains
     end if
 
     ! Set min limit roughness
+    ! Estimated assuming a Gaussian distribution 
     select case(nDim) 
     case(1)
       this%minLimitRoughness = &
-       !this%minRelativeRoughness*(this%histogram%maxRawDensity**2)
-       ! GAUSSIAN ESTIMATE
        this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/(this%stdCoords(this%idDim1)**4) 
     case(2)
       this%minLimitRoughness = &
@@ -2703,18 +2695,12 @@ contains
        ( product(this%stdCoords**(0.75),dim=1,mask=(this%stdCoords.ne.0d0)) ) ! 3/4=0.75
     end select
 
-print *, 'MIN LIMIT ROUGHNESS: ', this%minLimitRoughness
-print *, 'MIN LIMIT ROUGHNESS ERF: ',& 
-        1d-1*(this%histogram%maxRawDensity**2)/( (2d0*this%binSize(1))**4d0 )
-     this%minLimitRoughness = 1d-1*(this%histogram%maxRawDensity**2)/( (2d0*this%binSize(1))**4d0 )
-!    this%maxLimitRoughness = &
-!     10d0*(this%histogram%maxRawDensity**2)/&
-!     ( this%stdCoords(1)**2*this%stdCoords(2)**2 )
-!!print *, 'THE OLD MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
-!    this%maxLimitRoughness = &
-!     0.01d0*((this%histogram%maxRawDensity)**2)/&
-!     ( (4*this%binSize(1))**4 )
-!!print *, 'MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
+    !! Min roughness from an erf function 
+    !print *, 'MIN LIMIT ROUGHNESS ERF: ',& 
+    !        1d-1*(this%histogram%maxRawDensity**2)/( (2d0*this%binSize(1))**4d0 )
+
+    ! Max roughness ? 
+    !!print *, 'MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
 
     ! Assign distribution statistics as initial smoothing, Silverman (1986)
     if ( this%initialSmoothingSelection .eq. 0 ) then 
@@ -3581,10 +3567,8 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
     doubleprecision, dimension(:),   pointer       :: roughness11Array
     doubleprecision, dimension(:),   pointer       :: roughness22Array
     doubleprecision, dimension(:),   allocatable   :: normRoughness
-    doubleprecision, dimension(:,:), allocatable   :: kernelSmoothingShape1
-    doubleprecision, dimension(:,:), allocatable   :: kernelSmoothingShape2
-    integer :: nd
-    logical :: updateScale
+    integer         :: nd
+    logical         :: updateScale
     doubleprecision :: threshold
     !----------------------------------------------------------------------------
 
@@ -3681,141 +3665,6 @@ print *, 'MIN LIMIT ROUGHNESS ERF: ',&
             kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)/normRoughness
           end where 
 
-
-
-          !print *, count((roughness11Array/normRoughness).gt.0.5)
-          !print *, count((roughness22Array/normRoughness).gt.0.5)
-
-          !kernelSmoothingShape(this%idDim1,:) = (roughness11Array/normRoughness)
-          !kernelSmoothingShape(this%idDim2,:) = (roughness22Array/normRoughness)
-       
-
-
-
-          ! Shape factors make sense only when both roughnesses
-          ! are competing.
-          !where( &
-          ! (roughness11Array.gt.this%minLimitRoughness ) .and.&
-          ! (roughness22Array.gt.this%minLimitRoughness ) )
-          !print *, this%minLimitRoughness, count( netRoughness.gt.this%minLimitRoughness )
-          !print *, this%minLimitRoughness, count(&
-          !               (roughness11Array.gt.this%minLimitRoughness ) .and.&
-          !               (roughness22Array.gt.this%minLimitRoughness ) )
-
-          !where( &
-          ! (roughness11Array.gt.this%minLimitRoughness ) .and.&
-          ! (roughness22Array.gt.this%minLimitRoughness ) )
-          !if ( allocated( kernelSmoothingShape1 ) ) deallocate( kernelSmoothingShape1 ) 
-          !if ( allocated( kernelSmoothingShape2 ) ) deallocate( kernelSmoothingShape2 ) 
-          !allocate( kernelSmoothingShape1, mold=kernelSmoothingShape ) 
-          !allocate( kernelSmoothingShape2, mold=kernelSmoothingShape ) 
-          !kernelSmoothingShape1 = 1d0
-          !kernelSmoothingShape2 = 1d0
-          !print *, this%idDim1, this%idDim2
-          !print *, shape(kernelSmoothingShape)
-          !if( & 
-          !  count( roughness11Array .gt. roughness22Array ) .gt. count( roughness22Array .gt. roughness11Array ) ) then
-          !  !print *, 'YES'
-          !  kernelSmoothingShape(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
-          !  kernelSmoothingShape(this%idDim2,:) = 1/kernelSmoothingShape(this%idDim1,:)
-          !else
-          !  !print *, 'NO'
-          !  kernelSmoothingShape(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
-          !  kernelSmoothingShape(this%idDim1,:) = 1/kernelSmoothingShape(this%idDim2,:)
-          !end if 
-          !print *, maxval( kernelSmoothingShape(this%idDim1, : ) ), minval( kernelSmoothingShape(this%idDim1, : ) ) 
-          !print *, maxval( kernelSmoothingShape(this%idDim2, : ) ), minval( kernelSmoothingShape(this%idDim2, : ) )
-          !print *, maxval( kernelSmoothingShape(this%idDim1, : )/kernelSmoothingShape(this%idDim1, : ) ) 
-          !print *, maxval( kernelSmoothingShape(this%idDim2, : )/kernelSmoothingShape(this%idDim1, : ) ) 
-          !print *, maxval( kernelSmoothingShape(this%idDim2, : ) ), minval( kernelSmoothingShape(this%idDim2, : ) )
-
-
-          !where( roughness11Array .ge. netRoughness ) 
-          !where( roughness11Array .gt. 0d0 ) 
-          !  kernelSmoothingShape1(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
-          !  kernelSmoothingShape1(this%idDim2,:) = 1/kernelSmoothingShape1(this%idDim1,:)
-          !end where
-          !where( roughness22Array .gt. 0d0 ) 
-          !  kernelSmoothingShape2(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
-          !  kernelSmoothingShape2(this%idDim1,:) = 1/kernelSmoothingShape2(this%idDim2,:)
-          !end where
-          !where( roughness11Array .ge. roughness22Array ) 
-          !  kernelSmoothingShape1(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
-          !  kernelSmoothingShape1(this%idDim2,:) = 1/kernelSmoothingShape1(this%idDim1,:)
-          !elsewhere
-          !  kernelSmoothingShape2(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
-          !  kernelSmoothingShape2(this%idDim1,:) = 1/kernelSmoothingShape2(this%idDim2,:)
-          !end where
-          !kernelSmoothingShape  = 2d0*(kernelSmoothingShape1*kernelSmoothingShape2 )/(kernelSmoothingShape1 + kernelSmoothingShape2 )
-          !kernelSmoothingShape  = 0.5*(kernelSmoothingShape1 + kernelSmoothingShape2 )
-
-          !if ( allocated(normRoughness) ) deallocate( normRoughness )
-          !allocate( normRoughness, mold=netRoughness ) 
-
-          !normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
-          !! Should not happen, but for precaution
-          !where( normRoughness.gt.0d0 )
-          !  kernelSmoothingShape(this%idDim1,:) = kernelSmoothingShape(this%idDim1,:)/normRoughness
-          !  kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)/normRoughness
-          !end where 
-
-          !print *, count( kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:).eq.1d0 ), this%nComputeBins
-          !print *, count(&
-          !  abs( kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:)-1d0).lt.1d-10 ), this%nComputeBins
-
-          !where( roughness11Array.gt.0d0 )  
-          !!where( roughness11Array.gt.this%minLimitRoughness )  
-          !  kernelSmoothingShape(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
-          !  kernelSmoothingShape(this%idDim2,:) = 1/kernelSmoothingShape(this%idDim1,:)
-          !end where
-
-          !!normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
-          !if ( allocated(normRoughness) ) deallocate( normRoughness )
-          !allocate( normRoughness, mold=netRoughness ) 
-          !normRoughness = 1d0 
-          !where( roughness22Array.gt.0d0 )
-          !!where( roughness22Array.gt.this%minLimitRoughness )
-          !  !normRoughness = (netRoughness/roughness22Array)**( 0.25 )
-          !  !!kernelSmoothingShape(this%idDim2,:) = 0.5*( normRoughness  + kernelSmoothingShape(this%idDim2,:) )
-          !  !!kernelSmoothingShape(this%idDim1,:) = 0.5*( 1/normRoughness + kernelSmoothingShape(this%idDim1,:) )
-          !  !kernelSmoothingShape(this%idDim2,:) = 2d0*(normRoughness*kernelSmoothingShape(this%idDim2,:))/(&
-          !  !        normRoughness  + kernelSmoothingShape(this%idDim2,:) )
-          !  !kernelSmoothingShape(this%idDim1,:) = 2d0*(& 
-          !  ! 1/normRoughness* kernelSmoothingShape(this%idDim1,:)       & 
-          !  !        )/( 1/normRoughness + kernelSmoothingShape(this%idDim1,:) )
-          !  normRoughness = (netRoughness/roughness22Array)**( 0.25 )
-          !  kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)*normRoughness
-          !  kernelSmoothingShape(this%idDim1,:) = kernelSmoothingShape(this%idDim1,:)/normRoughness
-          !end where
-          !kernelSmoothingShape = sqrt(kernelSmoothingShape) 
-
-          !where( roughness22Array.gt.this%minLimitRoughness )  
-          !  kernelSmoothingShape(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
-          !  !kernelSmoothingShape(this%idDim1,:) = 1/kernelSmoothingShape(this%idDim2,:)
-          !end where
-          !normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
-          !!where( netRoughness.gt.this%minLimitRoughness )  
-          !!  kernelSmoothingShape(this%idDim1,:) = (netRoughness/roughness11Array)**( 0.25 )
-          !!  kernelSmoothingShape(this%idDim2,:) = (netRoughness/roughness22Array)**( 0.25 )
-          !!end where
-
-          !normRoughness = sqrt(kernelSmoothingShape(this%idDim1,:)*kernelSmoothingShape(this%idDim2,:))
-          !! Should not happen, but for precaution
-          !where( normRoughness.gt.0d0 )
-          !  kernelSmoothingShape(this%idDim1,:) = kernelSmoothingShape(this%idDim1,:)/normRoughness
-          !  kernelSmoothingShape(this%idDim2,:) = kernelSmoothingShape(this%idDim2,:)/normRoughness
-          !end where 
-
-          ! Some control on kernel anisotropy
-          !where( kernelSmoothingShape(this%idDim1,:).gt.this%maxKernelShape )
-          !  kernelSmoothingShape(this%idDim1,:) = this%maxKernelShape
-          !  kernelSmoothingShape(this%idDim2,:) = 1/this%maxKernelShape
-          !end where
-          !where( kernelSmoothingShape(this%idDim2,:).gt.this%maxKernelShape )
-          !  kernelSmoothingShape(this%idDim1,:) = 1/this%maxKernelShape
-          !  kernelSmoothingShape(this%idDim2,:) = this%maxKernelShape
-          !end where
-          !deallocate(normRoughness)
         case(3)
           ! Something more sophisticated could be done for 3D with 
           ! uniformity on a given dimension, like default to the 

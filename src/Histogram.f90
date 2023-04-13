@@ -12,7 +12,9 @@ module HistogramModule
   type, public :: HistogramType
     ! Properties
     doubleprecision, dimension(:,:,:), allocatable :: counts 
-    integer, dimension(3)                  :: nBins
+    integer, dimension(3)                  :: domainGridSize
+    integer, dimension(3)                  :: gridSize
+    integer, dimension(:), pointer         :: nBins
     doubleprecision, dimension(3)          :: binSize
     doubleprecision                        :: binVolume
     doubleprecision                        :: binDistance
@@ -47,7 +49,8 @@ module HistogramModule
 ! HistogramModule contains
 contains
 
-  subroutine prInitialize( this, nBins, binSize, & 
+  subroutine prInitialize( this, & 
+                        domainGridSize, binSize, & 
                     dimensionMask, domainOrigin, & 
                               adaptGridToCoords  )
     !------------------------------------------------------------------------------
@@ -57,7 +60,7 @@ contains
     !------------------------------------------------------------------------------
     implicit none 
     class(HistogramType), target                        :: this
-    integer, dimension(3), intent(in)                   :: nBins
+    integer, dimension(3), intent(in)                   :: domainGridSize
     doubleprecision, dimension(3), intent(in)           :: binSize
     integer, dimension(3), intent(in), optional         :: dimensionMask
     integer, dimension(3)                               :: locDimensionMask
@@ -73,8 +76,8 @@ contains
     end if 
 
     ! Stop if any nBins .lt. 1
-    if ( any( nBins .lt. 1 ) ) then 
-      write(*,*)'Error while initializing Histogram, some nBins .lt. 1. Stop.'
+    if ( any( domainGridSize .lt. 1 ) ) then 
+      write(*,*)'Error while initializing Histogram, some domainGridSize .lt. 1. Stop.'
       stop
     end if
 
@@ -122,23 +125,25 @@ contains
     end if
 
     ! Initialize variables
-    this%nBins       = nBins
-    this%binSize     = binSize
-    this%binVolume   = product( binSize, mask=(binSize.gt.0d0) ) 
-    this%binDistance = ( this%binVolume )**(1d0/this%nDim)
+    this%domainGridSize = domainGridSize
+    this%binSize        = binSize
+    this%binVolume      = product( binSize, mask=(binSize.gt.0d0) ) 
+    this%binDistance    = ( this%binVolume )**(1d0/this%nDim)
 
     ! Allocate and initialize histogram counts
     ! Only if brute-force allocating the whole grid.
     if ( .not. this%adaptGridToCoords ) then 
-      allocate( this%counts( nBins(1), nBins(2), nBins(3) ) )
-      this%counts = 0
-      this%origin => this%domainOrigin
+      allocate( this%counts( domainGridSize(1), domainGridSize(2), domainGridSize(3) ) )
+      this%counts   = 0
+      this%origin   => this%domainOrigin
+      this%nBins    => this%domainGridSize
+      this%gridSize = this%domainGridSize
     end if 
-
 
   end subroutine prInitialize
 
 
+  ! NEEDS UPDATE
   subroutine prReset( this )
     !------------------------------------------------------------------------------
     ! 
@@ -203,7 +208,6 @@ contains
       do nd = 1,this%nDim
         did = this%dimensions(nd)
         gridIndexes(did) = floor(( dataPoints(np,did) - this%origin(did) )/this%binSize(did)) + exactIndex
-        !gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
         if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
             (gridIndexes(did) .le. 0) ) then
           inside = .false. 
@@ -268,7 +272,6 @@ contains
       do nd = 1,this%nDim
         did = this%dimensions(nd)
         gridIndexes(did) = floor(( dataPoints(np,did) - this%origin(did) )/this%binSize(did)) + exactIndex
-        !gridIndexes(did) = floor(( dataPoints(np,did) - this%domainOrigin(did) )/this%binSize(did)) + exactIndex
         if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
             (gridIndexes(did) .le. 0) ) then
           inside = .false. 
