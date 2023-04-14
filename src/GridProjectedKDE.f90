@@ -683,7 +683,7 @@ contains
      this%minKernelSize(:) = 0d0
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%minKernelSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelRange)
+      this%minKernelSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelRange)
      end do
      ! As the sigma kernel is isotropic, the minSizeDimId 
      ! is given by the more restrictive dimension. 
@@ -691,7 +691,7 @@ contains
      this%minKernelSDSize(:) = 0d0
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%minKernelSDSize(nd) = 2d0*this%binSize(nd)/real(defaultKernelSDRange)
+      this%minKernelSDSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelSDRange)
      end do
     end select
 
