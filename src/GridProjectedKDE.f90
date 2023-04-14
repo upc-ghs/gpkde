@@ -678,7 +678,8 @@ contains
       if ( this%dimensionMask(nd).eq.0 ) cycle
       this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange))
      end do
-     ! Assign min kernel sizes, ensures at least 2d0 positive shape cells
+     ! Assign min kernel sizes, ensuring at least 2 positive shape cells, 
+     ! Positive shape is obtained as ceiling 
      this%minKernelSize(:) = 0d0
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
