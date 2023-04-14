@@ -1,7 +1,7 @@
 ! GPKDE.f90
 program GPKDE
   use GridProjectedKDEModule, only: GridProjectedKDEType
-  use UTL8MODULE,only : urword, ustop
+  use UTL8MODULE,only : urword, ustop, u8rdcom
   use CompilerVersion,only : get_compiler_txt
   use omp_lib ! OpenMP
   !-----------------------------------------------
@@ -28,10 +28,13 @@ program GPKDE
   integer            :: initialSmoothingSelection 
   logical            :: exportOptimizationVariables
   doubleprecision    :: uniformMass
+  logical            :: advancedOptions
   ! urword
   character(len=200) :: line
   integer            :: icol,istart,istop,n, iostatus
   doubleprecision    :: r
+  integer            :: errorCode
+  integer            :: auxUnit = 0
   ! clock
   doubleprecision    :: elapsedTime
   integer            :: clockCountStart, clockCountStop
@@ -44,6 +47,15 @@ program GPKDE
   ! kernels
   doubleprecision, dimension(3) :: initialSmoothing
   doubleprecision, dimension(3) :: kernelParams
+  ! advanced options, some with default values
+  integer            :: minRoughnessFormat = 0
+  doubleprecision    :: minRelativeRoughness
+  doubleprecision    :: minRoughnessLengthScale
+  doubleprecision    :: minRoughness
+  integer            :: effectiveWeightFormat  = 0
+  integer            :: boundKernelSizeFormat  = 0
+  doubleprecision    :: isotropicThreshold     = 0.9
+  logical            :: useGlobalSmoothing     = .false.
   !-----------------------------------------------
   simUnit    = 111
   logUnit    = 911
@@ -97,9 +109,26 @@ program GPKDE
 
   if ( logUnit .gt. 0 ) then 
     write(logUnit, *)
-    write(logUnit, '(1x,a)') ' Read data file '
-    write(logUnit, '(1x,a)') '----------------'
+    write(logUnit, '(1x,a)') ' Read simulation file '
+    write(logUnit, '(1x,a)') '----------------------'
   end if 
+
+  ! Reads the input file name and 
+  ! handles the optional comment 
+  call u8rdcom(simUnit, auxUnit, line, errorCode)
+  dataFile = line
+
+  ! Check existence 
+  exists = .false.
+  inquire (file=dataFile, exist=exists)
+  if(.not. exists) then
+    call ustop('Specified data file was not found. Stop.')
+  else
+    if ( logType .gt. 0 ) then 
+      write( logUnit, '(a,a)') 'Input data file name: ', adjustl(trim(dataFile))
+    end if
+  end if
+  dataFile = trim(dataFile)
 
   ! Read an input format
   ! 0: x,y,z
@@ -123,10 +152,11 @@ program GPKDE
     end if 
     call ustop('Input data format not available. Stop.') 
   end select
-  ! number of lines  
+
+  ! Number of lines  
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   nlines = 0
-  if ( n.eq.0 ) then
+  if ( n.le.0 ) then
     if ( logUnit .gt. 0 ) then 
       write(logUnit, '(a)') 'No number of points was specified, will infer from the input file.' 
     end if 
@@ -137,22 +167,18 @@ program GPKDE
     end if 
   end if 
 
-  ! Read the input file name
-  read(simUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 0, n, r, 0, 0)
-  dataFile = line(istart:istop)
-  ! Check existence 
-  exists = .false.
-  inquire (file=dataFile, exist=exists)
-  if(.not. exists) then
-    call ustop('Specified data file was not found. Stop.')
-  else
-    if ( logType .gt. 0 ) then 
-      write( logUnit, '(a,a)') 'Input data file name: ', adjustl(trim(dataFile))
-    end if
-  end if
-  dataFile = trim(dataFile)
+  ! Looks for a uniform weight in case input format is only (x,y,z)
+  if (inputDataFormat.eq.0) then 
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    if ( r .gt. 0d0 ) then
+      uniformMass = r 
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,es18.9e3)') 'Given a uniform weight for the particle distribution: ', uniformMass 
+      end if
+    else
+      uniformMass = 1d0 
+    end if 
+  end if  
 
   ! Open data file
   open(dataUnit, file=dataFile,access='sequential',form="formatted")
@@ -173,19 +199,6 @@ program GPKDE
   if ( nlines.lt.1 ) then 
     call ustop('Data file does not have entries. Stop.')
   end if 
-
-  ! Looks for a uniform mass next to file name in case input format is only (x,y,z)
-  if (inputDataFormat.eq.0) then 
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    if ( r .gt. 0d0 ) then
-      uniformMass = r 
-      if ( logUnit .gt. 0 ) then 
-        write(logUnit, '(a,es18.9e3)') 'Given a uniform mass for the particle distribution: ', uniformMass 
-      end if
-    else
-      uniformMass = 1d0 
-    end if 
-  end if  
 
   ! Before loading the data, read the 
   ! reconstruction parameters and perform 
@@ -295,6 +308,55 @@ program GPKDE
     write(logUnit,'(a,I4)') 'Optimization will consider the maximum number of loops: ', nOptLoops
   end if
 
+  ! Export optimization variables 
+  ! 0: does not export 
+  ! 1: export data, one file per loop for active bins 
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will not export optimization variables.'
+    end if
+    exportOptimizationVariables = .false.
+  case(1)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will export optimization variables, one file per loop.'
+    end if
+    exportOptimizationVariables = .true.
+  case default
+    ! Defaults to false
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will not export optimization variables.'
+    end if
+    exportOptimizationVariables = .false.
+  end select
+
+  ! Skip error convergence ?
+  ! 0: Break if convergence criteria is met 
+  ! 1: Skip and run nOptLoops optimization loops 
+  read(simUnit, '(a)') line
+  icol = 1
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    skipErrorConvergence = .false.
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'GPKDE will break once convergence is satisfied.'
+    end if
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    relativeErrorConvergence = r
+    if ( (logUnit.gt.0).and.(relativeErrorConvergence.gt.0d0) ) then 
+      write(logUnit,'(a,es18.9e3)') 'Relative error convergence set to: ', relativeErrorConvergence
+    end if
+  case(1)
+    skipErrorConvergence = .true.
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'GPKDE run until the maximum number of optimization loops.'
+    end if
+  case default
+     call ustop('Skip error convergence parameter not valid. Should be 0 or 1. Stop.')
+  end select
+
   ! Employ raw kernel computation or 
   ! kernel database ?
   ! 0: without kernel database, brute force
@@ -353,121 +415,313 @@ program GPKDE
     kernelParams(:) = 0d0
   end if 
 
-
-  ! Skip error convergence ?
-  ! 0: Break if convergence criteria is met 
-  ! 1: Skip and run nOptLoops optimization loops 
-  read(simUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  select case(n)
-  case(0)
-    skipErrorConvergence = .false.
-    if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'GPKDE will break once convergence is satisfied.'
-    end if
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    relativeErrorConvergence = r
-    if ( (logUnit.gt.0).and.(relativeErrorConvergence.gt.0d0) ) then 
-      write(logUnit,'(a,es18.9e3)') 'Relative error convergence set to: ', relativeErrorConvergence
-    end if
-  case(1)
-    skipErrorConvergence = .true.
-    if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'GPKDE run until the maximum number of optimization loops.'
-    end if
-  case default
-     call ustop('Skip error convergence parameter not valid. Should be 0 or 1. Stop.')
-  end select
-
-
   ! Selection of initial smoothing
   ! 0: automatic, based on Silverman (1986) global estimate
   ! 1: user provides a factor scaling the characteristic bin size
   ! 2: user provides the initial smoothing array
-  read(simUnit, '(a)') line
-  icol = 1
-  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  select case(n)
-  case(0)
+  read(simUnit, '(a)', iostat=iostatus) line
+  if ( iostatus.lt.0 ) then
+    ! Not given, take as zero
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'Initial smoothing is selected from the global estimate of Silverman (1986). '
     end if
     initialSmoothing(:) = 0d0
     initialSmoothingFactor = 1d0
-    initialSmoothingSelection = n 
-  case(1)
-    if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'Initial smoothing specified as a factor multiplying characteristic bin size.'
-    end if
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    initialSmoothing(:) = 0d0
-    initialSmoothingFactor = r
-    if ( (logUnit.gt.0).and.(initialSmoothingFactor.gt.0d0) ) then 
-      write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set to: ', initialSmoothingFactor
-    end if
-    if ( initialSmoothingFactor .le. 0d0 ) then 
-      call ustop('Invalid initial smoothing factor, it should greater than zero. Stop.')
-    end if 
-    initialSmoothingSelection = n 
-  case(2)
-    if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'Initial smoothing array specified by the user.'
-    end if
-    read(simUnit, '(a)') line
-    icol = 1
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    initialSmoothing(1) = r
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    initialSmoothing(2) = r
-    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    initialSmoothing(3) = r
-    initialSmoothingFactor = 1d0
-    if ( any( initialSmoothing .lt. 0d0 ) ) then 
-      call ustop('Invalid value for initial smoothing, it should greater or equal to zero. Stop.')
-    end if 
-    if ( all( initialSmoothing .le. 0d0 ) ) then 
-      call ustop('Invalid values for initial smoothing, at least one should be positive. Stop.')
-    end if 
-    initialSmoothingSelection = n 
-  case default
-     call ustop('Initial smoothing selection method not valid. Should be 0, 1 or 2. Stop.')
-  end select
-
-
-  ! Export optimization variables 
-  ! 0: does not export 
-  ! 1: export data, one file per loop for active bins 
-  read(simUnit, '(a)', iostat=iostatus) line
-  if ( iostatus.lt.0 ) then
-    ! Not given, take as zero
-    if ( logUnit.gt.0 ) then 
-      write(logUnit,'(a)') 'Will not export optimization variables.'
-    end if
-    exportOptimizationVariables = .false.
+    initialSmoothingSelection = 0 
   else
     icol = 1
     call urword(line, icol, istart, istop, 2, n, r, 0, 0)
     select case(n)
     case(0)
       if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'Will not export optimization variables.'
+        write(logUnit,'(a)') 'Initial smoothing is selected from the global estimate of Silverman (1986). '
       end if
-      exportOptimizationVariables = .false.
+      initialSmoothing(:) = 0d0
+      initialSmoothingFactor = 1d0
+      initialSmoothingSelection = n 
     case(1)
       if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'Will export optimization variables, one file per loop.'
+        write(logUnit,'(a)') 'Initial smoothing specified as a factor multiplying characteristic bin size.'
       end if
-      exportOptimizationVariables = .true.
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      initialSmoothing(:) = 0d0
+      initialSmoothingFactor = r
+      if ( (logUnit.gt.0).and.(initialSmoothingFactor.gt.0d0) ) then 
+        write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set to: ', initialSmoothingFactor
+      end if
+      if ( initialSmoothingFactor .le. 0d0 ) then 
+        call ustop('Invalid initial smoothing factor, it should greater than zero. Stop.')
+      end if 
+      initialSmoothingSelection = n 
+    case(2)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Initial smoothing array specified by the user.'
+      end if
+      read(simUnit, '(a)') line
+      icol = 1
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      initialSmoothing(1) = r
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      initialSmoothing(2) = r
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      initialSmoothing(3) = r
+      initialSmoothingFactor = 1d0
+      if ( any( initialSmoothing .lt. 0d0 ) ) then 
+        call ustop('Invalid value for initial smoothing, it should greater or equal to zero. Stop.')
+      end if 
+      if ( all( initialSmoothing .le. 0d0 ) ) then 
+        call ustop('Invalid values for initial smoothing, at least one should be positive. Stop.')
+      end if 
+      initialSmoothingSelection = n 
+    case default
+       call ustop('Initial smoothing selection method not valid. Should be 0, 1 or 2. Stop.')
+    end select
+  end if 
+
+
+  ! Advanced options
+  ! 0: does not interpret advance options
+  ! 1: read advance parameters
+  read(simUnit, '(a)', iostat=iostatus) line
+  advancedOptions = .false.
+  if ( iostatus.lt.0 ) then
+    ! Not given, take as zero
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Will not interpret advanced options.'
+    end if
+  else
+    icol = 1
+    call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+    select case(n)
+    case(0)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Will not interpret advanced options.'
+      end if
+    case(1)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Will interpret advanced options.'
+      end if
+      advancedOptions = .true.
     case default
       ! Defaults to false
       if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'Will not export optimization variables.'
+        write(logUnit,'(a)') 'Will not interpret advanced options.'
       end if
-      exportOptimizationVariables = .false.
     end select
   end if 
- 
+
+  ! Intepretation of advanced options
+  if ( advancedOptions ) then
+   ! Any advanced option ?  
+   read(simUnit, '(a)', iostat=iostatus) line
+   if ( iostatus.lt.0 ) then
+    ! If advanced options were expected but none was given, stop.
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'No advanced options were given. Stop.'
+    end if
+    call ustop('No advanced options were given. Stop.')
+   else
+    ! Read kernel size bounding format/limits 
+    ! 0: limit based on domain and bin size
+    ! 1: user give limit values
+    ! 2: unbounded
+    icol = 1
+    call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+    select case(n)
+    case(0)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Kernel sizes are bounded by domain constraints.'
+      end if
+      boundKernelSizeFormat = n 
+    case(1)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Kernel sizes are bounded based on user provided limits.'
+      end if
+      boundKernelSizeFormat = n
+      ! Shall override kernel database params ?
+      ! Read min relative kernel size (minHOverLambda)
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      if ( r.le.0d0 ) then 
+        if ( logUnit.gt.0 ) then 
+          write(logUnit,'(a)') 'Invalid min kernel size. Should be .gt. 0d0. Stop.'
+        end if
+       call ustop('Invalid min kernel size. Should be .gt. 0d0. Stop.')
+      end if 
+      kernelParams(1) = r
+      ! Read max relative kernel size (maxHOverLambda)
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      if ( (r.le.0d0).or.(r.le.kernelParams(1)) ) then 
+        if ( logUnit.gt.0 ) then 
+          write(logUnit,'(a)') 'Invalid max kernel size. Should be .gt. 0d0 and .gt. min given value. Stop.'
+        end if
+       call ustop('Invalid max kernel size. Should be .gt. 0d0 and .gt. min given value. Stop.')
+      end if
+      kernelParams(3) = r
+    case(2)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Kernel sizes are unbounded.'
+      end if
+      boundKernelSizeFormat = n 
+    case default
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Given kernel bounding format is not valid. Stop.'
+      end if
+      call ustop('Given kernel bounding format is not valid. Stop.')
+    end select
+
+    ! Continue to min limit roughness
+    read(simUnit, '(a)', iostat=iostatus) line
+    if ( iostatus.lt.0 ) then
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'No further advanced options were given. Continue.'
+      end if
+    else
+     ! Min roughness format
+     ! 0: Gaussian, computes the std deviation of particles and default relative roughness
+     ! 1: User provides minRelativeRoughness and a characteristic length scale
+     ! 2: User provides the minRoughness
+     ! 3: Unbounded, computes all values .gt. 0d0
+     icol = 1
+     call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+     select case(n)
+     case(0)
+       if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'Min roughness estimated as a Gaussian distribution.'
+       end if
+       minRoughnessFormat = n
+     case(1)
+       if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'Min roughness computed from user input parameters.'
+       end if
+       minRoughnessFormat = n
+       ! Read min relative roughness: should be .gt. 0d0 
+       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+       if ( r.lt.0d0 ) then 
+         if ( logUnit.gt.0 ) then 
+           write(logUnit,'(a)') 'Invalid minRelativeRoughness. Should be .ge. 0d0. Stop.'
+         end if
+        call ustop('Invalid minRelativeRoughness. Should be .ge. 0d0. Stop.')
+       end if 
+       minRelativeRoughness = r
+       ! Read characteristic length scale: cannot be zero
+       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+       if ( r.le.0d0 ) then 
+         if ( logUnit.gt.0 ) then 
+           write(logUnit,'(a)') 'Invalid minRoughnessLengthScale. Should be .gt. 0d0. Stop.'
+         end if
+        call ustop('Invalid minRoughnessLengthScale. Should be .gt. 0d0. Stop.')
+       end if 
+       minRoughnessLengthScale = r
+     case(2)
+       if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'Min roughness given by user.'
+       end if
+       minRoughnessFormat = n
+       ! Read min roughness: should be .ge. 0d0 
+       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+       if ( r.lt.0d0 ) then 
+         if ( logUnit.gt.0 ) then 
+           write(logUnit,'(a)') 'Invalid minRoughness. Should be .ge. 0d0. Stop.'
+         end if
+        call ustop('Invalid minRoughness. Should be .ge. 0d0. Stop.')
+       end if 
+       minRoughness = r
+     case(3)
+       if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'Min roughness is unbounded.'
+       end if
+       minRoughnessFormat = n
+     case default
+       if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'Min roughness format is not valid. Stop.'
+       end if
+       call ustop('Min roughness format is not valid. Stop.')
+     end select
+
+     ! Continue to isotropicThreshold
+     read(simUnit, '(a)', iostat=iostatus) line
+     if ( iostatus.lt.0 ) then
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'No further advanced options were given. Continue.'
+      end if
+     else
+      icol = 1
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      if ( (r.lt.0d0).or.(r.gt.1d0) ) then 
+        if ( logUnit.gt.0 ) then 
+          write(logUnit,'(a)') 'Given isotropicThreshold is invalid. Should be between 0 and 1. Stop.'
+        end if
+        call ustop('Given isotropicThreshold is invalid. Should be between 0 and 1. Stop.')
+      end if
+      isotropicThreshold = r
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a,es18.9e3)') 'IsotropicThreshold was set to: ', isotropicThreshold
+      end if
+
+      ! Continue to effectiveWeightFormat
+      read(simUnit, '(a)', iostat=iostatus) line
+      if ( iostatus.lt.0 ) then
+        if ( logUnit.gt.0 ) then 
+          write(logUnit,'(a)') 'No further advanced options were given. Continue.'
+        end if
+      else
+       ! effectiveWeightFormat
+       ! 0: compute effective number of points as Kish (1965,1992)
+       ! 1: compute average particles weight 
+       icol = 1
+       call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+       select case(n)
+       case(0)
+         if ( logUnit.gt.0 ) then 
+           write(logUnit,'(a)') 'Effective weight starting from effective number of points (Kish, 1965,1992).'
+         end if
+         effectiveWeightFormat = n
+       case(1)
+         if ( logUnit.gt.0 ) then 
+           write(logUnit,'(a)') 'Effective weight obtained as the average over particles.'
+         end if
+         effectiveWeightFormat = n
+       case default
+         if ( logUnit.gt.0 ) then 
+           write(logUnit,'(a)') 'Given effective weight format is not available. Stop.'
+         end if
+         call ustop('Given effective weight format is not available. Stop.')
+       end select
+
+       ! Continue to useGlobalSmoothing
+       ! 0: apply the localized algorithm 
+       ! 1: compute quantities using global expressions 
+       read(simUnit, '(a)', iostat=iostatus) line
+       if ( iostatus.lt.0 ) then
+         if ( logUnit.gt.0 ) then 
+           write(logUnit,'(a)') 'No further advanced options were given. Continue.'
+         end if
+       else
+        icol = 1
+        call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+        select case(n)
+        case(1)
+          if ( logUnit.gt.0 ) then 
+            write(logUnit,'(a)') 'Smoothing is computed using global expressions.'
+          end if
+          useGlobalSmoothing = .true.
+        case default
+          ! Not even report, this is the most default option
+          useGlobalSmoothing = .false.
+        end select
+       end if ! useGlobalSmoothing
+
+      end if ! effectiveWeightFormat
+
+     end if ! isotropicThreshold
+
+    end if ! minRoughness
+
+   end if ! kernel size bounding 
+
+  end if ! advancedOptions 
+
+  ! Done with interpretation of input parameters, and from now take action !
 
   ! Read data into arrays for reconstruction
   if ( logUnit.gt.0 ) then 
@@ -494,6 +748,11 @@ program GPKDE
 
 
   ! Initialize gpkde 
+  if ( logUnit .gt. 0 ) then 
+    write(logUnit, *)
+    write(logUnit, '(1x,a)') ' Initialize GPKDE '
+    write(logUnit, '(1x,a)') '------------------'
+  end if 
   allocate( gpkdeObj )
   if (logUnit.gt.0) then
     call gpkdeObj%Initialize(& 
@@ -507,7 +766,15 @@ program GPKDE
       maxHOverLambda            = kernelParams(3),          &
       initialSmoothing          = initialSmoothing,         & 
       initialSmoothingFactor    = initialSmoothingFactor,   & 
-      initialSmoothingSelection = initialSmoothingSelection,& 
+      initialSmoothingSelection = initialSmoothingSelection,&
+      interpretAdvancedParams   = advancedOptions,          & 
+      minRoughnessFormat        = minRoughnessFormat,       & 
+      minRoughness              = minRoughness,             & 
+      minRoughnessLengthScale   = minRoughnessLengthScale,  & 
+      minRelativeRoughness      = minRelativeRoughness,     &
+      effectiveWeightFormat     = effectiveWeightFormat,    & 
+      boundKernelSizeFormat     = boundKernelSizeFormat,    & 
+      isotropicThreshold        = isotropicThreshold,       & 
       outFileName               = logFile                   &
     )
     write(logUnit,'(a)') 'GPKDE is initialized. '
@@ -536,6 +803,11 @@ program GPKDE
     write(logUnit,'(a)') 'Opened output unit for reconstruction. '
   end if
 
+  if ( logUnit .gt. 0 ) then 
+    write(logUnit, *)
+    write(logUnit, '(1x,a)') ' Density reconstruction '
+    write(logUnit, '(1x,a)') '------------------------'
+  end if 
 
   ! Compute density
   if ( logUnit .gt. 0 ) then
@@ -544,12 +816,12 @@ program GPKDE
   call system_clock(clockCountStart, clockCountRate, clockCountMax)
   select case(inputDataFormat)
   case(0)
-    ! Not weighted reconstruction
-    call gpkdeObj%ComputeDensity(       &
-     dataCarrier,                       &
-     outputFileUnit    = outputUnit,    &
-     computeRawDensity = .true.,        &
-     scalingFactor     = uniformMass,   & 
+    ! Non weighted reconstruction
+    call gpkdeObj%ComputeDensity(          &
+     dataCarrier,                          &
+     outputFileUnit         = outputUnit,  &
+     computeRawDensity      = .true.,      &
+     scalingFactor          = uniformMass, & 
      histogramScalingFactor = uniformMass, & ! For consistency with smoothed density 
      isotropic              = isotropicKernels, & 
      skipErrorConvergence   = skipErrorConvergence, &
@@ -585,6 +857,7 @@ program GPKDE
 
   stop
 
+! GPKDE
 contains
 
   subroutine ParseCommandLine(simFile, logFile, logType, parallel)
@@ -792,7 +1065,7 @@ contains
   !----------------------------------------------------------------------------------------
 
     write(output_unit,'(a)') &
-     'Fortran module for Grid Projected Kernel Density Estimation of discrete particles distributions'
+     'Fortran code for Grid Projected Kernel Density Estimation of discrete particles distributions'
     write(output_unit, *) 
     write(output_unit, '(a)') 'usage:'
     write(output_unit, *) 

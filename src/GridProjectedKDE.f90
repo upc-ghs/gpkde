@@ -14,44 +14,46 @@ module GridProjectedKDEModule
   implicit none
   !----------------------------------------------------------------------------
 
-  ! Default parameters
-  integer, parameter :: defaultKernelRange              = 3
-  integer, parameter :: defaultKernelSDRange            = 4
-  integer, parameter :: defaultNOptLoops                = 5
-  logical, parameter :: defaultFlatKernelDatabase       = .true. ! TO BE DEPRECATED
-  logical, parameter :: defaultDatabaseOptimization     = .true.
-  logical, parameter :: defaultLogKernelDatabase        = .true.
-  doubleprecision, parameter :: defaultMaxHOverLambda   = 15
-  doubleprecision, parameter :: defaultMinHOverLambda   = 0.3
-  doubleprecision, parameter :: defaultDeltaHOverLambda = 0.3
-  doubleprecision, parameter :: defaultRelativeErrorConvergence        = 1d-2
-  doubleprecision, parameter :: defaultRelaxedRelativeErrorConvergence = 5d-2
-
-  doubleprecision, parameter :: defaultDensityRelativeConvergence = 0.01        ! TO BE DEPRECATED
-  doubleprecision, parameter :: defaultRelaxedDensityRelativeConvergence = 0.05 ! TP BE DEPRECATED
-
-  ! Default initial smoothing 
-  integer, parameter         :: defaultInitialSmoothingSelection = 0
   ! Numerical Parameters
   doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
   doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
-  ! Optimization
-  doubleprecision, parameter :: defaultInitialSmoothingFactor = 2d0
-  doubleprecision, parameter :: defaultMinRelativeRoughness   = 1e-5
-  doubleprecision, parameter :: defaultMaxKernelShape         = 5d0
-  doubleprecision            :: defaultMinLimitRoughness = 1d-5
-  logical, parameter         :: defaultAdaptGridToCoords = .false. 
+
+  ! Default parameters
+  integer        , parameter :: defaultKernelRange                     = 3
+  integer        , parameter :: defaultKernelSDRange                   = 4
+  integer        , parameter :: defaultNOptLoops                       = 5
+  logical        , parameter :: defaultDatabaseOptimization            = .true.
+  logical        , parameter :: defaultLogKernelDatabase               = .true.
+  doubleprecision, parameter :: defaultMaxHOverLambda                  = 15
+  doubleprecision, parameter :: defaultMinHOverLambda                  = 0.3
+  doubleprecision, parameter :: defaultDeltaHOverLambda                = 0.3
+  doubleprecision, parameter :: defaultRelativeErrorConvergence        = 1d-2
+  doubleprecision, parameter :: defaultRelaxedRelativeErrorConvergence = 5d-2
+  integer        , parameter :: defaultInitialSmoothingSelection       = 0
+  doubleprecision, parameter :: defaultInitialSmoothingFactor          = 5d0
+  doubleprecision, parameter :: defaultMaxKernelShape                  = 5d0
+  logical        , parameter :: defaultAdaptGridToCoords               = .false. 
+  doubleprecision, parameter :: defaultMinRelativeRoughness            = 1d-4
+  doubleprecision, parameter :: defaultMinLimitRoughness               = 1d-4
+  integer        , parameter :: defaultMinRoughnessFormat              = 0
+  integer        , parameter :: defaultEffectiveWeightFormat           = 0
+  integer        , parameter :: defaultBoundKernelSizeFormat           = 0
+  doubleprecision, parameter :: defaultIsotropicThreshold              = 0.9
+  logical        , parameter :: defaultUseGlobalSmoothing              = .false.
+
 
   ! DEPRECATED
-  logical, parameter ::  defaultBruteOptimization       = .false. 
-  logical, parameter ::  defaultAnisotropicSigmaSupport = .false.
+  doubleprecision, parameter :: defaultDensityRelativeConvergence = 0.01        ! TO BE DEPRECATED
+  doubleprecision, parameter :: defaultRelaxedDensityRelativeConvergence = 0.05 ! TO BE DEPRECATED
+  logical        , parameter :: defaultFlatKernelDatabase       = .true. ! TO BE DEPRECATED
+  logical, parameter ::  defaultBruteOptimization       = .false. ! TO BE DEPRECATED 
+  logical, parameter ::  defaultAnisotropicSigmaSupport = .false. ! TO BE DEPRECATED
+  doubleprecision :: defaultDensityScale                = 1d0     ! TO BE DEPRECATED
+  doubleprecision :: defaultMaxLimitRoughness           = 1d40    ! TO BE DEPRECATED
+  doubleprecision :: defaultMaxSmoothingGrowth          = 10d0    ! TO BE DEPRECATED
+  doubleprecision :: defaultMinKernelShape              = 1d-1    ! TO BE DEPRECATED
+  ! DEPRECATED
 
-
-  ! Optimization
-  doubleprecision :: defaultDensityScale           = 1d0  ! TO BE DEPRECATED
-  doubleprecision :: defaultMaxLimitRoughness      = 1d40 ! TO BE DEPRECATED
-  doubleprecision :: defaultMaxSmoothingGrowth     = 10d0 ! TO BE DEPRECATED
-  doubleprecision :: defaultMinKernelShape         = 1d-1 ! TO BE DEPRECATED
 
   ! Module variables defined after initialization
   integer               :: nDim
@@ -65,23 +67,20 @@ module GridProjectedKDEModule
   private
 
 
-  ! MOVE ALL OF THESE ? 
-  ! Arrays
-  doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
-  doubleprecision, dimension(:)    , allocatable :: kernelSmoothingScale
-  doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothingShape
-  !doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
-  doubleprecision, dimension(:)    , allocatable :: kernelSigmaSupportScale
-  doubleprecision, dimension(:,:)  , allocatable :: curvatureBandwidth
-  !doubleprecision, dimension(:,:)  , allocatable :: relativeSmoothingChange
-  doubleprecision, dimension(:)    , allocatable :: relativeDensityChange
-  doubleprecision, dimension(:)    , allocatable :: densityEstimateArray 
-  doubleprecision, dimension(:)    , allocatable :: nEstimateArray
-  doubleprecision, dimension(:)    , allocatable , target :: roughnessXXArray
-  doubleprecision, dimension(:)    , allocatable , target :: roughnessYYArray
-  doubleprecision, dimension(:)    , allocatable , target :: roughnessZZArray
-  doubleprecision, dimension(:)    , allocatable :: netRoughnessArray
-  type( GridCellType ), dimension(:), allocatable, target :: activeGridCellsMod
+  ! Arrays, related to active bins
+  doubleprecision   , dimension(:,:), allocatable         :: kernelSmoothing
+  doubleprecision   , dimension(:)  , allocatable         :: kernelSmoothingScale
+  doubleprecision   , dimension(:,:), allocatable         :: kernelSmoothingShape
+  doubleprecision   , dimension(:)  , allocatable         :: kernelSigmaSupportScale
+  doubleprecision   , dimension(:,:), allocatable         :: curvatureBandwidth
+  doubleprecision   , dimension(:)  , allocatable         :: relativeDensityChange
+  doubleprecision   , dimension(:)  , allocatable         :: densityEstimateArray 
+  doubleprecision   , dimension(:)  , allocatable         :: nEstimateArray
+  doubleprecision   , dimension(:)  , allocatable, target :: roughnessXXArray
+  doubleprecision   , dimension(:)  , allocatable, target :: roughnessYYArray
+  doubleprecision   , dimension(:)  , allocatable, target :: roughnessZZArray
+  doubleprecision   , dimension(:)  , allocatable         :: netRoughnessArray
+  type(GridCellType), dimension(:)  , allocatable, target :: activeGridCellsMod
   
   
   ! Main object
@@ -132,18 +131,25 @@ module GridProjectedKDEModule
     logical                       :: flatKernelDatabase ! TRUE BY DEFAULT, TO BE PRECEATED
     
     ! Optimization
+    integer                       :: nOptimizationLoops
+    doubleprecision               :: densityRelativeConvergence
+    doubleprecision               :: minLimitRoughness
+    doubleprecision               :: minRelativeRoughness
+    doubleprecision               :: minRoughnessLengthScale
+    logical                       :: minRoughnessLengthScaleAsSigma
+    doubleprecision, dimension(3) :: initialSmoothing
+    logical                       :: useGlobalSmoothing
+    doubleprecision               :: isotropicThreshold
+    integer                       :: boundKernelSizeFormat
+    logical                       :: boundKernels = .true.
+
+    doubleprecision :: maxLimitRoughness       ! TO BE DEPRECATED
+    doubleprecision :: maxSmoothingGrowth      ! TO BE DEPRECATED
+    doubleprecision :: densityScale            ! TO BE DEPRECATED
+    doubleprecision :: minKernelShape          ! TO BE DEPRECATED
+    doubleprecision :: maxKernelShape          ! TO BE DEPRECATED 
     logical         :: bruteOptimization       ! TO BE DEPRECATED
     logical         :: anisotropicSigmaSupport ! TO BE DEPRECATED
-    integer         :: nOptimizationLoops
-    doubleprecision :: densityRelativeConvergence
-    doubleprecision :: minLimitRoughness
-    doubleprecision :: minRelativeRoughness
-    doubleprecision :: maxLimitRoughness
-    doubleprecision :: maxSmoothingGrowth
-    doubleprecision :: densityScale
-    doubleprecision :: minKernelShape
-    doubleprecision :: maxKernelShape
-    doubleprecision, dimension(3) :: initialSmoothing
 
     logical :: isotropic = .false.
 
@@ -153,6 +159,8 @@ module GridProjectedKDEModule
 
     ! Protocol for selection of initial smoothing
     integer :: initialSmoothingSelection
+    ! Min roughness format
+    integer :: minRoughnessFormat
 
     ! Distribution statistics
     doubleprecision, dimension(3) :: meanCoords
@@ -330,17 +338,26 @@ contains
   ! - densityScale
   ! - flatKernelDatabase
   ! - bruteOptimization
-  subroutine prInitialize( this, &
-              domainSize, binSize, domainOrigin, adaptGridToCoords, &
-                       initialSmoothing, initialSmoothingSelection, & 
-                        initialSmoothingFactor, nOptimizationLoops, &
-        databaseOptimization, flatKernelDatabase,logKernelDatabase, &
-                  minHOverLambda, maxHOverLambda, deltaHOverLambda, &
-                        bruteOptimization, anisotropicSigmaSupport, &
-                          densityRelativeConvergence, densityScale, &
-                    maxRoughness, minRoughness, maxSmoothingGrowth, &
-                                    minKernelShape, maxKernelShape, & 
-                                                        outFileName )
+  ! - minKernelShape
+  ! - maxKernelShape
+  subroutine prInitialize( this,& 
+                     domainSize, binSize, domainOrigin, adaptGridToCoords, &
+      initialSmoothing, initialSmoothingFactor, initialSmoothingSelection, & 
+                                 nOptimizationLoops, databaseOptimization, &
+                         minHOverLambda, maxHOverLambda, deltaHOverLambda, &
+                                                        logKernelDatabase, & ! DEPRECATE ?
+                                                  interpretAdvancedParams, &
+                                         minRoughnessFormat, minRoughness, & 
+                            minRelativeRoughness, minRoughnessLengthScale, &
+                                                    effectiveWeightFormat, & 
+                                                    boundKernelSizeFormat, & 
+                                                       isotropicThreshold, & 
+                                 densityRelativeConvergence, densityScale, & ! TO BE DEPRECATED
+                                                       flatKernelDatabase, & ! TO BE DEPRECATED
+                               bruteOptimization, anisotropicSigmaSupport, & ! TO BE DEPRECATED
+                                         maxRoughness, maxSmoothingGrowth, & ! TO BE DEPRECATED
+                                           minKernelShape, maxKernelShape, & ! TO BE DEPRECATED 
+                                                               outFileName )
     !---------------------------------------------------------------------------
     ! Initialize the module, assign default parameters,
     ! configures the reconstruction grid, module dimensions and others.
@@ -351,33 +368,52 @@ contains
     ! input
     class( GridProjectedKDEType ) :: this
     ! Reconstruction grid parameters
-    doubleprecision, dimension(3), intent(in) :: domainSize
-    doubleprecision, dimension(3), intent(in) :: binSize
+    doubleprecision, dimension(3), intent(in)           :: domainSize
+    doubleprecision, dimension(3), intent(in)           :: binSize
     doubleprecision, dimension(3), intent(in), optional :: domainOrigin
+    logical                      , intent(in), optional :: adaptGridToCoords
+    ! Initial smoothing
     doubleprecision, dimension(3), intent(in), optional :: initialSmoothing
-    integer, intent(in), optional :: initialSmoothingSelection
-    doubleprecision, intent(in), optional :: initialSmoothingFactor
-    integer, intent(in), optional :: nOptimizationLoops 
+    doubleprecision              , intent(in), optional :: initialSmoothingFactor
+    integer                      , intent(in), optional :: initialSmoothingSelection
+    ! Number of optimization loops
+    integer                      , intent(in), optional :: nOptimizationLoops 
     ! Kernel database parameters
-    logical, intent(in), optional :: databaseOptimization, flatKernelDatabase
-    doubleprecision, intent(in), optional :: minHOverLambda, maxHOverLambda
-    doubleprecision, intent(in), optional :: deltaHOverLambda
-    doubleprecision, intent(in), optional :: densityRelativeConvergence  
-    doubleprecision, intent(in), optional :: densityScale, maxSmoothingGrowth
-    doubleprecision, intent(in), optional :: minRoughness, maxRoughness
-    doubleprecision, intent(in), optional :: minKernelShape, maxKernelShape
-    logical, intent(in), optional :: logKernelDatabase
-    ! Grid allocation control
-    logical, intent(in), optional :: adaptGridToCoords
-    ! Brute optimization, no kernel database
-    logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport
+    logical                      , intent(in), optional :: databaseOptimization
+    doubleprecision              , intent(in), optional :: minHOverLambda
+    doubleprecision              , intent(in), optional :: maxHOverLambda
+    doubleprecision              , intent(in), optional :: deltaHOverLambda
+    logical                      , intent(in), optional :: logKernelDatabase    ! DEPRECATE ? 
+    ! Advanced parameters
+    logical        , intent(in), optional :: interpretAdvancedParams
+    integer        , intent(in), optional :: minRoughnessFormat
+    doubleprecision, intent(in), optional :: minRoughness
+    doubleprecision, intent(in), optional :: minRelativeRoughness
+    doubleprecision, intent(in), optional :: minRoughnessLengthScale
+    integer        , intent(in), optional :: effectiveWeightFormat
+    integer        , intent(in), optional :: boundKernelSizeFormat
+    doubleprecision, intent(in), optional :: isotropicThreshold
+                                                       
+
+
+
+    doubleprecision, intent(in), optional :: densityRelativeConvergence         ! DEPRECATE 
+    logical        , intent(in), optional :: flatKernelDatabase                 ! DEPRECATE
+    doubleprecision, intent(in), optional :: maxRoughness                       ! DEPRECATE
+    doubleprecision, intent(in), optional :: minKernelShape, maxKernelShape     ! DEPRECATE
+    doubleprecision, intent(in), optional :: densityScale, maxSmoothingGrowth   ! DEPRECATE
+    logical, intent(in), optional :: bruteOptimization, anisotropicSigmaSupport ! DEPRECATE
+
+    ! Limit roughness CLEAN!
+    !doubleprecision ::  minHRoughness, maxHRoughness, nDensityScale
+
     ! General use, indexes
     integer :: nd
-    ! Limit roughness
-    doubleprecision ::  minHRoughness, maxHRoughness, nDensityScale
     ! The analog to a listUnit, reports
     character(len=200), intent(in), optional :: outFileName
+    ! local
     integer :: isThisFileOpen
+    logical :: advancedOptions
     !---------------------------------------------------------------------------
 
     ! Enable reporting to outUnit if given 
@@ -389,13 +425,13 @@ contains
         this%outFileUnit = isThisFileOpen
         this%outFileName = outFileName
         write( this%outFileUnit, * )
-        write( this%outFileUnit, '(A)' ) '------------------------------'
-        write( this%outFileUnit, '(A)' ) ' GPKDE module is initializing '
+        write( this%outFileUnit, '(A)' ) '-----------------------'
+        write( this%outFileUnit, '(A)' ) ' GPKDE is initializing '
       end if
     else if ( this%reportToOutUnit ) then 
       write( this%outFileUnit, * )
-      write( this%outFileUnit, '(A)' ) '------------------------------'
-      write( this%outFileUnit, '(A)' ) ' GPKDE module is initializing '
+      write( this%outFileUnit, '(A)' ) '-----------------------'
+      write( this%outFileUnit, '(A)' ) ' GPKDE is initializing '
     end if 
 
     ! Reconstruction grid parameters !
@@ -406,7 +442,6 @@ contains
     else
       this%adaptGridToCoords = defaultAdaptGridToCoords
     end if 
-
     ! Stop if all bin sizes are zero
     if ( all( binSize .lt. 0d0 ) ) then 
       write(*,*) 'Error while initializing GPKDE, all binSizes are .lt. 0d0. Stop.'
@@ -414,11 +449,8 @@ contains
     end if 
     ! Initialize reconstruction grid parameters 
     where( binSize .ne. 0d0 ) 
-      !this%nBins = ceiling( domainSize/binSize )
-      !this%nBins = int( domainSize/binSize + 0.5 )
       this%domainGridSize = int( domainSize/binSize + 0.5 )
     elsewhere
-      !this%nBins = 1
       this%domainGridSize = 1
     end where
     ! Stop if any the domainGridSize .lt. 1
@@ -435,7 +467,7 @@ contains
       this%domainOrigin = (/0,0,0/)
     end if
 
-    ! Depending on nBins, is the number of dimensions of the GPDKE
+    ! Depending on domainGridSize, is the number of dimensions of the GPDKE
     ! reconstruction process. If any nBins is 1, then that dimension
     ! is compressed. e.g. nBins = (10,1,20), then it is a 2D reconstruction
     ! process where dimensions 'x' and 'z' define the 2D plane. This is not
@@ -455,7 +487,7 @@ contains
       write( this%outFileUnit, '(A)' ) ' GPKDE initializing Histogram '
     end if
 
-    ! Initialize histogram, requires dimension mask
+    ! Initialize histogram, requires dimension mask !
     if ( this%adaptGridToCoords ) then
       ! Skip histogram grid allocation in order 
       ! to adapt to the given particle coordinates 
@@ -483,85 +515,13 @@ contains
         write( this%outFileUnit, '(A)' ) '   Histogram grid will follow domain grid size.'
       end if
     end if
-
     if ( this%reportToOutUnit ) then 
-      write( this%outFileUnit, *) '  Histogram determines dimensions to be analyzed based on binSizes '
-      write( this%outFileUnit, *) '  Will compute Histogram considering ', this%histogram%nDim, ' dimensions '
+      write( this%outFileUnit, *) '  Histogram determines dimensions to be analyzed based on binSize.'
+      write( this%outFileUnit, *) '  Will compute Histogram considering ', this%histogram%nDim, ' dimensions.'
     end if  
     
-    ! Process further optional arguments !
+    ! Process further arguments !
 
-    ! Kernel database 
-    if ( present( databaseOptimization ) ) then 
-      this%databaseOptimization = databaseOptimization
-    else 
-      this%databaseOptimization = defaultDatabaseOptimization
-    end if 
-    ! flatKernelDatabase
-    if ( present( flatKernelDatabase ) ) then 
-      this%flatKernelDatabase = flatKernelDatabase
-    else 
-      this%flatKernelDatabase = defaultFlatKernelDatabase
-    end if
-    ! Process kernel database discretization parameters 
-    if ( present( maxHOverLambda ) .and. (maxHOverLambda.gt.0d0) ) then 
-      this%maxHOverLambda = maxHOverLambda
-    else 
-      this%maxHOverLambda = defaultMaxHOverLambda
-    end if
-    if ( present( minHOverLambda ) .and. (minHOverLambda.gt.0d0) ) then 
-      this%minHOverLambda = minHOverLambda
-    else 
-      this%minHOverLambda = defaultMinHOverLambda
-    end if
-    if ( present( deltaHOverLambda ) .and. (deltaHOverLambda.gt.0d0) ) then 
-      this%deltaHOverLambda = deltaHOverLambda
-    else 
-      this%deltaHOverLambda = defaultDeltaHOverLambda
-    end if
-    if ( present( densityRelativeConvergence ) ) then 
-      this%densityRelativeConvergence = densityRelativeConvergence
-    else 
-      this%densityRelativeConvergence = defaultDensityRelativeConvergence
-    end if
-    if ( present( minRoughness ) ) then 
-      this%minLimitRoughness = minRoughness
-    else 
-      this%minLimitRoughness = defaultMinLimitRoughness
-    end if
-    if ( present( minRoughness ) ) then 
-      this%minRelativeRoughness = minRoughness
-    else 
-      this%minRelativeRoughness = defaultMinRelativeRoughness
-    end if
-    if ( present( maxRoughness ) ) then 
-      this%maxLimitRoughness = maxRoughness
-    else 
-      this%maxLimitRoughness = defaultMaxLimitRoughness
-    end if
-    if ( present( logKernelDatabase ) ) then 
-      this%logKernelDatabase = logKernelDatabase
-    else 
-      this%logKernelDatabase = defaultLogKernelDatabase
-    end if
-    ! bruteOptimization, not used
-    if ( present( bruteOptimization ) ) then 
-      this%bruteOptimization = bruteOptimization
-    else 
-      this%bruteOptimization = defaultBruteOptimization       
-    end if
-    ! Not implemented 
-    if ( present( anisotropicSigmaSupport ) ) then 
-      this%anisotropicSigmaSupport = anisotropicSigmaSupport
-    else 
-      this%anisotropicSigmaSupport = defaultAnisotropicSigmaSupport
-    end if
-    ! nOptimizationLoops
-    if ( present( nOptimizationLoops ) ) then 
-      this%nOptimizationLoops = nOptimizationLoops
-    else 
-      this%nOptimizationLoops = defaultNOptLoops
-    end if
     ! initialSmoothing
     if ( present( initialSmoothingSelection ) ) then 
       this%initialSmoothingSelection = initialSmoothingSelection
@@ -595,74 +555,242 @@ contains
         this%initialSmoothing(nd) = 0d0
       end if 
     end do
-    ! TO BE DEPRECATED !
-    ! Smoothing growth
-    if ( present( maxSmoothingGrowth ) ) then 
-      this%maxSmoothingGrowth = maxSmoothingGrowth
+    ! nOptimizationLoops
+    if ( present( nOptimizationLoops ) ) then 
+      this%nOptimizationLoops = nOptimizationLoops
     else 
-      this%maxSmoothingGrowth = defaultMaxSmoothingGrowth
+      this%nOptimizationLoops = defaultNOptLoops
     end if
-    if ( present( minKernelShape ) ) then 
-      this%minKernelShape = minKernelShape
+    ! Kernel database 
+    if ( present( databaseOptimization ) ) then 
+      this%databaseOptimization = databaseOptimization
     else 
-      this%minKernelShape = defaultMinKernelShape
+      this%databaseOptimization = defaultDatabaseOptimization
     end if
-    ! END TO BE DEPRECATED !
-    ! Max limit kernel shapes
-    if ( present( maxKernelShape ) ) then 
-      this%maxKernelShape = maxKernelShape
+    ! Process kernel database discretization parameters 
+    if ( present( maxHOverLambda ) .and. (maxHOverLambda.gt.0d0) ) then 
+      this%maxHOverLambda = maxHOverLambda
     else 
-      this%maxKernelShape = defaultMaxKernelShape
+      this%maxHOverLambda = defaultMaxHOverLambda
     end if
-    ! Density scale
-    if ( present( densityScale ) ) then 
-      this%densityScale = densityScale
+    if ( present( minHOverLambda ) .and. (minHOverLambda.gt.0d0) ) then 
+      this%minHOverLambda = minHOverLambda
     else 
-      this%densityScale = defaultDensityScale
+      this%minHOverLambda = defaultMinHOverLambda
     end if
-    ! Verify !
-    ! Default, nDensityScale = 1d0
-    ! Consider only left as user parameter
-    ! NOT USED !
-    nDensityScale = this%densityScale
-    maxHRoughness = maxval( this%maxHOverLambda*this%binSize )
-    minHRoughness = minval( this%minHOverLambda*this%binSize )
-    ! END NOT USED !
+    if ( present( deltaHOverLambda ) .and. (deltaHOverLambda.gt.0d0) ) then 
+      this%deltaHOverLambda = deltaHOverLambda
+    else 
+      this%deltaHOverLambda = defaultDeltaHOverLambda
+    end if
+    if ( present( logKernelDatabase ) ) then ! ? DEPRECATE ? 
+      this%logKernelDatabase = logKernelDatabase
+    else 
+      this%logKernelDatabase = defaultLogKernelDatabase
+    end if
 
-    ! Assign max kernel sizes, consistent 
-    ! with domain dimensions, kernel ranges and bin sizes.
-    this%maxKernelSize(:) = 0d0
-    do nd=1,3
-      if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelRange))
-    end do
-    ! As the sigma kernel is isotropic, the maxSizeDimId 
-    ! is given by the more restrictive dimension. 
-    this%maxSizeDimId = minloc( this%maxKernelSize, dim=1, mask=(this%maxKernelSize.gt.0d0) )
-    this%maxKernelSDSize(:) = 0d0
-    do nd=1,3
-      if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange))
-    end do
+    ! Process advanced parameters !
+     
+    advancedOptions = .false.
+    if ( present(interpretAdvancedParams) ) then
+      advancedOptions = interpretAdvancedParams
+    end if 
+    if ( advancedOptions ) then
+      ! Bound kernel size format 
+      if ( present( boundKernelSizeFormat ) ) then 
+        this%boundKernelSizeFormat = boundKernelSizeFormat 
+      else
+        this%boundKernelSizeFormat = defaultBoundKernelSizeFormat
+      end if 
+      ! Determine kernel bounding  
+      select case(this%boundKernelSizeFormat)
+      ! 1: Bounding values given by user
+      case(1)
+       ! Assign max kernel sizes based on provided values of maxHOverLambda
+       this%maxKernelSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        this%maxKernelSize(nd) = this%binSize(nd)*maxHOverLambda
+       end do
+       ! As the sigma kernel is isotropic, maxSizeDimId is given by the more restrictive dimension. 
+       this%maxSizeDimId = minloc( this%maxKernelSize, dim=1, mask=(this%maxKernelSize.gt.0d0) )
+       this%maxKernelSDSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        this%maxKernelSDSize(nd) = this%binSize(nd)*maxHOverLambda
+       end do
+       ! Assign min kernel sizes based on provided values of minHOverLambda
+       this%minKernelSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        this%minKernelSize(nd) = this%binSize(nd)*minHOverLambda
+       end do
+       ! As the sigma kernel is isotropic, maxSizeDimId is given by the more restrictive dimension. 
+       this%minSizeDimId = maxloc( this%minKernelSize, dim=1, mask=(this%minKernelSize.gt.0d0) )
+       this%minKernelSDSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        this%minKernelSDSize(nd) = this%binSize(nd)*minHOverLambda
+       end do
+      ! 2: Unbounded 
+      case(2)
+        this%boundKernels = .false.
+      ! 0: domain constraints (VERIFY)
+      case default
+       ! Assign max kernel sizes, consistent with domain dimensions
+       ! kernel ranges and bin sizes.
+       this%maxKernelSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelRange))
+       end do
+       ! As the sigma kernel is isotropic, the maxSizeDimId 
+       ! is given by the more restrictive dimension. 
+       this%maxSizeDimId = minloc( this%maxKernelSize, dim=1, mask=(this%maxKernelSize.gt.0d0) )
+       this%maxKernelSDSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange))
+       end do
+       ! Assign min kernel sizes, to avoid zero size kernels.
+       this%minKernelSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        ! Consider something with minHOverLambda
+        this%minKernelSize(nd) = 6d0*this%binSize(nd)/real(defaultKernelRange)
+       end do
+       ! As the sigma kernel is isotropic, the minSizeDimId 
+       ! is given by the more restrictive dimension. 
+       this%minSizeDimId = maxloc( this%minKernelSize, dim=1, mask=(this%minKernelSize.gt.0d0) )
+       this%minKernelSDSize(:) = 0d0
+       do nd=1,3
+        if ( this%dimensionMask(nd).eq.0 ) cycle
+        ! Consider something with minHOverLambda
+        this%minKernelSDSize(nd) = 8d0*this%binSize(nd)/real(defaultKernelSDRange)
+       end do
+      end select
 
-    ! Assign min kernel sizes, to avoid
-    ! zero size kernels. Both minHOverLambda
-    ! and kernel range are somehow related.
-    this%minKernelSize(:) = 0d0
-    do nd=1,3
-      if ( this%dimensionMask(nd).eq.0 ) cycle
-      ! Consider something with minHOverLambda
-      this%minKernelSize(nd) = 6d0*this%binSize(nd)/real(defaultKernelRange)
-    end do
-    ! As the sigma kernel is isotropic, the minSizeDimId 
-    ! is given by the more restrictive dimension. 
-    this%minSizeDimId = maxloc( this%minKernelSize, dim=1, mask=(this%minKernelSize.gt.0d0) )
-    this%minKernelSDSize(:) = 0d0
-    do nd=1,3
-      if ( this%dimensionMask(nd).eq.0 ) cycle
-      ! Consider something with minHOverLambda
-      this%minKernelSDSize(nd) = 8d0*this%binSize(nd)/real(defaultKernelSDRange)
-    end do
+      ! Min roughness format 
+      if ( present( minRoughnessFormat ) ) then 
+        this%minRoughnessFormat = minRoughnessFormat
+      else
+        this%minRoughnessFormat = defaultMinRoughnessFormat
+      end if 
+      ! Interpret roughness parameters according to format
+      select case(this%minRoughnessFormat)
+      ! 0: Gaussian: do nothing
+      ! 1: Requires relative roughness and length scale
+      case(1)
+        if ( present(minRelativeRoughness) ) then 
+          this%minRelativeRoughness = minRelativeRoughness
+        else
+          this%minRelativeRoughness = defaultMinRelativeRoughness
+        end if 
+        if ( present(minRoughnessLengthScale) ) then 
+          this%minRoughnessLengthScale = minRoughnessLengthScale
+          this%minRoughnessLengthScaleAsSigma = .false.
+        else
+          this%minRoughnessLengthScaleAsSigma = .true.
+        end if 
+      ! 2: as minRoughness
+      case(2)
+        if ( present(minRoughness) ) then 
+          this%minLimitRoughness = minRoughness
+        else
+          this%minLimitRoughness = defaultMinLimitRoughness
+        end if 
+      ! 3: Do nothing
+      end select
+
+      ! Effective weight format 
+      if ( present(effectiveWeightFormat) ) then 
+        this%histogram%effectiveWeightFormat = effectiveWeightFormat   
+      else
+        this%histogram%effectiveWeightFormat = defaultEffectiveWeightFormat   
+      end if 
+     
+    else
+      ! Should assign eveything to default values
+      this%minRoughnessFormat = defaultMinRoughnessFormat
+      continue
+    end if 
+
+
+
+    !! TO BE DEPRECATED !
+    ! TO BE DEPRECATED 
+    ! flatKernelDatabase
+    !if ( present( flatKernelDatabase ) ) then 
+    !  this%flatKernelDatabase = flatKernelDatabase
+    !else 
+    !  this%flatKernelDatabase = defaultFlatKernelDatabase
+    !end if
+    !if ( present( densityRelativeConvergence ) ) then 
+    !  this%densityRelativeConvergence = densityRelativeConvergence
+    !else 
+    !  this%densityRelativeConvergence = defaultDensityRelativeConvergence
+    !end if
+    !if ( present( minRoughness ) ) then 
+    !  this%minLimitRoughness = minRoughness
+    !else 
+    !  this%minLimitRoughness = defaultMinLimitRoughness
+    !end if
+    !if ( present( minRoughness ) ) then 
+    !  this%minRelativeRoughness = minRoughness
+    !else 
+    !  this%minRelativeRoughness = defaultMinRelativeRoughness
+    !end if
+    !if ( present( maxRoughness ) ) then 
+    !  this%maxLimitRoughness = maxRoughness
+    !else 
+    !  this%maxLimitRoughness = defaultMaxLimitRoughness
+    !end if
+    !! bruteOptimization, not used
+    !if ( present( bruteOptimization ) ) then 
+    !  this%bruteOptimization = bruteOptimization
+    !else 
+    !  this%bruteOptimization = defaultBruteOptimization       
+    !end if
+    ! Not implemented 
+    !if ( present( anisotropicSigmaSupport ) ) then 
+    !  this%anisotropicSigmaSupport = anisotropicSigmaSupport
+    !else 
+    !  this%anisotropicSigmaSupport = defaultAnisotropicSigmaSupport
+    !end if
+    ! END TO BE DEPRECATED 
+    !! Smoothing growth
+    !if ( present( maxSmoothingGrowth ) ) then 
+    !  this%maxSmoothingGrowth = maxSmoothingGrowth
+    !else 
+    !  this%maxSmoothingGrowth = defaultMaxSmoothingGrowth
+    !end if
+    !if ( present( minKernelShape ) ) then 
+    !  this%minKernelShape = minKernelShape
+    !else 
+    !  this%minKernelShape = defaultMinKernelShape
+    !end if
+    !! END TO BE DEPRECATED !
+    !! Max limit kernel shapes
+    !if ( present( maxKernelShape ) ) then 
+    !  this%maxKernelShape = maxKernelShape
+    !else 
+    !  this%maxKernelShape = defaultMaxKernelShape
+    !end if
+    !! Density scale
+    !if ( present( densityScale ) ) then 
+    !  this%densityScale = densityScale
+    !else 
+    !  this%densityScale = defaultDensityScale
+    !end if
+    !! Verify !
+    !! Default, nDensityScale = 1d0
+    !! Consider only left as user parameter
+    !! NOT USED !
+    !nDensityScale = this%densityScale
+    !maxHRoughness = maxval( this%maxHOverLambda*this%binSize )
+    !minHRoughness = minval( this%minHOverLambda*this%binSize )
+    !! END NOT USED !
+
 
     ! Logging
     if ( this%reportToOutUnit ) then 
@@ -670,7 +798,7 @@ contains
       write( this%outFileUnit, *) '  domainSize         :', this%domainSize
       write( this%outFileUnit, *) '  domainOrigin       :', this%domainOrigin
       write( this%outFileUnit, *) '  domainGridSize     :', this%domainGridSize
-      write( this%outFileUnit, *) '  Dimensionality for reconstruction is determined from domainGridSize '
+      write( this%outFileUnit, *) '  Dimensionality for reconstruction is determined from domainGridSize.'
       write( this%outFileUnit, *) '  Will perform reconstruction in ', nDim, ' dimensions.'
       if ( this%initialSmoothingSelection.ge.1 ) then 
       write( this%outFileUnit, *) '  initialSmoothing   :', this%initialSmoothing
@@ -699,8 +827,8 @@ contains
 
     ! Report intialization
     if ( this%reportToOutUnit ) then 
-      write( this%outFileUnit, '(A)' ) ' GPKDE module is initialized  '
-      write( this%outFileUnit, '(A)' ) '------------------------------'
+      write( this%outFileUnit, '(A)' ) ' GPKDE is initialized  '
+      write( this%outFileUnit, '(A)' ) '-----------------------'
       write( this%outFileUnit,  *    )
       flush( this%outFileUnit ) 
     end if
@@ -721,26 +849,16 @@ contains
     class( GridProjectedKDEType ) :: this
     !------------------------------------------------------------------------------
 
-    call this%histogram%Reset()
 
-    ! Default configuration module level params
-    !defaultInitialSmoothingFactor = 10d0
-    !defaultDensityScale           = 1d0
-    !defaultMinLimitRoughness      = 1d-40
-    !defaultMaxLimitRoughness      = 1d40
-    !defaultMaxSmoothingGrowth     = 10d0
-    !defaultMaxKernelShape         = 10d0
-    !defaultMinKernelShape         = 5d-1
-    dimensionMask                 = (/1,1,1/)
-    nDim                          = 3
+    call this%histogram%Reset()
+    dimensionMask = (/1,1,1/)
+    nDim          = 3
 
     if ( allocated(  kernelSmoothing         )) deallocate(  kernelSmoothing         )
     if ( allocated(  kernelSmoothingScale    )) deallocate(  kernelSmoothingScale    )
     if ( allocated(  kernelSmoothingShape    )) deallocate(  kernelSmoothingShape    )
-    !if ( allocated(  kernelSigmaSupport      )) deallocate(  kernelSigmaSupport      )
     if ( allocated(  kernelSigmaSupportScale )) deallocate(  kernelSigmaSupportScale )
     if ( allocated(  curvatureBandwidth      )) deallocate(  curvatureBandwidth      )
-    !if ( allocated(  relativeSmoothingChange )) deallocate(  relativeSmoothingChange )
     if ( allocated(  relativeDensityChange   )) deallocate(  relativeDensityChange   )
     if ( allocated(  densityEstimateArray    )) deallocate(  densityEstimateArray    )
     if ( allocated(  nEstimateArray          )) deallocate(  nEstimateArray          )
@@ -784,7 +902,6 @@ contains
                               inkernelSmoothing,&
                               inkernelSmoothingScale,&
                               inkernelSmoothingShape,&
-                              !inkernelSigmaSupport,&
                               inkernelSigmaSupportScale,&
                               incurvatureBandwidth,&
                               indensityEstimateArray ,&
@@ -805,7 +922,6 @@ contains
     doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothing
     doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSmoothingScale
     doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSmoothingShape
-    !doubleprecision, dimension(:,:), allocatable, intent(out) :: inkernelSigmaSupport
     doubleprecision, dimension(:)  , allocatable, intent(out) :: inkernelSigmaSupportScale
     doubleprecision, dimension(:,:), allocatable, intent(out) :: incurvatureBandwidth
     doubleprecision, dimension(:)  , allocatable, intent(out) :: indensityEstimateArray 
@@ -817,7 +933,6 @@ contains
     doubleprecision, dimension(:,:), allocatable :: lockernelSmoothing
     doubleprecision, dimension(:)  , allocatable :: lockernelSmoothingScale
     doubleprecision, dimension(:,:), allocatable :: lockernelSmoothingShape
-    !doubleprecision, dimension(:,:), allocatable :: lockernelSigmaSupport
     doubleprecision, dimension(:)  , allocatable :: lockernelSigmaSupportScale
     doubleprecision, dimension(:,:), allocatable :: loccurvatureBandwidth
     doubleprecision, dimension(:)  , allocatable :: locdensityEstimateArray 
@@ -833,7 +948,6 @@ contains
 
     ! Allocate arrays
     allocate(         lockernelSmoothing( 3, nComputeBins ) )
-    !allocate(      lockernelSigmaSupport( 3, nComputeBins ) )
     allocate(    lockernelSmoothingShape( 3, nComputeBins ) )
     allocate(      loccurvatureBandwidth( 3, nComputeBins ) )
     allocate(          lockernelSmoothingScale( nComputeBins ) )
@@ -848,7 +962,6 @@ contains
 
     call move_alloc(        activeGridCellsLocal,       activeGridCellsIn  )
     call move_alloc(          lockernelSmoothing,        inkernelSmoothing )
-    !call move_alloc(       lockernelSigmaSupport,     inkernelSigmaSupport )
     call move_alloc(     lockernelSmoothingShape,   inkernelSmoothingShape )
     call move_alloc(       loccurvatureBandwidth,     incurvatureBandwidth )
     call move_alloc(     lockernelSmoothingScale,   inkernelSmoothingScale )
@@ -966,7 +1079,6 @@ contains
 
     ! Done
     return
-
 
   end subroutine prInitializeModuleConstants 
 
@@ -2679,28 +2791,37 @@ contains
      end if
     end if
 
-    ! Set min limit roughness
-    ! Estimated assuming a Gaussian distribution 
-    select case(nDim) 
+    ! Assign min roughness based on specified format
+    select case(this%minRoughnessFormat)
+    ! Assuming a Gaussian distribution
+    case(0)
+      select case(nDim) 
+      case(1)
+        this%minLimitRoughness = &
+         this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/(this%stdCoords(this%idDim1)**4) 
+      case(2)
+        this%minLimitRoughness = &
+         this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/&
+         ( product(this%stdCoords**2,dim=1,mask=(this%stdCoords.ne.0d0)) )
+      case(3)
+        this%minLimitRoughness = &
+         this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/&
+         ( product(this%stdCoords**(0.75),dim=1,mask=(this%stdCoords.ne.0d0)) ) ! 3/4=0.75
+      end select
+    ! From minRelativeRoughness and a given length scale
     case(1)
-      this%minLimitRoughness = &
-       this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/(this%stdCoords(this%idDim1)**4) 
+      if ( this%minRoughnessLengthScaleAsSigma ) this%minRoughnessLengthScale = this%stdSigmaScale
+      this%minLimitRoughness = & 
+        this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/&
+        (this%minRoughnessLengthScale**4)
+    ! Given value
     case(2)
-      this%minLimitRoughness = &
-       this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/&
-       ( product(this%stdCoords**2,dim=1,mask=(this%stdCoords.ne.0d0)) )
+      continue
+    ! Zero
     case(3)
-      this%minLimitRoughness = &
-       this%minRelativeRoughness*(this%histogram%maxRawDensity**2)/&
-       ( product(this%stdCoords**(0.75),dim=1,mask=(this%stdCoords.ne.0d0)) ) ! 3/4=0.75
+      this%minLimitRoughness = 0d0
     end select
 
-    !! Min roughness from an erf function 
-    !print *, 'MIN LIMIT ROUGHNESS ERF: ',& 
-    !        1d-1*(this%histogram%maxRawDensity**2)/( (2d0*this%binSize(1))**4d0 )
-
-    ! Max roughness ? 
-    !!print *, 'MAX LIMIT ROUGHNESS: ', this%maxLimitRoughness
 
     ! Assign distribution statistics as initial smoothing, Silverman (1986)
     if ( this%initialSmoothingSelection .eq. 0 ) then 
@@ -3585,9 +3706,9 @@ contains
       kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*netRoughness ) )**( oneOverNDimPlusFour )
     elsewhere
       ! Estimate a scale based on minLimitRoughness
-      !kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( oneOverNDimPlusFour )
-      kernelSmoothingScale = (&
-        nDim*(sum(nEstimate)/this%nComputeBins)/( ( 4d0*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( oneOverNDimPlusFour )
+      kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( oneOverNDimPlusFour )
+      !kernelSmoothingScale = (&
+      !  nDim*(sum(nEstimate)/this%nComputeBins)/( ( 4d0*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( oneOverNDimPlusFour )
       !kernelSmoothingScale = ( nDim/(& 
       !( 4d0*pi )**( 0.5*nDim )*this%minLimitRoughness*this%histogram%nPoints & 
       !) )**( oneOverNDimPlusFour )
@@ -3717,12 +3838,11 @@ contains
       if( this%dimensionMask(nd).eq.0 ) cycle
       kernelSmoothing(nd,:) = kernelSmoothingShape(nd,:)*kernelSmoothingScale
       if ( any(kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) ) then
-              print *,' SOME WHERE LARGE'
-        !updateScale = .true.
-        !! Limit the size based on domain restrictions
-        !where( kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) 
-        !  kernelSmoothing(nd,:) = this%maxKernelSize(nd)
-        !end where
+        updateScale = .true.
+        ! Limit the size based on domain restrictions
+        where( kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) 
+          kernelSmoothing(nd,:) = this%maxKernelSize(nd)
+        end where
       end if
       !if ( any(kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) ) then
       !  updateScale = .true.

@@ -12,28 +12,29 @@ module HistogramModule
   type, public :: HistogramType
     ! Properties
     doubleprecision, dimension(:,:,:), allocatable :: counts 
-    integer, dimension(3)                  :: domainGridSize
-    integer, dimension(3)                  :: gridSize
-    integer, dimension(:), pointer         :: nBins
-    doubleprecision, dimension(3)          :: binSize
-    doubleprecision                        :: binVolume
-    doubleprecision                        :: binDistance
-    integer, dimension(:,:), allocatable   :: activeBinIds
-    integer                                :: nActiveBins
-    integer, dimension(:,:), allocatable   :: boundingBoxBinIds
-    integer                                :: nBBoxBins 
-    doubleprecision, dimension(3)          :: domainOrigin ! of the reconstruction grid 
-    doubleprecision, dimension(3)          :: gridOrigin   ! while allocating from dataset
-    doubleprecision, dimension(:), pointer :: origin       ! point to the proper origin for indexes 
-    logical                                :: adaptGridToCoords
-    integer, dimension(:), allocatable     :: dimensions
-    integer                                :: nDim
-    integer                                :: nPoints 
-    doubleprecision                        :: nEffective 
-    doubleprecision                        :: totalMass, effectiveMass 
-    logical                                :: isWeighted
-    doubleprecision                        :: maxCount
-    doubleprecision                        :: maxRawDensity
+    integer, dimension(3)                          :: domainGridSize
+    integer, dimension(3)                          :: gridSize
+    integer, dimension(:), pointer                 :: nBins
+    doubleprecision, dimension(3)                  :: binSize
+    doubleprecision                                :: binVolume
+    doubleprecision                                :: binDistance
+    integer, dimension(:,:), allocatable           :: activeBinIds
+    integer                                        :: nActiveBins
+    integer, dimension(:,:), allocatable           :: boundingBoxBinIds
+    integer                                        :: nBBoxBins 
+    doubleprecision, dimension(3)                  :: domainOrigin ! of the reconstruction grid 
+    doubleprecision, dimension(3)                  :: gridOrigin   ! while allocating from dataset
+    doubleprecision, dimension(:), pointer         :: origin       ! point to the proper origin for indexes 
+    logical                                        :: adaptGridToCoords
+    integer, dimension(:), allocatable             :: dimensions
+    integer                                        :: nDim
+    integer                                        :: nPoints 
+    doubleprecision                                :: nEffective 
+    doubleprecision                                :: totalMass, effectiveMass 
+    logical                                        :: isWeighted
+    doubleprecision                                :: maxCount
+    doubleprecision                                :: maxRawDensity
+    integer                                        :: effectiveWeightFormat = 0
   ! HistogramType contains
   contains
     ! Procedures
@@ -130,8 +131,8 @@ contains
     this%binVolume      = product( binSize, mask=(binSize.gt.0d0) ) 
     this%binDistance    = ( this%binVolume )**(1d0/this%nDim)
 
-    ! Allocate and initialize histogram counts
-    ! Only if brute-force allocating the whole grid.
+    ! Allocate and initialize histogram counts, 
+    ! if not adapting to the particle distribution follows the domain grid. 
     if ( .not. this%adaptGridToCoords ) then 
       allocate( this%counts( domainGridSize(1), domainGridSize(2), domainGridSize(3) ) )
       this%counts   = 0
@@ -285,12 +286,22 @@ contains
           this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)
 
     end do 
-   
-    this%totalMass     = sum(weights)
-    this%nEffective    = this%totalMass**2/sum(weights**2)
-    this%effectiveMass = this%totalMass/this%nEffective
-
-    ! Tranform mass counts into n counts
+ 
+    ! Get total mass 
+    this%totalMass = sum(weights)
+    ! Compute the effective number of particles 
+    ! and mass according to effectiveWeightFormat
+    select case(this%effectiveWeightFormat)
+    ! 1: using the simple average mass
+    case(1)
+      this%nEffective = nPointsShape(1)
+      this%effectiveMass = this%totalMass/this%nEffective
+    ! Defaults to Kish (1965,1992)
+    case default
+      this%nEffective    = this%totalMass**2/sum(weights**2)
+      this%effectiveMass = this%totalMass/this%nEffective
+    end select
+    ! Transform mass counts into n counts
     this%counts        = this%counts/this%effectiveMass
     this%nPoints       = size(weights)
     this%isWeighted    = .true.
