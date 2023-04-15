@@ -72,6 +72,7 @@ module GridProjectedKDEModule
 
 
   ! Arrays, related to active bins
+  doubleprecision   , dimension(:,:,:), allocatable, target       :: densityGrid
   doubleprecision   , dimension(:,:), allocatable         :: kernelSmoothing
   doubleprecision   , dimension(:)  , allocatable         :: kernelSmoothingScale
   doubleprecision   , dimension(:,:), allocatable         :: kernelSmoothingShape
@@ -119,7 +120,8 @@ module GridProjectedKDEModule
     ! Consider replacing some for a common grid, 
     ! updating values when necessary 
     doubleprecision, dimension(:)    , allocatable :: densityEstimate
-    doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
+    doubleprecision, dimension(:,:,:), pointer :: densityEstimateGrid
+    !doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
     doubleprecision, dimension(:,:,:), allocatable :: rawDensityEstimateGrid
     doubleprecision, dimension(:,:)  , allocatable :: kernelSmoothing
     doubleprecision, dimension(:,:)  , allocatable :: kernelSigmaSupport
@@ -513,8 +515,11 @@ contains
       this%nBins = this%domainGridSize
       this%deltaBinsOrigin = 0
       ! Allocate matrix for density 
-      if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
-      allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      !if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
+      !allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      if ( allocated( densityGrid ) ) deallocate( densityGrid )
+      allocate( densityGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      !this%densityEstimateGrid => densityGrid
       if ( this%reportToOutUnit ) then 
         write( this%outFileUnit, '(A)' ) '   Histogram grid will follow domain grid size.'
       end if
@@ -896,7 +901,8 @@ contains
     this%kernelSDDatabase1 => null()
     this%kernelSDDatabase2 => null()
     if( allocated( this%densityEstimate        ) )deallocate( this%densityEstimate        )
-    if( allocated( this%densityEstimateGrid    ) )deallocate( this%densityEstimateGrid    )
+    !if( allocated( this%densityEstimateGrid    ) )deallocate( this%densityEstimateGrid    )
+    this%densityEstimateGrid => null()
     if( allocated( this%rawDensityEstimateGrid ) )deallocate( this%rawDensityEstimateGrid )
     if( allocated( this%kernelSmoothing        ) )deallocate( this%kernelSmoothing        )
     if( allocated( this%kernelSigmaSupport     ) )deallocate( this%kernelSigmaSupport     ) 
@@ -911,6 +917,7 @@ contains
     this%SetKernelSD2D  => null()
     this%SetKernelSD3D  => null()
 
+    if( allocated( densityGrid    ) )deallocate( densityGrid    )
 
   end subroutine prReset
 
@@ -2779,8 +2786,11 @@ contains
       this%histogram%counts = 0
 
       ! Allocate matrix for density 
-      if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
-      allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      !if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
+      !allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      if ( allocated( densityGrid ) ) deallocate( densityGrid )
+      allocate( densityGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
+      !this%densityEstimateGrid => densityGrid
 
       if ( this%reportToOutUnit ) then
        write(this%outFileUnit, * ) '  Allocated size    :', this%nBins
@@ -2942,7 +2952,8 @@ contains
       end if
       ! Compute density
       call this%ComputeDensityOptimization(                              &
-              this%densityEstimateGrid,                                  &
+              densityGrid,                                  &
+              !this%densityEstimateGrid,                                  &
               nOptimizationLoops=localNOptimizationLoops,                &
               exportOptimizationVariables=locExportOptimizationVariables,&
               skipErrorConvergence=locSkipErrorConvergence,              &
@@ -2954,12 +2965,16 @@ contains
     else
       ! Brute force optimization
       call this%ComputeDensityOptimization(                              &
-              this%densityEstimateGrid,                                  &
+              densityGrid,                                  &
+              !this%densityEstimateGrid,                                  &
               nOptimizationLoops=localNOptimizationLoops,                &
               exportOptimizationVariables=locExportOptimizationVariables,&
               skipErrorConvergence=locSkipErrorConvergence,              & 
               relativeErrorConvergence=locRelativeErrorConvergence ) 
     end if 
+
+    this%densityEstimateGrid => densityGrid
+
 
     ! Some corrections to relevant variables before writing to output files 
     if ( locComputeRawDensity ) then 
@@ -3011,6 +3026,7 @@ contains
     implicit none
     ! input
     class( GridProjectedKDEType ), target:: this
+    !doubleprecision, dimension(:,:,:), intent(inout) :: densityEstimateGrid
     doubleprecision, dimension(:,:,:), allocatable, intent(inout) :: densityEstimateGrid
     integer, intent(in), optional         :: nOptimizationLoops
     logical, intent(in), optional         :: exportOptimizationVariables
