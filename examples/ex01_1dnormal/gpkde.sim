@@ -1,5 +1,5 @@
 # GPKDE for a Gaussian distribution of particles
-particles_gaussian_r4.csv
+ex01data01M.csv
 0	100000
 gpkde.out
 -6	0	0
