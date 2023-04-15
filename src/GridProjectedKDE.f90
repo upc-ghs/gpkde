@@ -2952,7 +2952,7 @@ contains
       end if
       ! Compute density
       call this%ComputeDensityOptimization(                              &
-              densityGrid,                                  &
+              densityGrid,                                               &
               !this%densityEstimateGrid,                                  &
               nOptimizationLoops=localNOptimizationLoops,                &
               exportOptimizationVariables=locExportOptimizationVariables,&
@@ -2965,16 +2965,15 @@ contains
     else
       ! Brute force optimization
       call this%ComputeDensityOptimization(                              &
-              densityGrid,                                  &
+              densityGrid,                                               &
               !this%densityEstimateGrid,                                  &
               nOptimizationLoops=localNOptimizationLoops,                &
               exportOptimizationVariables=locExportOptimizationVariables,&
               skipErrorConvergence=locSkipErrorConvergence,              & 
               relativeErrorConvergence=locRelativeErrorConvergence ) 
     end if 
-
+    ! Point to the module density
     this%densityEstimateGrid => densityGrid
-
 
     ! Some corrections to relevant variables before writing to output files 
     if ( locComputeRawDensity ) then 
@@ -3185,7 +3184,7 @@ contains
       end if 
     end do
     kernelSmoothingScaleOld = kernelSmoothingScale
-  
+
     ! Initialize density grid
     densityEstimateGrid(:,:,:) = 0d0
     densityEstimateArray(:) = 0d0
