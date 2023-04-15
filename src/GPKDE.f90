@@ -790,7 +790,15 @@ program GPKDE
       maxHOverLambda            = kernelParams(3),          &
       initialSmoothing          = initialSmoothing,         & 
       initialSmoothingFactor    = initialSmoothingFactor,   & 
-      initialSmoothingSelection = initialSmoothingSelection & 
+      initialSmoothingSelection = initialSmoothingSelection,& 
+      interpretAdvancedParams   = advancedOptions,          & 
+      minRoughnessFormat        = minRoughnessFormat,       & 
+      minRoughness              = minRoughness,             & 
+      minRoughnessLengthScale   = minRoughnessLengthScale,  & 
+      minRelativeRoughness      = minRelativeRoughness,     &
+      effectiveWeightFormat     = effectiveWeightFormat,    & 
+      boundKernelSizeFormat     = boundKernelSizeFormat,    & 
+      isotropicThreshold        = isotropicThreshold        & 
     )
   end if
 
@@ -823,20 +831,22 @@ program GPKDE
      computeRawDensity      = .true.,      &
      scalingFactor          = uniformMass, & 
      histogramScalingFactor = uniformMass, & ! For consistency with smoothed density 
-     isotropic              = isotropicKernels, & 
+     isotropic              = isotropicKernels, &  
+     useGlobalSmoothing     = useGlobalSmoothing, &  
      skipErrorConvergence   = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence,  &
      exportOptimizationVariables = exportOptimizationVariables &
     )
   case(1)
     ! Weighted reconstruction
-    call gpkdeObj%ComputeDensity(       &
-     dataCarrier,                       &
-     outputFileUnit    = outputUnit,    &
-     computeRawDensity = .true.,        &
-     weightedHistogram = .true.,        &
-     weights           = weightsCarrier,&
-     isotropic         = isotropicKernels, & 
+    call gpkdeObj%ComputeDensity(         &
+     dataCarrier,                         &
+     outputFileUnit     = outputUnit,     &
+     computeRawDensity  = .true.,         &
+     weightedHistogram  = .true.,         &
+     weights            = weightsCarrier, &
+     isotropic          = isotropicKernels, & 
+     useGlobalSmoothing = useGlobalSmoothing, &  
      skipErrorConvergence = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence, &
      exportOptimizationVariables = exportOptimizationVariables &

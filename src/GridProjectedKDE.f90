@@ -19,27 +19,39 @@ module GridProjectedKDEModule
   doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
 
   ! Default parameters
-  integer        , parameter :: defaultKernelRange                     = 3
-  integer        , parameter :: defaultKernelSDRange                   = 4
-  integer        , parameter :: defaultNOptLoops                       = 5
-  logical        , parameter :: defaultDatabaseOptimization            = .true.
-  logical        , parameter :: defaultLogKernelDatabase               = .true.
-  doubleprecision, parameter :: defaultMaxHOverLambda                  = 15
-  doubleprecision, parameter :: defaultMinHOverLambda                  = 0.3
-  doubleprecision, parameter :: defaultDeltaHOverLambda                = 0.3
-  doubleprecision, parameter :: defaultRelativeErrorConvergence        = 1d-2
-  doubleprecision, parameter :: defaultRelaxedRelativeErrorConvergence = 5d-2
-  integer        , parameter :: defaultInitialSmoothingSelection       = 0
-  doubleprecision, parameter :: defaultInitialSmoothingFactor          = 5d0
-  doubleprecision, parameter :: defaultMaxKernelShape                  = 5d0
-  logical        , parameter :: defaultAdaptGridToCoords               = .false. 
-  doubleprecision, parameter :: defaultMinRelativeRoughness            = 1d-4
-  doubleprecision, parameter :: defaultMinLimitRoughness               = 1d-4
-  integer        , parameter :: defaultMinRoughnessFormat              = 0
-  integer        , parameter :: defaultEffectiveWeightFormat           = 0
-  integer        , parameter :: defaultBoundKernelSizeFormat           = 0
-  doubleprecision, parameter :: defaultIsotropicThreshold              = 0.9
-  logical        , parameter :: defaultUseGlobalSmoothing              = .false.
+  integer         , parameter :: defaultKernelRange                     = 3
+  integer         , parameter :: defaultKernelSDRange                   = 4
+  integer         , parameter :: defaultNOptLoops                       = 5
+  logical         , parameter :: defaultDatabaseOptimization            = .true.
+  logical         , parameter :: defaultLogKernelDatabase               = .true.
+  doubleprecision , parameter :: defaultMaxHOverLambda                  = 15
+  doubleprecision , parameter :: defaultMinHOverLambda                  = 0.3
+  doubleprecision , parameter :: defaultDeltaHOverLambda                = 0.3
+  doubleprecision , parameter :: defaultRelativeErrorConvergence        = 1d-2
+  doubleprecision , parameter :: defaultRelaxedRelativeErrorConvergence = 5d-2
+  integer         , parameter :: defaultInitialSmoothingSelection       = 0
+  doubleprecision , parameter :: defaultInitialSmoothingFactor          = 5d0
+  doubleprecision , parameter :: defaultMaxKernelShape                  = 5d0
+  logical         , parameter :: defaultAdaptGridToCoords               = .false. 
+  doubleprecision , parameter :: defaultMinRelativeRoughness            = 1d-4
+  doubleprecision , parameter :: defaultMinLimitRoughness               = 1d-4
+  integer         , parameter :: defaultMinRoughnessFormat              = 0
+  integer         , parameter :: defaultEffectiveWeightFormat           = 0
+  integer         , parameter :: defaultBoundKernelSizeFormat           = 0
+  doubleprecision , parameter :: defaultIsotropicThreshold              = 0.9
+  logical         , parameter :: defaultUseGlobalSmoothing              = .false.
+  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.2d0 
+  doubleprecision , parameter :: defaultMaxSizeFactor                   = 0.5 
+  doubleprecision , parameter :: defaultBorderFraction                  = 0.05 
+  character(len=*), parameter :: defaultOutputFileName                  = 'gpkde.out'
+
+
+  ! Module variables defined after initialization
+  integer               :: nDim
+  integer, dimension(3) :: dimensionMask = (/1,1,1/)
+  doubleprecision       :: oneOverNDimPlusFour
+  doubleprecision       :: minusOneOverNDimPlusSix
+  doubleprecision       :: onePlusNDimQuarter
 
 
   ! DEPRECATED
@@ -53,14 +65,6 @@ module GridProjectedKDEModule
   doubleprecision :: defaultMaxSmoothingGrowth          = 10d0    ! TO BE DEPRECATED
   doubleprecision :: defaultMinKernelShape              = 1d-1    ! TO BE DEPRECATED
   ! DEPRECATED
-
-
-  ! Module variables defined after initialization
-  integer               :: nDim
-  integer, dimension(3) :: dimensionMask = (/1,1,1/)
-  doubleprecision       :: oneOverNDimPlusFour
-  doubleprecision       :: minusOneOverNDimPlusSix
-  doubleprecision       :: onePlusNDimQuarter
 
 
   ! Set default access to private
@@ -113,7 +117,7 @@ module GridProjectedKDEModule
 
     ! Variables
     ! Consider replacing some for a common grid, 
-    ! replacing values when necessary
+    ! updating values when necessary 
     doubleprecision, dimension(:)    , allocatable :: densityEstimate
     doubleprecision, dimension(:,:,:), allocatable :: densityEstimateGrid
     doubleprecision, dimension(:,:,:), allocatable :: rawDensityEstimateGrid
@@ -128,7 +132,7 @@ module GridProjectedKDEModule
     integer, dimension(3)         :: nDeltaHOverLambda ! Computed at kernel databases
     logical                       :: logKernelDatabase 
     logical                       :: databaseOptimization 
-    logical                       :: flatKernelDatabase ! TRUE BY DEFAULT, TO BE PRECEATED
+    logical                       :: flatKernelDatabase ! TRUE BY DEFAULT, TO BE DEPRECATED
     
     ! Optimization
     integer                       :: nOptimizationLoops
@@ -138,10 +142,11 @@ module GridProjectedKDEModule
     doubleprecision               :: minRoughnessLengthScale
     logical                       :: minRoughnessLengthScaleAsSigma
     doubleprecision, dimension(3) :: initialSmoothing
-    logical                       :: useGlobalSmoothing
     doubleprecision               :: isotropicThreshold
     integer                       :: boundKernelSizeFormat
-    logical                       :: boundKernels = .true.
+    logical                       :: boundKernels       = .true.
+    logical                       :: useGlobalSmoothing = .false.
+    logical                       :: isotropic          = .false. 
 
     doubleprecision :: maxLimitRoughness       ! TO BE DEPRECATED
     doubleprecision :: maxSmoothingGrowth      ! TO BE DEPRECATED
@@ -151,10 +156,10 @@ module GridProjectedKDEModule
     logical         :: bruteOptimization       ! TO BE DEPRECATED
     logical         :: anisotropicSigmaSupport ! TO BE DEPRECATED
 
-    logical :: isotropic = .false.
 
-    logical :: firstRun  = .true. ! NOT USED, COULD BE DEPRECATED
-    integer, allocatable, dimension(:,:) :: outputBinIds
+    ! COULD BE USED FOR SOME FANCY FASTER RECALCULATION OF FOLLOWING 
+    ! SMOOTHING WHEN APPLIED IN SUBSEQUENT RECONSTRUCTIONS
+    logical :: firstRun  = .true. ! RECONSIDERE DEPRECATION 
     doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0 ! TO BE DEPRECATED
 
     ! Protocol for selection of initial smoothing
@@ -661,14 +666,15 @@ contains
     ! 2: Unbounded 
     case(2)
       this%boundKernels = .false.
-    ! 0: domain constraints (VERIFY)
+    ! 0: domain constraints
     case default
      ! Assign max kernel sizes, consistent with domain dimensions
      ! kernel ranges and bin sizes.
      this%maxKernelSize(:) = 0d0
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelRange))
+      this%maxKernelSize(nd) = &
+        this%binSize(nd)*(defaultMaxSizeFactor*this%domainGridSize(nd) - 1)/real(defaultKernelRange)
      end do
      ! As the sigma kernel is isotropic, the maxSizeDimId 
      ! is given by the more restrictive dimension. 
@@ -676,14 +682,15 @@ contains
      this%maxKernelSDSize(:) = 0d0
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%maxKernelSDSize(nd) = 0.99*(this%binSize(nd)*(0.5*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange))
+      this%maxKernelSDSize(nd) = & 
+        this%binSize(nd)*(defaultMaxSizeFactor*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange)
      end do
      ! Assign min kernel sizes, ensuring at least 2 positive shape cells, 
      ! Positive shape is obtained as ceiling 
      this%minKernelSize(:) = 0d0
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%minKernelSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelRange)
+      this%minKernelSize(nd) = defaultMinSizeFactor*this%binSize(nd)/real(defaultKernelRange)
      end do
      ! As the sigma kernel is isotropic, the minSizeDimId 
      ! is given by the more restrictive dimension. 
@@ -691,7 +698,7 @@ contains
      this%minKernelSDSize(:) = 0d0
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%minKernelSDSize(nd) = 1.2d0*this%binSize(nd)/real(defaultKernelSDRange)
+      this%minKernelSDSize(nd) = defaultMinSizeFactor*this%binSize(nd)/real(defaultKernelSDRange)
      end do
     end select
 
@@ -894,7 +901,6 @@ contains
     if( allocated( this%kernelSmoothing        ) )deallocate( this%kernelSmoothing        )
     if( allocated( this%kernelSigmaSupport     ) )deallocate( this%kernelSigmaSupport     ) 
     if( allocated( this%curvatureBandwidth     ) )deallocate( this%curvatureBandwidth     ) 
-    if( allocated(this%outputBinIds) ) deallocate( this%outputBinIds )
 
     this%ComputeKernelDatabaseIndexes      => null()
     this%ComputeKernelDatabaseFlatIndexes  => null()
@@ -1314,12 +1320,27 @@ contains
     ! Product curvature
     curvature1 = curvature1*curvature1
 
-    ! kernelSigma was already computed ? 
-    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
-
     ! Net roughness
     roughness11Array  = 0d0 
     netRoughnessArray = 0d0
+    if ( this%useGlobalSmoothing ) then
+      ! If global smoothing, then the integral is over 
+      ! the whole domain
+      roughness11Array(:) = sum(curvature1)
+      netRoughnessArray = roughness11Array
+
+      ! Deallocate
+      deallocate( curvature1 )
+      
+      ! Done
+      return
+    end if
+
+    ! Continue to local form !
+
+    ! kernelSigma was already computed ? 
+    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
+
     smoothingCarrier  = 0d0
     !$omp parallel do schedule( dynamic, 1 ) &
     !$omp default( none )                    &
@@ -1602,13 +1623,32 @@ contains
     curvature1  = curvature1*curvature1
     curvature2  = curvature2*curvature2
 
-    ! Initialize kernelSigma
-    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
-
     ! Net roughness
     roughness11Array  = 0d0 
     roughness22Array  = 0d0 
     netRoughnessArray = 0d0
+    if ( this%useGlobalSmoothing ) then
+      ! If global smoothing, then the integral is over 
+      ! the whole domain and kernels are considered to 
+      ! be isotropic 
+      roughness11Array(:) = sum(curvature1)
+      roughness22Array(:) = sum(curvature2)
+      netRoughnessArray   = roughness11Array + roughness22Array + 2d0*sum(curvature12)
+
+      ! Deallocate
+      deallocate( curvature1  ) 
+      deallocate( curvature2  ) 
+      deallocate( curvature12 ) 
+
+      ! Done
+      return
+    end if
+
+    ! Continue to local form !
+
+    ! Initialize kernelSigma
+    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
+
     smoothingCarrier  = 0d0
     if ( .not. this%isotropic ) then
       ! Anisotropic  
@@ -1880,14 +1920,39 @@ contains
     curvatureXZ = curvatureX*curvatureZ
     curvatureYZ = curvatureY*curvatureZ
 
-    ! Initialize kernelSigma
-    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
-
     ! Net roughness
     roughnessXXArray  = 0d0 
     roughnessYYArray  = 0d0 
     roughnessZZArray  = 0d0 
     netRoughnessArray = 0d0
+    if ( this%useGlobalSmoothing ) then
+      ! If global smoothing, then the integral is over 
+      ! the whole domain and kernels are considered to 
+      ! be isotropic 
+      roughnessXXArray(:) = sum(curvatureX)
+      roughnessYYArray(:) = sum(curvatureY)
+      roughnessZZArray(:) = sum(curvatureZ)
+      netRoughnessArray   = &
+        roughnessXXArray + roughnessYYArray + roughnessZZArray + & 
+        2d0*sum(curvatureXY) + 2d0*sum(curvatureXZ) + 2d0*sum(curvatureYZ)
+
+      ! Deallocate
+      deallocate(  curvatureX )
+      deallocate(  curvatureY )
+      deallocate(  curvatureZ )
+      deallocate( curvatureXY )
+      deallocate( curvatureXZ )
+      deallocate( curvatureYZ )
+
+      ! Done
+      return
+    end if
+
+    ! Continue to local form !
+
+    ! Initialize kernelSigma
+    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
+
     roughnessXY       = 0d0
     roughnessXZ       = 0d0
     roughnessYZ       = 0d0
@@ -1978,10 +2043,6 @@ contains
               gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
               gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
         ! Net roughness
-        !netRoughnessArray( n ) = 3d0*( roughnessXXArray(n)*roughnessYYArray(n)*roughnessZZArray(n) )**(1d0/3d0) + &
-        !    2d0*roughnessYZ*( roughnessXXArray(n)**2/roughnessYYArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
-        !    2d0*roughnessXZ*( roughnessYYArray(n)**2/roughnessXXArray(n)/roughnessZZArray(n) )**(1d0/6d0) + &
-        !    2d0*roughnessXY*( roughnessZZArray(n)**2/roughnessXXArray(n)/roughnessYYArray(n) )**(1d0/6d0)
         netRoughnessArray( n ) = 3d0*( roughnessXXArray(n)*roughnessYYArray(n)*roughnessZZArray(n) )**(1d0/3d0) 
         if ( roughnessYZ.gt.0d0 ) netRoughnessArray(n) = netRoughnessArray(n) + & 
             2d0*roughnessYZ*( roughnessXXArray(n)**2/roughnessYYArray(n)/roughnessZZArray(n) )**(1d0/6d0)
@@ -2496,7 +2557,6 @@ contains
     ! Done
     return
 
-
   end subroutine prDropKernelDatabase
 
 
@@ -2508,7 +2568,8 @@ contains
                               scalingFactor, histogramScalingFactor, &
                                                   computeRawDensity, &
               weightedHistogram, weights, onlyHistogram, exactPoint, &
-                                relativeErrorConvergence, isotropic  ) 
+                                relativeErrorConvergence, isotropic, &
+                                                 useGlobalSmoothing  ) 
     !------------------------------------------------------------------------------
     ! 
     !------------------------------------------------------------------------------
@@ -2536,6 +2597,7 @@ contains
     doubleprecision, dimension(:), intent(in), optional :: weights
     doubleprecision, intent(in), optional               :: relativeErrorConvergence
     logical, intent(in), optional                       :: isotropic
+    logical, intent(in), optional                       :: useGlobalSmoothing
     ! local 
     logical               :: persistKDB
     logical               :: locExportOptimizationVariables
@@ -2561,7 +2623,7 @@ contains
     doubleprecision, dimension(3) :: maxCoords
     doubleprecision, dimension(3) :: maxSubGridCoords
     doubleprecision, dimension(3) :: deltaCoords 
-    doubleprecision               :: borderFraction = 0.05d0
+    doubleprecision               :: borderFraction 
     doubleprecision, dimension(3) :: subGridSize
     integer, dimension(3)         :: subGridNBins
     doubleprecision, dimension(3) :: subGridOrigin
@@ -2582,6 +2644,9 @@ contains
     locOnlyHistogram = .false.
     locExactPoint = .false.
     localNOptimizationLoops = this%nOptimizationLoops
+    this%isotropic = .false.
+    this%useGlobalSmoothing = .false.
+    borderFraction = defaultBorderFraction
 
     ! Process optional arguments !
     if ( present( nOptimizationLoops ) ) then 
@@ -2590,7 +2655,7 @@ contains
     if ( present( outputFileName ) ) then 
       this%outputFileName = outputFileName
     else
-      this%outputFileName = 'gpkde.out'
+      this%outputFileName = defaultOutputFileName
     end if
     if ( present( persistentKernelDatabase ) ) then
       persistKDB = persistentKernelDatabase
@@ -2623,15 +2688,18 @@ contains
     if ( present( exactPoint ) ) then
       locExactPoint = exactPoint
     end if
-    this%isotropic = .false.
-    if ( present( isotropic ) ) then
-      locIsotropic = isotropic 
-      this%isotropic = isotropic
-    end if
     if ( present( relativeErrorConvergence ) ) then
       locRelativeErrorConvergence = relativeErrorConvergence
     else
       locRelativeErrorConvergence = defaultRelativeErrorConvergence
+    end if
+    if ( present( isotropic ) ) then
+      locIsotropic = isotropic 
+      this%isotropic = isotropic
+    end if
+    if ( present( useGlobalSmoothing ) ) then
+      this%isotropic = .true.
+      this%useGlobalSmoothing = useGlobalSmoothing
     end if
     if ( (locWeightedHistogram).and.(.not.present(weights)) ) then 
       write(*,*) 'ERROR: weightedHistogram requires weights and were not given. Stop.'
@@ -2640,16 +2708,15 @@ contains
     ! Verify weights size for weighted reconstruction
     dataPointsShape = shape(dataPoints)
     if ( locWeightedHistogram ) then
-      if ( size(weights).ne.dataPointsShape(1) ) then 
-        write(*,*) 'ERROR: given weights are not the same length than datapoints. Stop.'
-        stop
-      end if
+     if ( size(weights).ne.dataPointsShape(1) ) then 
+      write(*,*) 'ERROR: given weights are not the same length than datapoints. Stop.'
+      stop
+     end if
     end if
     if ( dataPointsShape(1).lt.1 ) then 
-      write(*,*) 'ERROR: data points is empty. Stop.'
-      stop
+     write(*,*) 'ERROR: data points is empty. Stop.'
+     stop
     end if
- 
     if ( this%reportToOutUnit ) then
      write(this%outFileUnit, *  )
      write(this%outFileUnit, '(A)' ) 'GPKDE histogram info '
@@ -2966,9 +3033,6 @@ contains
     doubleprecision, dimension(:,:,:), allocatable, target :: transposedKernelMatrix
     ! Utils
     integer            :: n, m, nd
-    integer            :: convergenceCount 
-    integer            :: softConvergenceCount
-    integer            :: zeroDensityCount    
     character(len=500) :: varsOutputFileName
     character(len=20)  :: loopId
     logical            :: exportVariables, skipErrorBreak
@@ -2994,9 +3058,6 @@ contains
     !------------------------------------------------------------------------------
 
     ! Initialize vars
-    convergenceCount = 0
-    softConvergenceCount = 0
-    zeroDensityCount = 0
     exportVariables  = .false.
     skipErrorBreak   = .false.
     exportLoopError  = .false.
@@ -3011,7 +3072,6 @@ contains
                            kernelSmoothing,        &
                            kernelSmoothingScale,   &
                            kernelSmoothingShape,   &
-                           !kernelSigmaSupport,     &
                            kernelSigmaSupportScale,&
                            curvatureBandwidth,     &
                            densityEstimateArray,   &
@@ -3040,7 +3100,6 @@ contains
     nEstimateArray = 0d0
     densityEstimateArray = 0d0
     curvatureBandwidth = 0d0
-
 
     ! Initialize and process arguments
     if ( present( nOptimizationLoops ) ) then 
@@ -3208,7 +3267,6 @@ contains
     errorALMISEProxyOld     = errorALMISEProxy
     errorRMSEOld            = errorRMSE
     errorMetricOld          = 0d0
-    !errorMetricOld          = 1d10 ! something big
     errorMetricSmoothingOld = errorMetricSmoothing
     densityEstimateArrayOld = densityEstimateArray
     kernelSmoothingScaleOld = kernelSmoothingScale
@@ -3584,7 +3642,7 @@ contains
         end do 
         where( kernelSmoothingShape(nd,:) .ne. 0d0 ) 
           shapeTerm( nd, : ) = (                                           &
-            ( oneOverNDimPlusFour/( kernelSmoothingShape( nd, : )**4d0 ) )* &
+            ( oneOverNDimPlusFour/( kernelSmoothingShape( nd, : )**4d0 ) )*&
                 (                                                          &
                     shapeTermSum                                           &
                 )                                                          &
@@ -3650,15 +3708,22 @@ contains
     doubleprecision :: normShape
     !----------------------------------------------------------------------------
 
-    ! Compute smoothing scale !
-
-    ! For the cases of really low roughness, use the limit
-    ! value to keep bound the smoothing scale
+    ! Initialize smoothing scale
     kernelSmoothingScale(:) = 0d0
+
+    ! Announce that something is wrong and leave
     if (maxval(netRoughness).eq.0d0 ) then 
       write(*,*) 'Error: the maximum value of roughness is 0d0, something wrong with discretization or kernel sizes.'
       stop
     end if
+
+    ! If using global smoothing and reached this point 
+    ! then netRoughness is safely non-zero. useGlobalSmoothing
+    ! forces isotropic kernels. 
+    if ( this%useGlobalSmoothing ) then 
+     kernelSmoothingScale =&
+       ( nDim/( ( 4d0*pi )**( 0.5*nDim )*netRoughness*this%histogram%nEffective ) )**( oneOverNDimPlusFour )
+    end if 
 
     ! Apply a correction to net roughness in case one of the 
     ! directional roughness is strongly dominating above the 
@@ -3722,24 +3787,26 @@ contains
     end if 
 
     ! Compute kernelSmoothingScale
-    if ( this%minLimitRoughness .gt. 0d0 ) then  
+    if ( .not. this%useGlobalSmoothing ) then 
+     if ( this%minLimitRoughness .gt. 0d0 ) then  
       where ( netRoughness .gt. this%minLimitRoughness )
        kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*netRoughness ) )**( oneOverNDimPlusFour )
       elsewhere
        ! Estimate a scale based on minLimitRoughness
        kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*this%minLimitRoughness ) )**( oneOverNDimPlusFour )
       end where
-    else
+     else
       ! If minLimitRoughness is zero, then compute 
       ! kernelSmoothingScale where possible and for any 
       ! case where netRoughnes is zero then assign the maximum 
-      ! compute kernelSmoothingScale.
+      ! computed kernelSmoothingScale.
       where ( netRoughness .gt. this%minLimitRoughness )
        kernelSmoothingScale = ( nDim*nEstimate/( ( 4d0*pi )**( 0.5*nDim )*netRoughness ) )**( oneOverNDimPlusFour )
       end where
       where ( netRoughness .eq. 0d0 ) 
        kernelSmoothingScale = maxval(kernelSmoothingScale, mask=(kernelSmoothingScale.gt.0d0)) 
       end where
+     end if
     end if
 
     ! Shape determination based on roughnesses ! 
@@ -3748,101 +3815,101 @@ contains
     if ( .not. this%isotropic ) then 
       ! Do it in parallel ?
       select case(nDim)
-        case(1)
-          continue
-        case(2)
-          ! At this stage, pointers to dims 1 and 2 were already assigned
-          ! If bounded kernels, limit shape factor to something that avoid overcoming limit 
-          if ( this%boundKernels ) then   
-            do n=1,this%nComputeBins
-              if ( (roughness11Array(n).eq.0d0).or.(roughness22Array(n).eq.0d0) ) then 
-                kernelSmoothingShape(this%idDim1,n) = 1d0
-                kernelSmoothingShape(this%idDim2,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(this%idDim1,n) = max( (netRoughness(n)/roughness11Array(n))**(1d0/8d0), &
-                this%minKernelSize(this%idDim1)/kernelSmoothingScale(n) )
-              kernelSmoothingShape(this%idDim2,n) = 1d0/kernelSmoothingShape(this%idDim1,n)
-              normShape = sqrt(kernelSmoothingShape(this%idDim1,n)*kernelSmoothingShape(this%idDim2,n))
-              ! Precaution 
-              if (normShape.eq.0d0) then 
-                kernelSmoothingShape(this%idDim1,n) = 1d0
-                kernelSmoothingShape(this%idDim2,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(this%idDim1,n) = kernelSmoothingShape(this%idDim1,n)/normShape
-              kernelSmoothingShape(this%idDim2,n) = kernelSmoothingShape(this%idDim2,n)/normShape
-            end do
-          else
-            do n=1,this%nComputeBins
-              if ( (roughness11Array(n).eq.0d0).or.(roughness22Array(n).eq.0d0) ) then 
-                kernelSmoothingShape(this%idDim1,n) = 1d0
-                kernelSmoothingShape(this%idDim2,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(this%idDim1,n) = (netRoughness(n)/roughness11Array(n))**(1d0/8d0) 
-              kernelSmoothingShape(this%idDim2,n) = 1d0/kernelSmoothingShape(this%idDim1,n)
-              normShape = sqrt(kernelSmoothingShape(this%idDim1,n)*kernelSmoothingShape(this%idDim2,n))
-              ! Precaution 
-              if (normShape.eq.0d0) then 
-                kernelSmoothingShape(this%idDim1,n) = 1d0
-                kernelSmoothingShape(this%idDim2,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(this%idDim1,n) = kernelSmoothingShape(this%idDim1,n)/normShape
-              kernelSmoothingShape(this%idDim2,n) = kernelSmoothingShape(this%idDim2,n)/normShape
-            end do
-          end if
-        case(3)
-          if ( this%boundKernels ) then   
-            do n=1,this%nComputeBins
-              if (&
-                (roughnessXXArray(n).eq.0d0).or.&
-                (roughnessYYArray(n).eq.0d0).or.&
-                (roughnessZZArray(n).eq.0d0) ) then 
-                kernelSmoothingShape(:,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(1,n) = max( (netRoughness(n)/roughnessXXArray(n))**(1d0/12d0), &
-                                                    this%minKernelSize(1)/kernelSmoothingScale(n) )
-              kernelSmoothingShape(2,n) = max( (netRoughness(n)/roughnessYYArray(n))**(1d0/12d0), &
-                                                    this%minKernelSize(2)/kernelSmoothingScale(n) )
-              kernelSmoothingShape(3,n) = 1d0/kernelSmoothingShape(1,n)/kernelSmoothingShape(2,n)
-              normShape =& 
-                (kernelSmoothingShape(1,n)*kernelSmoothingShape(2,n)*kernelSmoothingShape(3,n))**(0.333)
-              ! Precaution 
-              if (normShape.eq.0d0) then 
-                kernelSmoothingShape(:,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(1,n) = kernelSmoothingShape(1,n)/normShape
-              kernelSmoothingShape(2,n) = kernelSmoothingShape(2,n)/normShape
-              kernelSmoothingShape(3,n) = kernelSmoothingShape(3,n)/normShape
-            end do
-          else
-            do n=1,this%nComputeBins
-              if (&
-                (roughnessXXArray(n).eq.0d0).or.&
-                (roughnessYYArray(n).eq.0d0).or.&
-                (roughnessZZArray(n).eq.0d0) ) then 
-                kernelSmoothingShape(:,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(1,n) = (netRoughness(n)/roughnessXXArray(n))**(1d0/12d0)
-              kernelSmoothingShape(2,n) = (netRoughness(n)/roughnessYYArray(n))**(1d0/12d0)
-              kernelSmoothingShape(3,n) = 1d0/kernelSmoothingShape(1,n)/kernelSmoothingShape(2,n)
-              normShape =& 
-                (kernelSmoothingShape(1,n)*kernelSmoothingShape(2,n)*kernelSmoothingShape(3,n))**(0.333)
-              ! Precaution 
-              if (normShape.eq.0d0) then 
-                kernelSmoothingShape(:,n) = 1d0
-                cycle
-              end if 
-              kernelSmoothingShape(1,n) = kernelSmoothingShape(1,n)/normShape
-              kernelSmoothingShape(2,n) = kernelSmoothingShape(2,n)/normShape
-              kernelSmoothingShape(3,n) = kernelSmoothingShape(3,n)/normShape
-            end do
-          end if
+      case(1)
+        continue
+      case(2)
+        ! At this stage, pointers to dims 1 and 2 were already assigned
+        ! If bounded kernels, limit shape factor to something that avoid overcoming limit 
+        if ( this%boundKernels ) then   
+         do n=1,this%nComputeBins
+           if ( (roughness11Array(n).eq.0d0).or.(roughness22Array(n).eq.0d0) ) then 
+             kernelSmoothingShape(this%idDim1,n) = 1d0
+             kernelSmoothingShape(this%idDim2,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(this%idDim1,n) = max( (netRoughness(n)/roughness11Array(n))**(1d0/8d0), &
+             this%minKernelSize(this%idDim1)/kernelSmoothingScale(n) )
+           kernelSmoothingShape(this%idDim2,n) = 1d0/kernelSmoothingShape(this%idDim1,n)
+           normShape = sqrt(kernelSmoothingShape(this%idDim1,n)*kernelSmoothingShape(this%idDim2,n))
+           ! Precaution 
+           if (normShape.eq.0d0) then 
+             kernelSmoothingShape(this%idDim1,n) = 1d0
+             kernelSmoothingShape(this%idDim2,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(this%idDim1,n) = kernelSmoothingShape(this%idDim1,n)/normShape
+           kernelSmoothingShape(this%idDim2,n) = kernelSmoothingShape(this%idDim2,n)/normShape
+         end do
+        else
+         do n=1,this%nComputeBins
+           if ( (roughness11Array(n).eq.0d0).or.(roughness22Array(n).eq.0d0) ) then 
+             kernelSmoothingShape(this%idDim1,n) = 1d0
+             kernelSmoothingShape(this%idDim2,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(this%idDim1,n) = (netRoughness(n)/roughness11Array(n))**(1d0/8d0) 
+           kernelSmoothingShape(this%idDim2,n) = 1d0/kernelSmoothingShape(this%idDim1,n)
+           normShape = sqrt(kernelSmoothingShape(this%idDim1,n)*kernelSmoothingShape(this%idDim2,n))
+           ! Precaution 
+           if (normShape.eq.0d0) then 
+             kernelSmoothingShape(this%idDim1,n) = 1d0
+             kernelSmoothingShape(this%idDim2,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(this%idDim1,n) = kernelSmoothingShape(this%idDim1,n)/normShape
+           kernelSmoothingShape(this%idDim2,n) = kernelSmoothingShape(this%idDim2,n)/normShape
+         end do
+        end if
+      case(3)
+        if ( this%boundKernels ) then   
+         do n=1,this%nComputeBins
+           if (&
+             (roughnessXXArray(n).eq.0d0).or.&
+             (roughnessYYArray(n).eq.0d0).or.&
+             (roughnessZZArray(n).eq.0d0) ) then 
+             kernelSmoothingShape(:,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(1,n) = max( (netRoughness(n)/roughnessXXArray(n))**(1d0/12d0), &
+                                                 this%minKernelSize(1)/kernelSmoothingScale(n) )
+           kernelSmoothingShape(2,n) = max( (netRoughness(n)/roughnessYYArray(n))**(1d0/12d0), &
+                                                 this%minKernelSize(2)/kernelSmoothingScale(n) )
+           kernelSmoothingShape(3,n) = 1d0/kernelSmoothingShape(1,n)/kernelSmoothingShape(2,n)
+           normShape =& 
+             (kernelSmoothingShape(1,n)*kernelSmoothingShape(2,n)*kernelSmoothingShape(3,n))**(0.333)
+           ! Precaution 
+           if (normShape.eq.0d0) then 
+             kernelSmoothingShape(:,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(1,n) = kernelSmoothingShape(1,n)/normShape
+           kernelSmoothingShape(2,n) = kernelSmoothingShape(2,n)/normShape
+           kernelSmoothingShape(3,n) = kernelSmoothingShape(3,n)/normShape
+         end do
+        else
+         do n=1,this%nComputeBins
+           if (&
+             (roughnessXXArray(n).eq.0d0).or.&
+             (roughnessYYArray(n).eq.0d0).or.&
+             (roughnessZZArray(n).eq.0d0) ) then 
+             kernelSmoothingShape(:,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(1,n) = (netRoughness(n)/roughnessXXArray(n))**(1d0/12d0)
+           kernelSmoothingShape(2,n) = (netRoughness(n)/roughnessYYArray(n))**(1d0/12d0)
+           kernelSmoothingShape(3,n) = 1d0/kernelSmoothingShape(1,n)/kernelSmoothingShape(2,n)
+           normShape =& 
+             (kernelSmoothingShape(1,n)*kernelSmoothingShape(2,n)*kernelSmoothingShape(3,n))**(0.333)
+           ! Precaution 
+           if (normShape.eq.0d0) then 
+             kernelSmoothingShape(:,n) = 1d0
+             cycle
+           end if 
+           kernelSmoothingShape(1,n) = kernelSmoothingShape(1,n)/normShape
+           kernelSmoothingShape(2,n) = kernelSmoothingShape(2,n)/normShape
+           kernelSmoothingShape(3,n) = kernelSmoothingShape(3,n)/normShape
+         end do
+        end if
       end select
 
       ! The product of the shape factors should be one
@@ -3856,22 +3923,22 @@ contains
     ! Once shape factors are valid, compute smoothing
     updateScale = .false.
     do nd=1,3
-      if( this%dimensionMask(nd).eq.0 ) cycle
-      kernelSmoothing(nd,:) = kernelSmoothingShape(nd,:)*kernelSmoothingScale
-      if ( this%boundKernels ) then 
-        if ( any(kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) ) then
-          updateScale = .true.
-          where( kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) 
-            kernelSmoothing(nd,:) = this%maxKernelSize(nd)
-          end where
-        end if
-        if ( any(kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) ) then
-          updateScale = .true.
-          where( kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) 
-            kernelSmoothing(nd,:) = this%minKernelSize(nd)
-          end where
-        end if
-      end if 
+     if( this%dimensionMask(nd).eq.0 ) cycle
+     kernelSmoothing(nd,:) = kernelSmoothingShape(nd,:)*kernelSmoothingScale
+     if ( this%boundKernels ) then 
+      if ( any(kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) ) then
+       updateScale = .true.
+       where( kernelSmoothing(nd,:).gt.this%maxKernelSize(nd) ) 
+         kernelSmoothing(nd,:) = this%maxKernelSize(nd)
+       end where
+      end if
+      if ( any(kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) ) then
+       updateScale = .true.
+       where( kernelSmoothing(nd,:).lt.this%minKernelSize(nd) ) 
+         kernelSmoothing(nd,:) = this%minKernelSize(nd)
+       end where
+      end if
+     end if 
     end do
     if ( updateScale ) then 
       call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
@@ -3963,8 +4030,7 @@ contains
 
   end subroutine prComputeKernelDatabaseFlatIndexesLog
 
-
-  ! OUTDATED
+  ! NEEDS UPDATE
   ! Kernel Database indexes, Flat
   subroutine prComputeKernelDatabaseFlatIndexesLinear( this, smoothing, flatDBIndexes, transposeKernel )
     !------------------------------------------------------------------------------
@@ -4578,41 +4644,7 @@ contains
   end function prComputeXYTranspose
 
 
-  ! Utils output files
-  subroutine prExportDensity( this, outputFileName )
-    !------------------------------------------------------------------------------
-    ! 
-    !------------------------------------------------------------------------------
-    ! Specifications 
-    !------------------------------------------------------------------------------
-    implicit none 
-    class(GridProjectedKDEType) :: this
-    character(len=*), intent(in) :: outputFileName
-    integer :: ix, iy, iz
-    integer :: outputUnit = 555
-    !------------------------------------------------------------------------------
-
-    ! Write the output file name
-    ! Add some default
-    open( outputUnit, file=outputFileName, status='replace' )
-
-    ! Following column-major nesting
-    do iz = 1, this%nBins(3)
-      do iy = 1, this%nBins(2)
-        do ix = 1, this%nBins(1)
-          if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
-          ! cellids, density, histogram
-          write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
-            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
-        end do
-      end do
-    end do
-
-    ! Finished
-    close(outputUnit)
-
-  end subroutine prExportDensity
-
+  ! Utils output files !
 
   subroutine prExportDensityUnit( this, outputUnit, outputDataId, particleGroupId )
     !------------------------------------------------------------------------------
@@ -4639,7 +4671,6 @@ contains
             ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
             this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
             !ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
- 
           end do
         end do
       end do
@@ -4684,53 +4715,6 @@ contains
   end subroutine prExportDensityUnit
 
 
-  ! TO BE DEPRECATED ?
-  subroutine prExportOptimizationVariables( this, outputFileName  , &
-    densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
-    curvatureBandwidth, nEstimate, netRoughness )
-    !------------------------------------------------------------------------------
-    ! 
-    !------------------------------------------------------------------------------
-    ! Specifications 
-    !------------------------------------------------------------------------------
-    implicit none 
-    class(GridProjectedKDEType) :: this
-    character(len=500), intent(in) :: outputFileName
-    doubleprecision, dimension(:)  ,intent(in) :: densityEstimateArray
-    doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
-    doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
-    doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
-    doubleprecision, dimension(:)  ,intent(in) :: nEstimate
-    doubleprecision, dimension(:)  ,intent(in) :: netRoughness
-    integer :: ix, iy, iz, n
-    integer :: outputUnit = 555
-    !------------------------------------------------------------------------------
-
-    ! Write the output file name
-    ! Add some default
-    open( outputUnit, file=outputFileName, status='replace' )
-
-    do n = 1, this%nComputeBins
-      ix = this%computeBinIds( 1, n )
-      iy = this%computeBinIds( 2, n )
-      iz = this%computeBinIds( 3, n )
-      ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-      write(outputUnit,&
-        "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
-        ix, iy, iz,& 
-        densityEstimateArray( n ),& 
-        kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
-        kernelSigmaSupportScale(n), &
-        curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
-        nEstimate(n), netRoughness(n)
-    end do
-
-    ! Finished
-    close(outputUnit)
-
-  end subroutine prExportOptimizationVariables
-
-  ! THIS IS BEING USED
   subroutine prExportOptimizationVariablesExtended( this, outputFileName, &
              densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
                            kernelSmoothingShape, kernelSigmaSupportScale, &
@@ -4782,7 +4766,90 @@ contains
 
   end subroutine prExportOptimizationVariablesExtended
 
-  ! TO BE DEPRECATED ?
+
+
+  ! TO BE DEPRECATED
+  subroutine prExportDensity( this, outputFileName )
+    !------------------------------------------------------------------------------
+    ! 
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none 
+    class(GridProjectedKDEType) :: this
+    character(len=*), intent(in) :: outputFileName
+    integer :: ix, iy, iz
+    integer :: outputUnit = 555
+    !------------------------------------------------------------------------------
+
+    ! Write the output file name
+    ! Add some default
+    open( outputUnit, file=outputFileName, status='replace' )
+
+    ! Following column-major nesting
+    do iz = 1, this%nBins(3)
+      do iy = 1, this%nBins(2)
+        do ix = 1, this%nBins(1)
+          if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
+          ! cellids, density, histogram
+          write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
+            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+        end do
+      end do
+    end do
+
+    ! Finished
+    close(outputUnit)
+
+  end subroutine prExportDensity
+
+  ! TO BE DEPRECATED
+  subroutine prExportOptimizationVariables( this, outputFileName  , &
+    densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
+    curvatureBandwidth, nEstimate, netRoughness )
+    !------------------------------------------------------------------------------
+    ! 
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none 
+    class(GridProjectedKDEType) :: this
+    character(len=500), intent(in) :: outputFileName
+    doubleprecision, dimension(:)  ,intent(in) :: densityEstimateArray
+    doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
+    doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
+    doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
+    doubleprecision, dimension(:)  ,intent(in) :: nEstimate
+    doubleprecision, dimension(:)  ,intent(in) :: netRoughness
+    integer :: ix, iy, iz, n
+    integer :: outputUnit = 555
+    !------------------------------------------------------------------------------
+
+    ! Write the output file name
+    ! Add some default
+    open( outputUnit, file=outputFileName, status='replace' )
+
+    do n = 1, this%nComputeBins
+      ix = this%computeBinIds( 1, n )
+      iy = this%computeBinIds( 2, n )
+      iz = this%computeBinIds( 3, n )
+      ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
+      write(outputUnit,&
+        "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
+        ix, iy, iz,& 
+        densityEstimateArray( n ),& 
+        kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
+        kernelSigmaSupportScale(n), &
+        curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
+        nEstimate(n), netRoughness(n)
+    end do
+
+    ! Finished
+    close(outputUnit)
+
+  end subroutine prExportOptimizationVariables
+
+  ! TO BE DEPRECATED
   subroutine prExportOptimizationVariablesExtendedError( this, outputFileName, &
                   densityEstimateArray, kernelSmoothing, kernelSmoothingScale, & 
                                 kernelSmoothingShape, kernelSigmaSupportScale, &
@@ -4838,7 +4905,6 @@ contains
 
   end subroutine prExportOptimizationVariablesExtendedError
 
-
   ! TO BE DEPRECATED !
   subroutine prComputeSupportScale( this, kernelSmoothingScale, densityEstimate, &
                                             nEstimate, kernelSigmaSupportScale )
@@ -4884,5 +4950,6 @@ contains
     return
 
   end subroutine prComputeSupportScale
+
 
 end module GridProjectedKDEModule
