@@ -21,27 +21,26 @@ module GridProjectedKDEModule
   ! Default parameters
   integer         , parameter :: defaultKernelRange                     = 3
   integer         , parameter :: defaultKernelSDRange                   = 4
-  integer         , parameter :: defaultNOptLoops                       = 5
+  integer         , parameter :: defaultNOptLoops                       = 10
   logical         , parameter :: defaultDatabaseOptimization            = .true.
   logical         , parameter :: defaultLogKernelDatabase               = .true.
   doubleprecision , parameter :: defaultMaxHOverLambda                  = 15
   doubleprecision , parameter :: defaultMinHOverLambda                  = 0.3
   doubleprecision , parameter :: defaultDeltaHOverLambda                = 0.3
-  doubleprecision , parameter :: defaultRelativeErrorConvergence        = 1d-2
+  doubleprecision , parameter :: defaultRelativeErrorConvergence        = 2d-2
   doubleprecision , parameter :: defaultRelaxedRelativeErrorConvergence = 5d-2
   integer         , parameter :: defaultInitialSmoothingSelection       = 0
   doubleprecision , parameter :: defaultInitialSmoothingFactor          = 5d0
   doubleprecision , parameter :: defaultInitialSigmaFactor              = 2d0
-  doubleprecision , parameter :: defaultMaxKernelShape                  = 5d0
   logical         , parameter :: defaultAdaptGridToCoords               = .false. 
   doubleprecision , parameter :: defaultMinRelativeRoughness            = 1d-4
   doubleprecision , parameter :: defaultMinLimitRoughness               = 1d-4
-  integer         , parameter :: defaultMinRoughnessFormat              = 0
+  integer         , parameter :: defaultMinRoughnessFormat              = 3
   integer         , parameter :: defaultEffectiveWeightFormat           = 0
   integer         , parameter :: defaultBoundKernelSizeFormat           = 0
   doubleprecision , parameter :: defaultIsotropicThreshold              = 0.9
   logical         , parameter :: defaultUseGlobalSmoothing              = .false.
-  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.3d0 
+  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.5d0 
   doubleprecision , parameter :: defaultMaxSizeFactor                   = 0.5 
   doubleprecision , parameter :: defaultBorderFraction                  = 0.05 
   character(len=*), parameter :: defaultOutputFileName                  = 'gpkde.out'
@@ -125,10 +124,10 @@ module GridProjectedKDEModule
     logical                       :: useGlobalSmoothing = .false.
     logical                       :: isotropic          = .false. 
 
-    ! COULD BE USED FOR SOME FANCY FASTER RECALCULATION OF FOLLOWING 
-    ! SMOOTHING WHEN APPLIED IN SUBSEQUENT RECONSTRUCTIONS
-    logical :: firstRun  = .true. ! RECONSIDERE DEPRECATION 
-    doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0 ! TO BE DEPRECATED
+    ! Eventually could be used for calculating smoothing 
+    ! at subsequent reconstructions
+    logical :: firstRun  = .true. 
+    doubleprecision, dimension(3) :: averageKernelSmoothing = 0d0 
 
     ! Protocol for selection of initial smoothing
     integer :: initialSmoothingSelection
@@ -1547,7 +1546,7 @@ contains
         call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
 
         ! Directional roughness
-        roughness11Array( n ) = max( sum(&
+        roughness11Array( n ) = sum(&
             curvature1(&
                 gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
                 gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
@@ -1555,9 +1554,8 @@ contains
             )*gc%kernelSigmaMatrix(&
                 gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
                 gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )), &
-                this%minLimitRoughness )
-        roughness22Array( n ) = max( sum(&
+                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) ))
+        roughness22Array( n ) = sum(&
             curvature2(&
                 gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
                 gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
@@ -1565,8 +1563,7 @@ contains
             )*gc%kernelSigmaMatrix(&
                 gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
                 gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
-                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )), &
-                this%minLimitRoughness )
+                gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) ))
         ! Net roughness
         netRoughnessArray( n )  = 2d0*sum(&
             curvature12(&
@@ -2113,13 +2110,13 @@ contains
     integer         :: clockCountStart, clockCountStop, clockCountRate, clockCountMax
     doubleprecision :: elapsedTime
     !------------------------------------------------------------------------------
+
     ! Needs sanity check for input parameters !
     if ( this%reportToOutUnit ) then 
       write( this%outFileUnit, '(A)' ) ' Initializing kernels database with parameters: '
     end if 
 
     ! Default parameters
-    ! logDatabase as false
     if ( present( logKernelDatabase ) ) then 
       localLogDatabase = logKernelDatabase
     else
@@ -4680,7 +4677,6 @@ contains
             write(outputUnit,"(5I8,2es18.9e3)") outputDataId, particleGroupId, &
             ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
             this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
-            !ix, iy, iz, this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
           end do
         end do
       end do
@@ -4698,9 +4694,6 @@ contains
             write(outputUnit,"(4I8,2es18.9e3)") dataId, &
             ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
             this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
-            !write(outputUnit,"(4I8,2es18.9e3)") dataId, ix, iy, iz, &
-            !                this%densityEstimateGrid( ix, iy, iz ), &
-            !                    this%histogram%counts( ix, iy, iz ) 
           end do
         end do
       end do
@@ -4713,9 +4706,6 @@ contains
             write(outputUnit,"(3I8,2es18.9e3)") &
             ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
             this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
-            !write(outputUnit,"(3I8,2es18.9e3)") ix, iy, iz, &
-            !        this%densityEstimateGrid( ix, iy, iz ), &
-            !            this%histogram%counts( ix, iy, iz ) 
           end do
         end do
       end do
@@ -4777,8 +4767,6 @@ contains
   end subroutine prExportOptimizationVariablesExtended
 
 
-
-  ! TO BE DEPRECATED
   subroutine prExportDensity( this, outputFileName )
     !------------------------------------------------------------------------------
     ! 
@@ -4802,7 +4790,8 @@ contains
         do ix = 1, this%nBins(1)
           if ( this%densityEstimateGrid( ix, iy, iz ) .le. 0d0 ) cycle
           ! cellids, density, histogram
-          write(outputUnit,"(I8,I8,I8,2es18.9e3)") ix, iy, iz, & 
+          write(outputUnit,"(3I8,2es18.9e3)")& 
+            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
             this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
         end do
       end do
@@ -4812,99 +4801,6 @@ contains
     close(outputUnit)
 
   end subroutine prExportDensity
-
-  !! TO BE DEPRECATED
-  !subroutine prExportOptimizationVariables( this, outputFileName  , &
-  !  densityEstimateArray, kernelSmoothing, kernelSigmaSupportScale, &
-  !  curvatureBandwidth, nEstimate, netRoughness )
-  !  !------------------------------------------------------------------------------
-  !  ! 
-  !  !------------------------------------------------------------------------------
-  !  ! Specifications 
-  !  !------------------------------------------------------------------------------
-  !  implicit none 
-  !  class(GridProjectedKDEType) :: this
-  !  character(len=500), intent(in) :: outputFileName
-  !  doubleprecision, dimension(:)  ,intent(in) :: densityEstimateArray
-  !  doubleprecision, dimension(:,:),intent(in) :: kernelSmoothing 
-  !  doubleprecision, dimension(:)  ,intent(in) :: kernelSigmaSupportScale
-  !  doubleprecision, dimension(:,:),intent(in) :: curvatureBandwidth
-  !  doubleprecision, dimension(:)  ,intent(in) :: nEstimate
-  !  doubleprecision, dimension(:)  ,intent(in) :: netRoughness
-  !  integer :: ix, iy, iz, n
-  !  integer :: outputUnit = 555
-  !  !------------------------------------------------------------------------------
-
-  !  ! Write the output file name
-  !  ! Add some default
-  !  open( outputUnit, file=outputFileName, status='replace' )
-
-  !  do n = 1, this%nComputeBins
-  !    ix = this%computeBinIds( 1, n )
-  !    iy = this%computeBinIds( 2, n )
-  !    iz = this%computeBinIds( 3, n )
-  !    ! THIS FORMAT MAY BE DYNAMIC ACCORDING TO THE TOTAL NUMBER OF PARTICLES
-  !    write(outputUnit,&
-  !      "(I6,I6,I6,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8,F16.8)") &
-  !      ix, iy, iz,& 
-  !      densityEstimateArray( n ),& 
-  !      kernelSmoothing(1,n), kernelSmoothing(2,n), kernelSmoothing(3,n),& 
-  !      kernelSigmaSupportScale(n), &
-  !      curvatureBandwidth(1,n), curvatureBandwidth(2,n), curvatureBandwidth(3,n), &
-  !      nEstimate(n), netRoughness(n)
-  !  end do
-
-  !  ! Finished
-  !  close(outputUnit)
-
-  !end subroutine prExportOptimizationVariables
-
-
-  !! TO BE DEPRECATED !
-  !subroutine prComputeSupportScale( this, kernelSmoothingScale, densityEstimate, &
-  !                                          nEstimate, kernelSigmaSupportScale )
-  !  !------------------------------------------------------------------------------
-  !  ! Smoothing scale for the support kernel
-  !  ! 
-  !  !   - Eq. 23 in Sole-Mari et al. (2019) 
-  !  !------------------------------------------------------------------------------
-  !  ! Specifications 
-  !  !------------------------------------------------------------------------------
-  !  implicit none
-  !  class( GridProjectedKDEType ) :: this
-  !  doubleprecision, dimension(:), intent(in)    :: kernelSmoothingScale
-  !  doubleprecision, dimension(:), intent(in)    :: densityEstimate
-  !  doubleprecision, dimension(:), intent(in)    :: nEstimate
-  !  doubleprecision, dimension(:), intent(inout) :: kernelSigmaSupportScale
-  !  integer :: maxDimId
-  !  !------------------------------------------------------------------------------
-
-  !  ! Reset array
-  !  kernelSigmaSupportScale = 0d0
-
-  !  ! Compute
-  !  where ( densityEstimate .ne. 0d0 ) 
-  !    kernelSigmaSupportScale = nEstimate**(0.5)*kernelSmoothingScale**( 1d0 + 0.25*nDim )/&
-  !                   ( ( 4d0*densityEstimate )**0.25 )*this%supportDimensionConstant
-  !  end where
-  !  
-  !  ! Limit support size based on limits imposed by domain  
-  !  ! This kernel is isotropic so get the most restrictive condition
-  !  maxDimId = minloc( this%maxKernelSize, dim=1, mask=(this%maxKernelSize.gt.0d0) )
-  !  where( kernelSigmaSupportScale.gt.this%maxKernelSize(maxDimId) ) 
-  !    kernelSigmaSupportScale = this%maxKernelSize(maxDimId)
-  !  end where
-
-  !  ! Verify
-  !  maxDimId = maxloc( this%minKernelSize, dim=1, mask=(this%minKernelSize.gt.0d0) )
-  !  where( kernelSigmaSupportScale.lt.this%minKernelSize(maxDimId) ) 
-  !    kernelSigmaSupportScale = this%minKernelSize(maxDimId)
-  !  end where
-
-  !  ! Done
-  !  return
-
-  !end subroutine prComputeSupportScale
 
 
 end module GridProjectedKDEModule
