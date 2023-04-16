@@ -39,6 +39,7 @@ For details about the configuration of input files please refer to the program [
 A set of possible use cases of the reconstruction module are included as example files in this repository. The currently available simulations include:
 
 - [1D Gaussian distribution](examples/ex01_1dnormal/)
+- [2D Heterogeneous distribution](examples/ex02_2dhet/)
 
 ## Compilation 
 Program includes a `make/Makefile` for the `gfortran` compiler.
