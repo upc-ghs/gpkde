@@ -563,21 +563,20 @@ contains
                     xKernelSpan, yKernelSpan, zKernelSpan, &
                           boundLocX, boundLocY, boundLocZ, &
                     isBoundaryX, isBoundaryY, isBoundaryZ, & 
-                          boundDirX, boundDirY, boundDirZ, &
-                             dimensionMask = dimensionMask )
+                          boundDirX, boundDirY, boundDirZ  )
    end if  
 
 
   end subroutine prComputeGridSpans
 
 
+  ! OUTDATED, POSSIBLY DEPRECATED
   subroutine prVerifyBoundary( this, gridIndexes, gridShape,    &
                               xGridSpan, yGridSpan, zGridSpan,  &
                          xKernelSpan, yKernelSpan, zKernelSpan, & 
                                boundLocX, boundLocY, boundLocZ, &
                          isBoundaryX, isBoundaryY, isBoundaryZ, & 
-                               boundDirX, boundDirY, boundDirZ, & 
-                                                  dimensionMask )
+                               boundDirX, boundDirY, boundDirZ  ) 
     !------------------------------------------------------------------------------
     !  
     !------------------------------------------------------------------------------
@@ -597,7 +596,6 @@ contains
     integer, intent(in) :: boundDirY
     integer, intent(in) :: boundDirZ
     integer, dimension(:), allocatable :: kernelShape
-    integer, dimension(3), intent(in) :: dimensionMask
     integer :: lenb
     !------------------------------------------------------------------------------
 
@@ -613,73 +611,67 @@ contains
     ! Kernel reflection ! 
 
     ! X
-    !if ( dimensionMask(1) .eq. 1 ) then 
-      if ( isBoundaryX ) then 
-        ! Do the process 
-        select case( boundDirX ) 
-          case(1)
-            ! WEST
-            lenb = boundLocX
-            this%bmatrix( boundLocX + 1: boundLocX + lenb, :, :) = &
-            this%bmatrix( boundLocX + 1: boundLocX + lenb, :, :) + &
-            this%bmatrix( boundLocX:1:-1, :, :)
-            this%bmatrix( :boundLocX, :, :) = 0
-          case(2)
-            ! EAST 
-            lenb = kernelShape(1) - boundLocX + 1 
-            this%bmatrix( boundLocX - lenb: boundLocX - 1, :, :) = &
-            this%bmatrix( boundLocX - lenb: boundLocX - 1, :, :) + &
-            this%bmatrix( kernelShape(1): boundLocX :-1, :, :)
-            this%bmatrix( boundLocX:, :, :) = 0
-        end select    
-      end if 
-    !end if 
+    if ( isBoundaryX ) then 
+      ! Do the process 
+      select case( boundDirX ) 
+        case(1)
+          ! WEST
+          lenb = boundLocX
+          this%bmatrix( boundLocX + 1: boundLocX + lenb, :, :) = &
+          this%bmatrix( boundLocX + 1: boundLocX + lenb, :, :) + &
+          this%bmatrix( boundLocX:1:-1, :, :)
+          this%bmatrix( :boundLocX, :, :) = 0
+        case(2)
+          ! EAST 
+          lenb = kernelShape(1) - boundLocX + 1 
+          this%bmatrix( boundLocX - lenb: boundLocX - 1, :, :) = &
+          this%bmatrix( boundLocX - lenb: boundLocX - 1, :, :) + &
+          this%bmatrix( kernelShape(1): boundLocX :-1, :, :)
+          this%bmatrix( boundLocX:, :, :) = 0
+      end select    
+    end if 
 
     ! Y
-    !if( dimensionMask(2) .eq. 1 ) then 
-      if ( isBoundaryY ) then 
-        ! Do the process 
-        select case( boundDirY ) 
-          case(1)
-            ! SOUTH
-            lenb = boundLocY
-            this%bmatrix( :, boundLocY + 1: boundLocY + lenb, :) = &
-            this%bmatrix( :, boundLocY + 1: boundLocY + lenb, :) + &
-            this%bmatrix( :, boundLocY:1:-1, :)
-            this%bmatrix( :, :boundLocY, :) = 0
-          case(2)
-            ! NORTH
-            lenb = kernelShape(2) - boundLocY + 1 
-            this%bmatrix( :, boundLocY - lenb: boundLocY - 1, :) = &
-            this%bmatrix( :, boundLocY - lenb: boundLocY - 1, :) + &
-            this%bmatrix( :, kernelShape(2): boundLocY :-1, :)
-            this%bmatrix( :, boundLocY:, :) = 0
-        end select    
-      end if
-    !end if 
+    if ( isBoundaryY ) then 
+      ! Do the process 
+      select case( boundDirY ) 
+        case(1)
+          ! SOUTH
+          lenb = boundLocY
+          this%bmatrix( :, boundLocY + 1: boundLocY + lenb, :) = &
+          this%bmatrix( :, boundLocY + 1: boundLocY + lenb, :) + &
+          this%bmatrix( :, boundLocY:1:-1, :)
+          this%bmatrix( :, :boundLocY, :) = 0
+        case(2)
+          ! NORTH
+          lenb = kernelShape(2) - boundLocY + 1 
+          this%bmatrix( :, boundLocY - lenb: boundLocY - 1, :) = &
+          this%bmatrix( :, boundLocY - lenb: boundLocY - 1, :) + &
+          this%bmatrix( :, kernelShape(2): boundLocY :-1, :)
+          this%bmatrix( :, boundLocY:, :) = 0
+      end select    
+    end if
 
     ! Z 
-    !if ( dimensionMask(3) .eq. 1 ) then 
-      if ( isBoundaryZ ) then 
-        ! Do the process 
-        select case( boundDirZ ) 
-          case(1)
-            ! BOTTOM
-            lenb = boundLocZ
-            this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenb) = &
-            this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenb) + &
-            this%bmatrix( :, :, boundLocZ:1:-1)
-            this%bmatrix( :, :, :boundLocZ) = 0
-          case(2)
-            ! TOP
-            lenb = kernelShape(3) - boundLocZ + 1 
-            this%bmatrix( :, :, boundLocZ - lenb: boundLocZ - 1) = &
-            this%bmatrix( :, :, boundLocZ - lenb: boundLocZ - 1) + &
-            this%bmatrix( :, :, kernelShape(3): boundLocZ :-1)
-            this%bmatrix( :, :, boundLocZ:) = 0
-        end select
-      end if 
-    !end if 
+    if ( isBoundaryZ ) then 
+      ! Do the process 
+      select case( boundDirZ ) 
+        case(1)
+          ! BOTTOM
+          lenb = boundLocZ
+          this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenb) = &
+          this%bmatrix( :, :, boundLocZ + 1: boundLocZ + lenb) + &
+          this%bmatrix( :, :, boundLocZ:1:-1)
+          this%bmatrix( :, :, :boundLocZ) = 0
+        case(2)
+          ! TOP
+          lenb = kernelShape(3) - boundLocZ + 1 
+          this%bmatrix( :, :, boundLocZ - lenb: boundLocZ - 1) = &
+          this%bmatrix( :, :, boundLocZ - lenb: boundLocZ - 1) + &
+          this%bmatrix( :, :, kernelShape(3): boundLocZ :-1)
+          this%bmatrix( :, :, boundLocZ:) = 0
+      end select
+    end if 
 
 
     !if ( this%shouldIntegrateOne ) then 
@@ -790,14 +782,13 @@ contains
       ! this%bmatrix in order to avoid rewriting
       ! matrix at databases. 
       ! Transpose and correct by boundaries if any.
-      this%bmatrix = prComputeXYTranspose( this, this%matrix )
+      this%bmatrix = prComputeXYTranspose( this%matrix )
       call prVerifyBoundary( this, gridIndexes, gridShape, &
                           xGridSpan, yGridSpan, zGridSpan, &
                     xKernelSpan, yKernelSpan, zKernelSpan, &
                           boundLocX, boundLocY, boundLocZ, &
                     isBoundaryX, isBoundaryY, isBoundaryZ, & 
-                          boundDirX, boundDirY, boundDirZ, &
-                             dimensionMask = dimensionMask )
+                          boundDirX, boundDirY, boundDirZ  )
     end if 
 
 
@@ -912,14 +903,13 @@ contains
 
 
   ! ComputeXYTranspose
-  function prComputeXYTranspose( this, sourceMatrix ) result( transposedMatrix )
+  function prComputeXYTranspose( sourceMatrix ) result( transposedMatrix )
     !------------------------------------------------------------------------------
     !
     !------------------------------------------------------------------------------
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none 
-    class( KernelType ) :: this
     doubleprecision, dimension(:,:,:), intent(in)  :: sourceMatrix
     doubleprecision, dimension(:,:,:), allocatable :: transposedMatrix
     ! local

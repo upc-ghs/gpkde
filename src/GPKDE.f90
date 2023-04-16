@@ -835,7 +835,8 @@ program GPKDE
      useGlobalSmoothing     = useGlobalSmoothing, &  
      skipErrorConvergence   = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence,  &
-     exportOptimizationVariables = exportOptimizationVariables &
+     exportOptimizationVariables = exportOptimizationVariables,  &
+     persistentKernelDatabase = .false. &
     )
   case(1)
     ! Weighted reconstruction
@@ -849,12 +850,16 @@ program GPKDE
      useGlobalSmoothing = useGlobalSmoothing, &  
      skipErrorConvergence = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence, &
-     exportOptimizationVariables = exportOptimizationVariables &
+     exportOptimizationVariables = exportOptimizationVariables, &
+     persistentKernelDatabase = .false. &
     )
   end select
   call system_clock(clockCountStop, clockCountRate, clockCountMax)
 
   ! Deallocate
+  deallocate( dataCarrier )
+  if ( allocated( weightsCarrier ) ) deallocate( weightsCarrier ) 
+  call gpkdeObj%Reset()
   if ( allocated( gpkdeObj ) ) deallocate( gpkdeObj )
 
   ! Exit 

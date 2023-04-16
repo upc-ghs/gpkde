@@ -144,7 +144,6 @@ contains
   end subroutine prInitialize
 
 
-  ! NEEDS UPDATE
   subroutine prReset( this )
     !------------------------------------------------------------------------------
     ! 
@@ -156,16 +155,31 @@ contains
     class(HistogramType) :: this
     !------------------------------------------------------------------------------
 
-    this%nBins       = 0
-    this%nActiveBins = 0 
-    this%binSize     = 0d0
-    this%binVolume   = 0d0
-
     if( allocated(this%counts) ) deallocate( this%counts )
+    this%domainGridSize = 0
+    this%gridSize       = 0
+    this%nBins          => null()
+    this%binSize        = 0d0
+    this%binVolume      = 0d0
+    this%binDistance    = 0d0
     if( allocated(this%activeBinIds) ) deallocate( this%activeBinIds ) 
-    if( allocated(this%boundingBoxBinIds) ) deallocate( this%boundingBoxBinIds ) 
+    this%nActiveBins = 0 
+    if( allocated(this%boundingBoxBinIds) ) deallocate( this%boundingBoxBinIds )
+    this%nBBoxBins = 0
+    this%domainOrigin = 0d0
+    this%gridOrigin = 0d0
+    this%origin => null()
+    this%adaptGridToCoords = .false.
     if( allocated( this%dimensions) ) deallocate( this%dimensions) 
-
+    this%nDim = 3
+    this%nPoints = 0
+    this%nEffective = 0d0
+    this%totalMass = 0d0
+    this%effectiveMass = 0d0
+    this%isWeighted = .false.
+    this%maxCount = 0
+    this%maxRawDensity = 0d0
+    this%effectiveWeightFormat = 0
 
   end subroutine prReset
 
