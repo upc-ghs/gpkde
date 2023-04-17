@@ -3751,6 +3751,16 @@ contains
         ! At this stage, pointers to dims 1 and 2 were already assigned
         ! If bounded kernels, limit shape factor to something that avoid overcoming limit 
         if ( this%boundKernels ) then   
+         !$omp parallel do schedule(dynamic,1) & 
+         !$omp default( none )                 & 
+         !$omp shared( this )                  & 
+         !$omp shared( roughness11Array )      & 
+         !$omp shared( roughness22Array )      &
+         !$omp shared( kernelSmoothingShape )  &
+         !$omp shared( kernelSmoothingScale )  &
+         !$omp shared( netRoughness )          &
+         !$omp private( normShape )            &
+         !$omp private( n ) 
          do n=1,this%nComputeBins
            if ( (roughness11Array(n).eq.0d0).or.(roughness22Array(n).eq.0d0) ) then 
              kernelSmoothingShape(this%idDim1,n) = 1d0
@@ -3770,7 +3780,18 @@ contains
            kernelSmoothingShape(this%idDim1,n) = kernelSmoothingShape(this%idDim1,n)/normShape
            kernelSmoothingShape(this%idDim2,n) = kernelSmoothingShape(this%idDim2,n)/normShape
          end do
+         !$omp end parallel do
         else
+         !$omp parallel do schedule(dynamic,1) & 
+         !$omp default( none )                 & 
+         !$omp shared( this )                  & 
+         !$omp shared( roughness11Array )      & 
+         !$omp shared( roughness22Array )      &
+         !$omp shared( kernelSmoothingShape )  &
+         !$omp shared( kernelSmoothingScale )  &
+         !$omp shared( netRoughness )          &
+         !$omp private( normShape )            &
+         !$omp private( n ) 
          do n=1,this%nComputeBins
            if ( (roughness11Array(n).eq.0d0).or.(roughness22Array(n).eq.0d0) ) then 
              kernelSmoothingShape(this%idDim1,n) = 1d0
@@ -3789,6 +3810,7 @@ contains
            kernelSmoothingShape(this%idDim1,n) = kernelSmoothingShape(this%idDim1,n)/normShape
            kernelSmoothingShape(this%idDim2,n) = kernelSmoothingShape(this%idDim2,n)/normShape
          end do
+         !$omp end parallel do
         end if
       case(3)
         if ( this%boundKernels ) then
@@ -3829,6 +3851,16 @@ contains
          end do
          !$omp end parallel do 
         else
+         !$omp parallel do schedule(dynamic,1) & 
+         !$omp default( none )                 & 
+         !$omp shared( roughnessXXArray )      & 
+         !$omp shared( roughnessYYArray )      &
+         !$omp shared( roughnessZZArray )      &
+         !$omp shared( kernelSmoothingShape )  &
+         !$omp shared( kernelSmoothingScale )  &
+         !$omp shared( netRoughness )          &
+         !$omp private( normShape )            &
+         !$omp private( n ) 
          do n=1,this%nComputeBins
            if (&
              (roughnessXXArray(n).eq.0d0).or.&
@@ -3851,6 +3883,7 @@ contains
            kernelSmoothingShape(2,n) = kernelSmoothingShape(2,n)/normShape
            kernelSmoothingShape(3,n) = kernelSmoothingShape(3,n)/normShape
          end do
+         !$omp end parallel do 
         end if
       end select
 
