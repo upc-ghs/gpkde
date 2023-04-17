@@ -2,10 +2,14 @@
 *.mod
 *.swp
 *.swo
-make/objtemp
+make/objtemp*
 make/gpkde*
 make/*.csv
 make/*output*
 *.png*
 *.out*
 *.log*
+msvs/Release*
+msvs/Debug*
+msvs/x64*
+msvs/x86*
