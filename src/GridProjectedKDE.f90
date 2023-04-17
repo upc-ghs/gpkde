@@ -3743,7 +3743,6 @@ contains
     kernelSmoothing(:,:) = 0d0
     kernelSmoothingShape(:,:) = 1d0
     if ( .not. this%isotropic ) then 
-      ! Do it in parallel ?
       select case(nDim)
       case(1)
         continue
@@ -3853,6 +3852,7 @@ contains
         else
          !$omp parallel do schedule(dynamic,1) & 
          !$omp default( none )                 & 
+         !$omp shared( this )                  &
          !$omp shared( roughnessXXArray )      & 
          !$omp shared( roughnessYYArray )      &
          !$omp shared( roughnessZZArray )      &
