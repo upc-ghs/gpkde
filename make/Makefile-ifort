@@ -18,7 +18,6 @@ ${SOURCEDIR1}
 # Define the Fortran compile flags
 FC = ifort
 FFLAGS = -Ofast -traceback -qopenmp -ipo -fpe0 -fpp -no-heap-arrays
-#FFLAGS = -Ofast -traceback -qopenmp -ipo -fpe0 -fpp -heap-arrays 1024
 
 # Define the C compile flags
 CC = gcc
