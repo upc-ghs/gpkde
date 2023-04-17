@@ -3791,7 +3791,18 @@ contains
          end do
         end if
       case(3)
-        if ( this%boundKernels ) then   
+        if ( this%boundKernels ) then
+         !$omp parallel do schedule(dynamic,1) & 
+         !$omp default( none )                 & 
+         !$omp shared( this )                  &
+         !$omp shared( roughnessXXArray )      & 
+         !$omp shared( roughnessYYArray )      &
+         !$omp shared( roughnessZZArray )      &
+         !$omp shared( kernelSmoothingShape )  &
+         !$omp shared( kernelSmoothingScale )  &
+         !$omp shared( netRoughness )          &
+         !$omp private( normShape )            &
+         !$omp private( n ) 
          do n=1,this%nComputeBins
            if (&
              (roughnessXXArray(n).eq.0d0).or.&
@@ -3816,6 +3827,7 @@ contains
            kernelSmoothingShape(2,n) = kernelSmoothingShape(2,n)/normShape
            kernelSmoothingShape(3,n) = kernelSmoothingShape(3,n)/normShape
          end do
+         !$omp end parallel do 
         else
          do n=1,this%nComputeBins
            if (&
