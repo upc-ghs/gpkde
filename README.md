@@ -42,7 +42,12 @@ A set of possible use cases of the reconstruction module are included as example
 - [2D Heterogeneous distribution](examples/ex02_2dhet/)
 
 ## Compilation 
-Program includes a `make/Makefile` for the `gfortran` compiler.
+Repository includes two makefiles at the folder `make`:
+
+- `Makefile`: for the `gfortran` compiler, with compilation verified for `gfortran>=12`.
+- `Makefile-ifort`: for the `ifort` compiler, with compilation verified for `ifort@2021.9.0`.
+
+For users familiarized with Visual Studio, the folder `msvs` contains the project/solution files, and a Windows binary/executable is available at the folder `bin/`.
 
 ## License
 MIT License
@@ -50,5 +55,5 @@ MIT License
 ## Resources
 * [gfortran](https://gcc.gnu.org/wiki/GFortran)
 * [OpenMP](https://www.openmp.org/)
+* [Intel oneApi HPC toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/hpc-toolkit.html)
 * [MIT License](https://mit-license.org/)
-* [modpath-rw](https://github.com/upc-ghs/modpath-rw)
