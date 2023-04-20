@@ -681,6 +681,16 @@ program GPKDE
            write(logUnit,'(a)') 'Effective weight obtained as the average over particles.'
          end if
          effectiveWeightFormat = n
+       case(2)
+         if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'Histogram calculates both counts and weights, bandwidth selected with counts.'
+         end if
+         effectiveWeightFormat = n
+       case(3)
+         if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'Histogram calculates both counts and weights, bandwidth selected with effective counts.'
+         end if
+         effectiveWeightFormat = n
        case default
          if ( logUnit.gt.0 ) then 
            write(logUnit,'(a)') 'Given effective weight format is not available. Stop.'

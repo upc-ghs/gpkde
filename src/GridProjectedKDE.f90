@@ -15,8 +15,8 @@ module GridProjectedKDEModule
   !----------------------------------------------------------------------------
 
   ! Numerical Parameters
-  doubleprecision, parameter :: pi           = 4.d0*atan(1.d0)
-  doubleprecision, parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
+  doubleprecision , parameter :: pi           = 4.d0*atan(1.d0)
+  doubleprecision , parameter :: sqrtEightPi  = sqrt(8.d0*4.d0*atan(1.d0))
 
   ! Default parameters
   integer         , parameter :: defaultKernelRange                     = 3
@@ -40,7 +40,7 @@ module GridProjectedKDEModule
   integer         , parameter :: defaultBoundKernelSizeFormat           = 0
   doubleprecision , parameter :: defaultIsotropicThreshold              = 0.9
   logical         , parameter :: defaultUseGlobalSmoothing              = .false.
-  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.5d0 
+  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.2d0 
   doubleprecision , parameter :: defaultMaxSizeFactor                   = 0.5 
   doubleprecision , parameter :: defaultBorderFraction                  = 0.05 
   character(len=*), parameter :: defaultOutputFileName                  = 'gpkde.out'
@@ -56,19 +56,19 @@ module GridProjectedKDEModule
   private
 
   ! Arrays, related to active bins
-  doubleprecision   , dimension(:,:,:), allocatable, target :: densityGrid
-  doubleprecision   , dimension(:,:), allocatable           :: kernelSmoothing
-  doubleprecision   , dimension(:)  , allocatable           :: kernelSmoothingScale
-  doubleprecision   , dimension(:,:), allocatable           :: kernelSmoothingShape
-  doubleprecision   , dimension(:)  , allocatable           :: kernelSigmaSupportScale
-  doubleprecision   , dimension(:,:), allocatable           :: curvatureBandwidth
-  doubleprecision   , dimension(:)  , allocatable           :: densityEstimateArray 
-  doubleprecision   , dimension(:)  , allocatable           :: nEstimateArray
-  doubleprecision   , dimension(:)  , allocatable, target   :: roughnessXXArray
-  doubleprecision   , dimension(:)  , allocatable, target   :: roughnessYYArray
-  doubleprecision   , dimension(:)  , allocatable, target   :: roughnessZZArray
-  doubleprecision   , dimension(:)  , allocatable           :: netRoughnessArray
-  type(GridCellType), dimension(:)  , allocatable, target   :: activeGridCellsMod
+  doubleprecision   , dimension(:,:,:), allocatable, target   :: densityGrid
+  doubleprecision   , dimension(:,:)  , allocatable           :: kernelSmoothing
+  doubleprecision   , dimension(:)    , allocatable           :: kernelSmoothingScale
+  doubleprecision   , dimension(:,:)  , allocatable           :: kernelSmoothingShape
+  doubleprecision   , dimension(:)    , allocatable           :: kernelSigmaSupportScale
+  doubleprecision   , dimension(:,:)  , allocatable           :: curvatureBandwidth
+  doubleprecision   , dimension(:)    , allocatable           :: densityEstimateArray 
+  doubleprecision   , dimension(:)    , allocatable           :: nEstimateArray
+  doubleprecision   , dimension(:)    , allocatable, target   :: roughnessXXArray
+  doubleprecision   , dimension(:)    , allocatable, target   :: roughnessYYArray
+  doubleprecision   , dimension(:)    , allocatable, target   :: roughnessZZArray
+  doubleprecision   , dimension(:)    , allocatable           :: netRoughnessArray
+  type(GridCellType), dimension(:)    , allocatable, target   :: activeGridCellsMod
   
   ! Main object
   type, public :: GridProjectedKDEType
@@ -2695,11 +2695,8 @@ contains
       this%histogram%counts = 0
 
       ! Allocate matrix for density 
-      !if ( allocated( this%densityEstimateGrid ) ) deallocate( this%densityEstimateGrid )
-      !allocate( this%densityEstimateGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
       if ( allocated( densityGrid ) ) deallocate( densityGrid )
       allocate( densityGrid(this%nBins(1), this%nBins(2), this%nBins(3)) )
-      !this%densityEstimateGrid => densityGrid
 
       if ( this%reportToOutUnit ) then
        write(this%outFileUnit, * ) '  Allocated size    :', this%nBins
@@ -2708,10 +2705,27 @@ contains
 
     end if
 
-
+    ! Compute histogram
     if ( locWeightedHistogram ) then 
-      ! Cummulative histogram-like quantities
-      call this%histogram%ComputeCountsWeighted( dataPoints, weights, locExactPoint )
+      select case (this%histogram%effectiveWeightFormat)
+      case (2)
+        ! This format is mostly for analysis.
+        ! In this case histogram%counts store the number of points and wcounts the weights
+        if (.not.allocated(this%histogram%wcounts)) then
+          allocate(this%histogram%wcounts, mold=this%histogram%counts)
+        end if
+        call this%histogram%ComputeCountsAndWeights( dataPoints, weights, locExactPoint )
+      case (3)
+        ! This format is mostly for analysis.
+        if (.not.allocated(this%histogram%wcounts)) then
+          allocate(this%histogram%wcounts, mold=this%histogram%counts)
+        end if
+        call this%histogram%ComputeEffectiveCountsAndWeights( dataPoints, weights, locExactPoint )
+      case default
+        ! This is the standard/default format
+        ! Cummulative histogram-like quantities
+        call this%histogram%ComputeCountsWeighted( dataPoints, weights, locExactPoint )
+      end select
     else
       ! Histogram quantities
       call this%histogram%ComputeCounts( dataPoints, locExactPoint )
@@ -2756,6 +2770,8 @@ contains
        write(this%outFileUnit, *     ) '  Mean raw density  :',& 
          sum(this%histogram%counts)/this%histogram%binVolume/this%nComputeBins
        write(this%outFileUnit, *     ) '  Active bins       :', this%nComputeBins
+       write(this%outFileUnit, *     ) '  NPoints           :', this%histogram%nPoints
+       write(this%outFileUnit, *     ) '  NEffective        :', this%histogram%nEffective
        write(this%outFileUnit, *  )
      end if 
     end if 
@@ -3418,12 +3434,123 @@ contains
       write( this%outFileUnit, '(A)' ) '    - Max loops '
     end if
 
-    ! Final density estimate for weighted histograms
-    if ( this%histogram%isWeighted ) then 
-      ! Fix histogram
+    ! Final density estimate for weighted histograms, scaling by effective mass
+    if ( (this%histogram%isWeighted).and.(this%histogram%effectiveWeightFormat.lt.2) ) then 
+
+      ! The standard format, where the effective histogram is transformed 
+      ! back to mass histogram using the effective weight 
       this%histogram%counts = this%histogram%counts*this%histogram%effectiveMass
-      ! Fix density
       densityEstimateGrid = densityEstimateGrid*this%histogram%effectiveMass
+
+    else if ( (this%histogram%isWeighted).and.(this%histogram%effectiveWeightFormat.eq.2) ) then
+
+      ! A very specific format, where the histogram stored both the count of 
+      ! points and cummulative weights, mostly for analysis purposes. 
+      ! A last reconstruction of the weighted histogram is performed 
+      ! using the kernel smoothing determined from the count of particles
+
+      densityEstimateGrid = 0d0
+      densityEstimateArray = 0d0
+      !$omp parallel do schedule( dynamic, 1 )  &
+      !$omp default( none )                     &
+      !$omp shared( this )                      &
+      !$omp shared( activeGridCells )           & 
+      !$omp shared( kernelSmoothing )           & 
+      !$omp reduction( +: densityEstimateGrid ) & 
+      !$omp firstprivate( kernel )              & 
+      !$omp private( n )                        & 
+      !$omp private( gc )                        
+      do n = 1, this%nComputeBins
+
+        ! Assign pointer 
+        gc => activeGridCells(n)
+
+        ! Set kernel
+        call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
+
+        ! Compute estimate
+        densityEstimateGrid(                         &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) = densityEstimateGrid(                   &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) + this%histogram%wcounts(                &  ! Notice histogram%wcounts !
+              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                   gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
+                   gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
+                   gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
+          )
+
+        !! Cannot be done here ! Reduction !
+        ! Assign into array   
+        !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+      end do
+      !$omp end parallel do
+      densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
+      ! Transfer grid density to array ( not really needed for this case )
+      do n = 1, this%nComputeBins
+        gc => activeGridCells(n)
+        densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+      end do
+
+    else if ( (this%histogram%isWeighted).and.(this%histogram%effectiveWeightFormat.eq.3) ) then
+
+      ! A very specific format, where the histogram stored both the count of 
+      ! points and cummulative weights, mostly for analysis purposes. 
+      ! A last reconstruction of the weighted histogram is performed 
+      ! using the kernel smoothing determined from the effective localy 
+      ! count of particles
+
+      densityEstimateGrid = 0d0
+      densityEstimateArray = 0d0
+      !$omp parallel do schedule( dynamic, 1 )  &
+      !$omp default( none )                     &
+      !$omp shared( this )                      &
+      !$omp shared( activeGridCells )           & 
+      !$omp shared( kernelSmoothing )           & 
+      !$omp reduction( +: densityEstimateGrid ) & 
+      !$omp firstprivate( kernel )              & 
+      !$omp private( n )                        & 
+      !$omp private( gc )                        
+      do n = 1, this%nComputeBins
+
+        ! Assign pointer 
+        gc => activeGridCells(n)
+
+        ! Set kernel
+        call this%SetKernel( gc, kernel, kernelSmoothing(:,n) ) 
+
+        ! Compute estimate
+        densityEstimateGrid(                         &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) = densityEstimateGrid(                   &
+              gc%kernelXGSpan(1):gc%kernelXGSpan(2), &
+              gc%kernelYGSpan(1):gc%kernelYGSpan(2), & 
+              gc%kernelZGSpan(1):gc%kernelZGSpan(2)  & 
+          ) + this%histogram%wcounts(                &  ! Notice histogram%wcounts !
+              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelMatrix(&
+                   gc%kernelXMSpan(1):gc%kernelXMSpan(2), &
+                   gc%kernelYMSpan(1):gc%kernelYMSpan(2), & 
+                   gc%kernelZMSpan(1):gc%kernelZMSpan(2)  &
+          )
+
+        !! Cannot be done here ! Reduction !
+        ! Assign into array   
+        !densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+      end do
+      !$omp end parallel do
+      densityEstimateGrid = densityEstimateGrid/this%histogram%binVolume
+      ! Transfer grid density to array ( not really needed for this case )
+      do n = 1, this%nComputeBins
+        gc => activeGridCells(n)
+        densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+      end do
+
     end if 
 
     ! Clean

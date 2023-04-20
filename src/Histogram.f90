@@ -12,15 +12,16 @@ module HistogramModule
   type, public :: HistogramType
     ! Properties
     doubleprecision, dimension(:,:,:), allocatable :: counts 
-    integer, dimension(3)                          :: domainGridSize
-    integer, dimension(3)                          :: gridSize
-    integer, dimension(:), pointer                 :: nBins
+    doubleprecision, dimension(:,:,:), allocatable :: wcounts 
+    integer        , dimension(3)                  :: domainGridSize
+    integer        , dimension(3)                  :: gridSize
+    integer        , dimension(:), pointer         :: nBins
     doubleprecision, dimension(3)                  :: binSize
     doubleprecision                                :: binVolume
     doubleprecision                                :: binDistance
-    integer, dimension(:,:), allocatable           :: activeBinIds
+    integer        , dimension(:,:), allocatable   :: activeBinIds
     integer                                        :: nActiveBins
-    integer, dimension(:,:), allocatable           :: boundingBoxBinIds
+    integer        , dimension(:,:), allocatable   :: boundingBoxBinIds
     integer                                        :: nBBoxBins 
     doubleprecision, dimension(3)                  :: domainOrigin ! of the reconstruction grid 
     doubleprecision, dimension(3)                  :: gridOrigin   ! while allocating from dataset
@@ -38,13 +39,16 @@ module HistogramModule
   ! HistogramType contains
   contains
     ! Procedures
-    procedure :: Initialize            => prInitialize
-    procedure :: Reset                 => prReset
-    procedure :: ComputeCounts         => prComputeCounts
-    procedure :: ComputeCountsWeighted => prComputeCountsWeighted
-    procedure :: Export                => prExport
-    procedure :: ComputeActiveBinIds   => prComputeActiveBinIds
-    procedure :: ComputeBoundingBox    => prComputeBoundingBox
+    procedure :: Initialize              => prInitialize
+    procedure :: Reset                   => prReset
+    procedure :: ComputeCounts           => prComputeCounts
+    procedure :: ComputeCountsWeighted   => prComputeCountsWeighted
+    procedure :: ComputeCountsAndWeights => prComputeCountsAndWeights
+    procedure :: ComputeEffectiveCountsAndWeights => prComputeEffectiveCountsAndWeights
+    procedure :: ComputeActiveBinIds     => prComputeActiveBinIds
+    ! Potentially deprecated
+    procedure :: Export                  => prExport
+    procedure :: ComputeBoundingBox      => prComputeBoundingBox
   end type 
 
 ! HistogramModule contains
@@ -141,6 +145,7 @@ contains
       this%gridSize = this%domainGridSize
     end if 
 
+
   end subroutine prInitialize
 
 
@@ -155,7 +160,8 @@ contains
     class(HistogramType) :: this
     !------------------------------------------------------------------------------
 
-    if( allocated(this%counts) ) deallocate( this%counts )
+    if( allocated(this%counts )) deallocate( this%counts  )
+    if( allocated(this%wcounts)) deallocate( this%wcounts )
     this%domainGridSize = 0
     this%gridSize       = 0
     this%nBins          => null()
@@ -306,12 +312,12 @@ contains
     ! Compute the effective number of particles 
     ! and mass according to effectiveWeightFormat
     select case(this%effectiveWeightFormat)
-    ! 1: using the simple average mass
     case(1)
+      ! 1: using the simple average mass
       this%nEffective = nPointsShape(1)
       this%effectiveMass = this%totalMass/this%nEffective
-    ! Defaults to Kish (1965,1992)
     case default
+      ! Defaults to Kish (1965,1992)
       this%nEffective    = this%totalMass**2/sum(weights**2)
       this%effectiveMass = this%totalMass/this%nEffective
     end select
@@ -324,6 +330,149 @@ contains
 
 
   end subroutine prComputeCountsWeighted
+
+
+  subroutine prComputeCountsAndWeights( this, dataPoints, weights, exact )
+    !------------------------------------------------------------------------------
+    ! 
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none 
+    class(HistogramType) :: this
+    doubleprecision, dimension(:,:), intent(in) :: dataPoints
+    doubleprecision, dimension(:), intent(in)   :: weights
+    logical, intent(in), optional      :: exact 
+    integer, dimension(2)              :: nPointsShape
+    integer                            :: np, nd, did
+    integer, dimension(3)              :: gridIndexes
+    logical :: inside
+    integer :: exactIndex 
+    !------------------------------------------------------------------------------
+
+    exactIndex = 1
+    if( present(exact) ) then 
+      if ( exact ) exactIndex = 0
+    end if
+
+    ! Reset counts
+    this%counts  = 0
+    this%wcounts = 0
+    nPointsShape = shape(dataPoints)
+
+    ! This could be done with OpenMP (?) 
+    do np = 1, nPointsShape(1)
+      ! Initialize point
+      inside      = .true.
+      gridIndexes = 1
+      ! Compute gridIndex and verify  
+      ! only for active dimensions if inside or not.
+      ! Histogram considers active dimensions those where
+      ! binSize is non zero.
+      do nd = 1,this%nDim
+        did = this%dimensions(nd)
+        gridIndexes(did) = floor(( dataPoints(np,did) - this%origin(did) )/this%binSize(did)) + exactIndex
+        if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
+            (gridIndexes(did) .le. 0) ) then
+          inside = .false. 
+          exit
+        end if 
+      end do
+      if ( .not. inside ) cycle
+
+      ! Increase counter
+      this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+          this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + 1d0
+      this%wcounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+          this%wcounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)
+
+    end do 
+ 
+    ! Histogram metric, no transformation of counts 
+    this%totalMass     = sum(weights)
+    this%nEffective    = nPointsShape(1)
+    this%nPoints       = size(weights)
+    this%effectiveMass = 1d0
+    this%isWeighted    = .true.
+    this%maxCount      = maxval(this%counts)
+    this%maxRawDensity = this%maxCount/this%binVolume
+
+
+  end subroutine prComputeCountsAndWeights
+
+
+  subroutine prComputeEffectiveCountsAndWeights( this, dataPoints, weights, exact )
+    !------------------------------------------------------------------------------
+    ! 
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none 
+    class(HistogramType) :: this
+    doubleprecision, dimension(:,:), intent(in) :: dataPoints
+    doubleprecision, dimension(:), intent(in)   :: weights
+    logical, intent(in), optional      :: exact 
+    integer, dimension(2)              :: nPointsShape
+    integer                            :: np, nd, did
+    integer, dimension(3)              :: gridIndexes
+    logical :: inside
+    integer :: exactIndex 
+    !------------------------------------------------------------------------------
+
+    exactIndex = 1
+    if( present(exact) ) then 
+      if ( exact ) exactIndex = 0
+    end if
+
+    ! Reset counts
+    this%counts  = 0
+    this%wcounts = 0
+    nPointsShape = shape(dataPoints)
+
+    ! This could be done with OpenMP (?) 
+    do np = 1, nPointsShape(1)
+      ! Initialize point
+      inside      = .true.
+      gridIndexes = 1
+      ! Compute gridIndex and verify  
+      ! only for active dimensions if inside or not.
+      ! Histogram considers active dimensions those where
+      ! binSize is non zero.
+      do nd = 1,this%nDim
+        did = this%dimensions(nd)
+        gridIndexes(did) = floor(( dataPoints(np,did) - this%origin(did) )/this%binSize(did)) + exactIndex
+        if( (gridIndexes(did) .gt. this%nBins(did)) .or.&
+            (gridIndexes(did) .le. 0) ) then
+          inside = .false. 
+          exit
+        end if 
+      end do
+      if ( .not. inside ) cycle
+
+      ! Increase counter
+      this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+          this%counts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)**2
+      this%wcounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) = &
+          this%wcounts( gridIndexes(1), gridIndexes(2), gridIndexes(3) ) + weights(np)
+
+    end do 
+ 
+    ! Histogram metric, transform counts into the 
+    ! nEffective for each histogram cell M**2/sum mp**2
+    where( this%counts.ne.0d0 )
+      this%counts=this%wcounts**2/this%counts
+    end where
+    this%totalMass     = sum(weights)
+    ! NEEDS REVIEW
+    this%nEffective    = sum(this%counts)
+    this%nPoints       = size(weights)
+    this%effectiveMass = 1d0
+    this%isWeighted    = .true.
+    this%maxCount      = maxval(this%counts)
+    this%maxRawDensity = this%maxCount/this%binVolume
+
+
+  end subroutine prComputeEffectiveCountsAndWeights
 
 
   subroutine prComputeActiveBinIds( this )
