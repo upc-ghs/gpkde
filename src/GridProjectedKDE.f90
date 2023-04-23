@@ -3341,8 +3341,8 @@ contains
       end do
       call kernel%ResetMatrix()
 
-      ! Update smoothing scale
-      call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
+      ! Update smoothing scale ( not necessary )
+      !call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
 
       ! A proxy to error: relative density change
       errorMetricArray = 0d0
