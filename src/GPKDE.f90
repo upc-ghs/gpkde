@@ -311,6 +311,7 @@ program GPKDE
   ! Export optimization variables 
   ! 0: does not export 
   ! 1: export data, one file per loop for active bins 
+  exportOptimizationVariables = .false.
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   select case(n)
   case(0)
@@ -334,6 +335,7 @@ program GPKDE
   ! Skip error convergence ?
   ! 0: Break if convergence criteria is met 
   ! 1: Skip and run nOptLoops optimization loops 
+  skipErrorConvergence = .false.
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
@@ -361,6 +363,7 @@ program GPKDE
   ! kernel database ?
   ! 0: without kernel database, brute force
   ! 1: with kernel database and read parameters
+  kernelDatabase = .false.
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
@@ -376,6 +379,7 @@ program GPKDE
   ! Isotropic kernels
   ! 0: default, anisotropic
   ! 1: isotropic
+  isotropicKernels = .false.
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   select case(n)
   case(0)
