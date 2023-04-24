@@ -203,12 +203,8 @@ contains
     class( KernelType ), intent(in)   :: source 
     !------------------------------------------------------------------------------
 
-    !this%binSize             = source%binSize
-    !this%bandwidth           = source%bandwidth
-    !this%matrixRange         = source%matrixRange
     this%matrixPositiveShape = source%matrixPositiveShape
     this%matrix              = source%matrix
-    !this%shouldIntegrateOne  = source%shouldIntegrateOne
 
   end subroutine prCopyFrom
 

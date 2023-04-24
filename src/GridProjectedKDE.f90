@@ -40,7 +40,7 @@ module GridProjectedKDEModule
   integer         , parameter :: defaultBoundKernelSizeFormat           = 0
   doubleprecision , parameter :: defaultIsotropicThreshold              = 0.9
   logical         , parameter :: defaultUseGlobalSmoothing              = .false.
-  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.3d0 
+  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.2d0 
   doubleprecision , parameter :: defaultMaxSizeFactor                   = 0.5 
   doubleprecision , parameter :: defaultBorderFraction                  = 0.05 
   character(len=*), parameter :: defaultOutputFileName                  = 'gpkde.out'
@@ -4215,7 +4215,7 @@ contains
     logical, intent(inout)                    :: transposeKernel
     ! local 
     integer, dimension(3) :: indexes 
-    integer :: nd
+    integer :: nd, did
     ! A more robust function would be good 
     !------------------------------------------------------------------------------
 
@@ -4223,17 +4223,17 @@ contains
     indexes(:) = 1
     transposeKernel = .false.
 
-    ! Compute index value if required 
-    ! because active dimension
-    do nd = 1, 3
-      if ( (smoothing( nd ).le.0d0).or.(this%dimensionMask(nd).eq.0) ) cycle
-      indexes(nd) = min(&
+    ! Compute index value active dimensions
+    do nd = 1, nDim
+      did = this%dimensions(nd)
+      if ( (smoothing( did ).le.0d0) ) cycle
+      indexes(did) = min(&
         max(&
           floor(&
-            log( smoothing(nd)/this%binSize(nd)/this%minHOverLambda(nd) )/this%deltaHOverLambda(nd)&
+            log( smoothing(did)/this%binSize(did)/this%minHOverLambda(did) )/this%deltaHOverLambda(did)&
           ) + 1, 1 &
         ), &
-      this%nDeltaHOverLambda(nd)  )
+      this%nDeltaHOverLambda(did)  )
     end do 
     
     ! 1D
@@ -4338,8 +4338,9 @@ contains
     return
 
   end subroutine prComputeKernelDatabaseFlatIndexesLinear
-
-  ! NEEDS UPDATE 
+  
+  ! TO BE DEPRECATED 
+  ! NEEDS UPDATE, 
   ! Kernel Database indexes, 3D
   function prComputeKernelDatabaseIndexesLinear( this, smoothing ) result(indexes)
     !------------------------------------------------------------------------------
@@ -4371,6 +4372,7 @@ contains
 
   end function prComputeKernelDatabaseIndexesLinear
 
+  ! TO BE DEPRECATED 
   ! NEEDS UPDATE
   function prComputeKernelDatabaseIndexesLog( this, smoothing ) result(indexes)
     !------------------------------------------------------------------------------
@@ -4496,7 +4498,9 @@ contains
     call kernel%ResetMatrix()
 
     ! Compute indexes on kernel database
-    ! transposeKernelSigma will always be false as this kernel is isotropic
+    ! transposeKernelSigma will always be false as this kernel is isotropic.
+    ! Regardless, index function requires to compute indexes in all 
+    ! dimensions to take into account potential differences on cell sizes.
     call this%ComputeKernelDatabaseFlatIndexes( smoothing, &
       gridCell%kernelSigmaDBFlatIndexes, gridCell%transposeKernelSigma ) 
 
