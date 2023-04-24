@@ -46,11 +46,11 @@ module GridProjectedKDEModule
   character(len=*), parameter :: defaultOutputFileName                  = 'gpkde.out'
 
   ! Module variables defined after initialization
-  integer               :: nDim
-  integer, dimension(3) :: dimensionMask = (/1,1,1/)
-  doubleprecision       :: oneOverNDimPlusFour
-  doubleprecision       :: minusOneOverNDimPlusSix
-  doubleprecision       :: onePlusNDimQuarter
+  integer                            :: nDim
+  integer, dimension(3)              :: dimensionMask = (/1,1,1/)
+  doubleprecision                    :: oneOverNDimPlusFour
+  doubleprecision                    :: minusOneOverNDimPlusSix
+  doubleprecision                    :: onePlusNDimQuarter
 
   ! Set default access to private
   private
@@ -81,22 +81,24 @@ module GridProjectedKDEModule
     type( KernelSecondDerivativeYType ), dimension(:), allocatable :: kernelSDYDatabase
     type( KernelSecondDerivativeZType ), dimension(:), allocatable :: kernelSDZDatabase
 
+    ! Dimensionality
+    integer, dimension(3)              :: dimensionMask
+    integer, dimension(:), allocatable :: dimensions
     ! For 1d-2d mapping
-    integer :: idDim1, idDim2
+    integer                            :: idDim1, idDim2
     class( KernelType ), dimension(:), pointer :: kernelSDDatabase1
     class( KernelType ), dimension(:), pointer :: kernelSDDatabase2
     doubleprecision, dimension(:), pointer     :: roughness11Array
     doubleprecision, dimension(:), pointer     :: roughness22Array
 
-    ! Grid properties and dimensionality
-    doubleprecision, dimension(3) :: binSize
-    doubleprecision, dimension(3) :: domainSize
-    doubleprecision, dimension(3) :: domainOrigin
-    integer        , dimension(3) :: domainGridSize
-    integer        , dimension(3) :: deltaBinsOrigin
-    integer        , dimension(3) :: nBins
-    integer        , dimension(3) :: dimensionMask
-    logical                       :: adaptGridToCoords
+    ! Grid properties 
+    doubleprecision, dimension(3)      :: binSize
+    doubleprecision, dimension(3)      :: domainSize
+    doubleprecision, dimension(3)      :: domainOrigin
+    integer        , dimension(3)      :: domainGridSize
+    integer        , dimension(3)      :: deltaBinsOrigin
+    integer        , dimension(3)      :: nBins
+    logical                            :: adaptGridToCoords
 
     ! Variables
     doubleprecision, dimension(:,:,:), pointer :: densityEstimateGrid
@@ -193,7 +195,8 @@ module GridProjectedKDEModule
     procedure :: DropKernelDatabase              => prDropKernelDatabase
     procedure :: ComputeDensity                  => prComputeDensity
     procedure :: ComputeDensityOptimization      => prComputeDensityOptimization
-    procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth
+    procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureBandwidth ! OMP
+    !procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth ! OLD
     procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
     procedure :: ExportDensity                   => prExportDensity
     procedure :: ExportDensityUnit               => prExportDensityUnit
@@ -781,6 +784,7 @@ contains
     this%ComputeKernelDatabaseIndexes      => null()
     this%ComputeKernelDatabaseFlatIndexes  => null()
 
+    if ( allocated( this%dimensions ) )deallocate( this%dimensions  ) 
 
   end subroutine prReset
 
@@ -873,13 +877,12 @@ contains
     class( GridProjectedKDEType ), target :: this 
     integer, intent(inout)                :: nDim
     integer, dimension(3), intent(inout)  :: dimensionMask
-    integer :: n, nd, currentDim
+    integer :: n, nd, currentDim, dcount
     !-----------------------------------------------------------------
 
     ! Determine dimensions based on number of bins
     do n = 1,3
-    if (this%domainGridSize(n) .eq. 1) dimensionMask(n) = 0 
-      !if (this%nBins(n) .eq. 1) dimensionMask(n) = 0 
+      if (this%domainGridSize(n) .eq. 1) dimensionMask(n) = 0 
     end do 
     nDim = sum(dimensionMask)
     this%dimensionMask = dimensionMask
@@ -891,7 +894,7 @@ contains
     ! Initialize dimensions in kernel module
     call InitializeKernelDimensions(dimensionMask)
 
-    ! Identify directions
+    ! Identify directions, the OLD way
     ! 1D
     if ( nDim .eq. 1 ) then 
       ! Relate x,y,z dimensions to 1 dimensions
@@ -930,7 +933,17 @@ contains
         end select   
       end do
     end if
- 
+
+    ! The NEW way
+    if ( allocated( this%dimensions ) ) deallocate( this%dimensions )
+    allocate( this%dimensions( nDim  ) )
+    dcount= 0
+    do nd = 1, 3
+      if ( this%dimensionMask(nd) .eq. 0 ) cycle
+      dcount = dcount + 1
+      this%dimensions(dcount) = nd
+    end do
+
 
     ! Done
     return
@@ -2626,8 +2639,11 @@ contains
       this%isotropic = isotropic
     end if
     if ( present( useGlobalSmoothing ) ) then
-      this%isotropic = .true.
       this%useGlobalSmoothing = useGlobalSmoothing
+      ! If global smoothing, force isotropic 
+      if ( this%useGlobalSmoothing ) then 
+        this%isotropic = .true.
+      end if 
     end if
     if ( (locWeightedHistogram).and.(.not.present(weights)) ) then 
       write(*,*) 'ERROR: weightedHistogram requires weights and were not given. Stop.'
@@ -3761,6 +3777,110 @@ contains
   end subroutine prComputeCurvatureKernelBandwidth
 
 
+
+  subroutine prComputeCurvatureBandwidth( this, densityEstimate, nEstimate, &
+                                kernelSmoothingScale, kernelSmoothingShape, &
+                                kernelSigmaSupportScale, curvatureBandwidth )
+    !----------------------------------------------------------------------------
+    ! Estimate badwidth for the curvature kernel
+    !
+    !   - Eqs. 25,26 in Sole-Mari et al. (2019)
+    !----------------------------------------------------------------------------
+    ! Specifications 
+    !----------------------------------------------------------------------------
+    implicit none
+    ! input
+    class( GridProjectedKDEType ) :: this
+    doubleprecision, dimension(:),   intent(in)    :: nEstimate
+    doubleprecision, dimension(:),   intent(in)    :: densityEstimate
+    doubleprecision, dimension(:),   intent(in)    :: kernelSmoothingScale
+    doubleprecision, dimension(:,:), intent(in)    :: kernelSmoothingShape
+    doubleprecision, dimension(:),   intent(in)    :: kernelSigmaSupportScale
+    ! out 
+    doubleprecision, dimension(:,:), intent(inout) :: curvatureBandwidth
+    ! local 
+    doubleprecision               :: nVirtualPowerBeta
+    doubleprecision               :: shapeTerm
+    doubleprecision               :: shapeTermSum
+    doubleprecision, dimension(3) :: shapeTermNums = 1d0
+    integer :: n, nd, ndd, did, didd
+    !----------------------------------------------------------------------------
+
+    ! Compute curvature bandwidth in parallel 
+    curvatureBandwidth = 0d0
+    !$omp parallel do schedule( dynamic, 1 ) &
+    !$omp default( none )                    &
+    !$omp shared( this )                     & 
+    !$omp shared( nDim )                     &
+    !!$omp shared( sqrtEightPi )              & ! is a module parameter
+    !$omp shared( oneOverNDimPlusFour )      &
+    !$omp shared( minusOneOverNDimPlusSix )  &
+    !$omp shared( nEstimate )                &
+    !$omp shared( densityEstimate )          &
+    !$omp shared( kernelSmoothingScale )     &
+    !$omp shared( kernelSmoothingShape )     &
+    !$omp shared( kernelSigmaSupportScale )  &
+    !$omp shared( curvatureBandwidth )       &
+    !$omp private( shapeTerm )               &
+    !$omp private( shapeTermSum )            &
+    !$omp private( shapeTermNums )           &
+    !$omp private( nVirtualPowerBeta )       &
+    !$omp private( nd, ndd, did, didd )      &
+    !$omp private( n ) 
+    do n =1,this%nComputeBins
+
+      ! Something wrong
+      if ( densityEstimate(n) .le. 0d0 ) cycle
+
+      ! N virtual power beta 
+      nVirtualPowerBeta = ( ( sqrtEightPi*kernelSigmaSupportScale(n) )**nDim*&
+          nEstimate(n)**2d0/densityEstimate(n) )**this%betaDimensionConstant
+
+      ! Loop for dimensions
+      do nd =1, nDim
+        did = this%dimensions(nd)
+
+        ! Reset shape numbers
+        shapeTermNums      = 1d0
+        shapeTermNums(did) = 5d0
+
+        ! Sum for shape term, only over active dimensions
+        shapeTermSum = 0d0
+        do ndd=1, nDim
+          didd = this%dimensions(ndd) 
+          shapeTermSum = shapeTermSum + shapeTermNums(didd)/( kernelSmoothingShape(didd,n)**2d0 )
+        end do
+       
+        ! The shape term 
+        shapeTerm = (                                                  &
+          ( oneOverNDimPlusFour/( kernelSmoothingShape(did,n)**4d0 ) )*&
+              (                                                        &
+                  shapeTermSum                                         &
+              )                                                        &
+          )**( minusOneOverNDimPlusSix )
+      
+        ! The bandwidth for direction did 
+        curvatureBandwidth( did, n ) = &
+          this%alphaDimensionConstant*nVirtualPowerBeta*shapeTerm*kernelSmoothingScale(n)
+
+        ! Bound kernel sizes
+        if ( this%boundKernels ) then 
+          if ( curvatureBandwidth(did,n).gt.this%maxKernelSDSize(did) ) curvatureBandwidth(did,n) = this%maxKernelSDSize(did)
+          if ( curvatureBandwidth(did,n).lt.this%minKernelSDSize(did) ) curvatureBandwidth(did,n) = this%minKernelSDSize(did)
+        end if
+
+      end do
+
+    end do 
+    !$omp end parallel do 
+
+    ! Done
+    return
+
+  end subroutine prComputeCurvatureBandwidth
+
+
+
   subroutine prComputeOptimalSmoothingAndShape( this, nEstimate, netRoughness, &
                          roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                                               kernelSmoothing, & 
@@ -3906,7 +4026,7 @@ contains
       case(2)
         ! At this stage, pointers to dims 1 and 2 were already assigned
         ! If bounded kernels, limit shape factor to something that avoid overcoming limit 
-        if ( this%boundKernels ) then   
+        if ( this%boundKernels ) then
          !$omp parallel do schedule(dynamic,1) & 
          !$omp default( none )                 & 
          !$omp shared( this )                  & 
