@@ -40,7 +40,7 @@ module GridProjectedKDEModule
   integer         , parameter :: defaultBoundKernelSizeFormat           = 0
   doubleprecision , parameter :: defaultIsotropicThreshold              = 0.9
   logical         , parameter :: defaultUseGlobalSmoothing              = .false.
-  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.2d0 
+  doubleprecision , parameter :: defaultMinSizeFactor                   = 1.3d0 
   doubleprecision , parameter :: defaultMaxSizeFactor                   = 0.5 
   doubleprecision , parameter :: defaultBorderFraction                  = 0.05 
   character(len=*), parameter :: defaultOutputFileName                  = 'gpkde.out'
@@ -2445,6 +2445,14 @@ contains
 
     end select
 
+    ! Report db sizes
+    if ( this%reportToOutUnit ) then 
+      write(this%outFileUnit, '(1X,A,E15.1,A)')& 
+        '  - Allocated memory Kernel DB    : ', kernelDBMemory, ' MB'
+      write(this%outFileUnit, '(1X,A,E15.1,A)')& 
+        '  - Allocated memory Kernel SD DB : ', kernelSDDBMemory, ' MB'
+    end if 
+
     deallocate( hOverLambda )
 
     ! Done
@@ -2545,6 +2553,10 @@ contains
     doubleprecision, dimension(3) :: subGridOrigin
     integer, dimension(3)         :: subGridOriginIndexes
     integer, dimension(3)         :: subGridLimitIndexes
+    ! clock
+    doubleprecision               :: elapsedTime
+    integer                       :: clockCountStart, clockCountStop
+    integer                       :: clockCountRate, clockCountMax
     !------------------------------------------------------------------------------
 
     ! Initialize optional arguments
@@ -2878,24 +2890,42 @@ contains
                                                   this%logKernelDatabase  )
       end if
       ! Compute density
+      call system_clock(clockCountStart, clockCountRate, clockCountMax)
       call this%ComputeDensityOptimization(                              &
               densityGrid,                                               &
               nOptimizationLoops=localNOptimizationLoops,                &
               exportOptimizationVariables=locExportOptimizationVariables,&
               skipErrorConvergence=locSkipErrorConvergence,              &
               relativeErrorConvergence=locRelativeErrorConvergence ) 
+      call system_clock(clockCountStop, clockCountRate, clockCountMax)
+      if ( this%reportToOutUnit ) then 
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
+        write(this%outFileUnit, '(1X,A,E15.5,A)')& 
+          '  Optimization time = ', elapsedTime, ' seconds'
+        write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
+      end if 
       ! Drop database ?
       if ( .not. persistKDB ) then
           call this%DropKernelDatabase()
       end if
     else
       ! Brute force optimization
+      call system_clock(clockCountStart, clockCountRate, clockCountMax)
       call this%ComputeDensityOptimization(                              &
               densityGrid,                                               &
               nOptimizationLoops=localNOptimizationLoops,                &
               exportOptimizationVariables=locExportOptimizationVariables,&
               skipErrorConvergence=locSkipErrorConvergence,              & 
               relativeErrorConvergence=locRelativeErrorConvergence ) 
+      call system_clock(clockCountStop, clockCountRate, clockCountMax)
+      if ( this%reportToOutUnit ) then 
+        elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
+        write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
+        write(this%outFileUnit, '(1X,A,E15.5,A)')& 
+          '  Optimization time = ', elapsedTime, ' seconds'
+        write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
+      end if 
     end if 
     ! Point to the module density
     this%densityEstimateGrid => densityGrid
@@ -3364,8 +3394,8 @@ contains
       ! A proxy to error: ALMISE
       errorMetricArray = 0d0
       where ( kernelSmoothingScale .ne. 0d0 ) 
-          errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
-          0.25*netRoughnessArray*kernelSmoothingScale**4d0)/(this%histogram%nPoints**2)
+        errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**nDim)*(4d0*pi)**(0.5*nDim)) + &
+        0.25*netRoughnessArray*kernelSmoothingScale**4d0)/(this%histogram%nPoints**2)
       end where
       errorALMISEProxy = sqrt(sum(errorMetricArray**2)/this%nComputeBins)
 
