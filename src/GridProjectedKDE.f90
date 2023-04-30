@@ -10,7 +10,7 @@ module GridProjectedKDEModule
                                        KernelSecondDerivativeZType, &
                                                         KernelType
   use GridCellModule, only : GridCellType
-  use omp_lib
+  !use omp_lib ! not used
   implicit none
   !----------------------------------------------------------------------------
 
@@ -43,14 +43,15 @@ module GridProjectedKDEModule
   doubleprecision , parameter :: defaultMinSizeFactor                   = 1.2d0 
   doubleprecision , parameter :: defaultMaxSizeFactor                   = 0.5 
   doubleprecision , parameter :: defaultBorderFraction                  = 0.05 
+  doubleprecision , parameter :: defaultMaxSigmaGrowth                  = 1.5d0
   character(len=*), parameter :: defaultOutputFileName                  = 'gpkde.out'
 
   ! Module variables defined after initialization
-  integer                            :: nDim
-  integer, dimension(3)              :: dimensionMask = (/1,1,1/)
-  doubleprecision                    :: oneOverNDimPlusFour
-  doubleprecision                    :: minusOneOverNDimPlusSix
-  doubleprecision                    :: onePlusNDimQuarter
+  integer               :: nDim
+  integer, dimension(3) :: dimensionMask = (/1,1,1/)
+  doubleprecision       :: oneOverNDimPlusFour
+  doubleprecision       :: minusOneOverNDimPlusSix
+  doubleprecision       :: onePlusNDimQuarter
 
   ! Set default access to private
   private
@@ -74,18 +75,18 @@ module GridProjectedKDEModule
   type, public :: GridProjectedKDEType
   
     ! Histogram and kernel databases 
-    type( HistogramType ) :: histogram
-    type( KernelMultiGaussianType ), dimension(:,:,:), allocatable :: kernelDatabase
-    type( KernelMultiGaussianType ), dimension(:,:)  , allocatable :: kernelDatabaseFlat
-    type( KernelSecondDerivativeXType ), dimension(:), allocatable :: kernelSDXDatabase
-    type( KernelSecondDerivativeYType ), dimension(:), allocatable :: kernelSDYDatabase
-    type( KernelSecondDerivativeZType ), dimension(:), allocatable :: kernelSDZDatabase
+    type( HistogramType )                                              :: histogram
+    type( KernelMultiGaussianType )    , dimension(:,:,:), allocatable :: kernelDatabase
+    type( KernelMultiGaussianType )    , dimension(:,:)  , allocatable :: kernelDatabaseFlat
+    type( KernelSecondDerivativeXType ), dimension(:)    , allocatable :: kernelSDXDatabase
+    type( KernelSecondDerivativeYType ), dimension(:)    , allocatable :: kernelSDYDatabase
+    type( KernelSecondDerivativeZType ), dimension(:)    , allocatable :: kernelSDZDatabase
 
     ! Dimensionality
-    integer, dimension(3)              :: dimensionMask
-    integer, dimension(:), allocatable :: dimensions
+    integer, dimension(3)                      :: dimensionMask
+    integer, dimension(:), allocatable         :: dimensions
     ! For 1d-2d mapping
-    integer                            :: idDim1, idDim2
+    integer                                    :: idDim1, idDim2
     class( KernelType ), dimension(:), pointer :: kernelSDDatabase1
     class( KernelType ), dimension(:), pointer :: kernelSDDatabase2
     doubleprecision, dimension(:), pointer     :: roughness11Array
@@ -110,7 +111,7 @@ module GridProjectedKDEModule
     integer, dimension(3)         :: nDeltaHOverLambda ! Computed at kernel databases
     logical                       :: logKernelDatabase 
     logical                       :: databaseOptimization 
-    logical                       :: flatKernelDatabase ! TRUE BY DEFAULT, TO BE DEPRECATED
+    logical                       :: flatKernelDatabase ! Deprecate ?
     
     ! Optimization
     integer                       :: nOptimizationLoops
@@ -144,24 +145,25 @@ module GridProjectedKDEModule
     doubleprecision               :: hSigmaScale
 
     ! Limit max kernel size to fit consistently inside 
-    ! the reconstruction grid
+    ! the reconstruction grid.
     doubleprecision, dimension(3) :: maxKernelSize   
     doubleprecision, dimension(3) :: maxKernelSDSize
-    integer :: maxSizeDimId
+    integer                       :: maxSizeDimId
     ! Limit min kernel size to at least have 2 cells 
-    ! of positive shape. Otherwise, very small sizes
-    ! can lead to zero kernel. 
+    ! of positive shape.
     doubleprecision, dimension(3) :: minKernelSize   
     doubleprecision, dimension(3) :: minKernelSDSize
-    integer :: minSizeDimId
+    integer                       :: minSizeDimId
+    ! Limit the relative growth of the support kernel
+    doubleprecision               :: maxSigmaGrowth
 
     ! Report to outUnit
     logical            :: reportToOutUnit = .false.
     integer            :: outFileUnit
     character(len=200) :: outFileName
 
-    ! Module constants defined after initialization 
-    ! of module dimensions
+    ! Constants defined after initialization of module dimensions
+    ! Move out ?
     doubleprecision :: supportDimensionConstant
     doubleprecision :: alphaDimensionConstant
     doubleprecision :: betaDimensionConstant
@@ -195,8 +197,7 @@ module GridProjectedKDEModule
     procedure :: DropKernelDatabase              => prDropKernelDatabase
     procedure :: ComputeDensity                  => prComputeDensity
     procedure :: ComputeDensityOptimization      => prComputeDensityOptimization
-    procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureBandwidth ! OMP
-    !procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureKernelBandwidth ! OLD
+    procedure :: ComputeCurvatureKernelBandwidth => prComputeCurvatureBandwidth 
     procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
     procedure :: ExportDensity                   => prExportDensity
     procedure :: ExportDensityUnit               => prExportDensityUnit
@@ -327,13 +328,14 @@ contains
       initialSmoothing, initialSmoothingFactor, initialSmoothingSelection, & 
                                  nOptimizationLoops, databaseOptimization, &
                          minHOverLambda, maxHOverLambda, deltaHOverLambda, &
-                                                        logKernelDatabase, & ! DEPRECATE ?
+                                                        logKernelDatabase, & ! Deprecate ?
                                                   interpretAdvancedParams, &
                                          minRoughnessFormat, minRoughness, & 
                             minRelativeRoughness, minRoughnessLengthScale, &
                                                     effectiveWeightFormat, & 
                                                     boundKernelSizeFormat, & 
                                                        isotropicThreshold, & 
+                                                           maxSigmaGrowth, & 
                                                                outFileName )
     !---------------------------------------------------------------------------
     ! Initialize the module, assign default parameters,
@@ -360,7 +362,7 @@ contains
     doubleprecision              , intent(in), optional :: minHOverLambda
     doubleprecision              , intent(in), optional :: maxHOverLambda
     doubleprecision              , intent(in), optional :: deltaHOverLambda
-    logical                      , intent(in), optional :: logKernelDatabase    ! DEPRECATE ? 
+    logical                      , intent(in), optional :: logKernelDatabase    ! Deprecate ? 
     ! Advanced parameters
     logical        , intent(in), optional :: interpretAdvancedParams
     integer        , intent(in), optional :: minRoughnessFormat
@@ -370,6 +372,7 @@ contains
     integer        , intent(in), optional :: effectiveWeightFormat
     integer        , intent(in), optional :: boundKernelSizeFormat
     doubleprecision, intent(in), optional :: isotropicThreshold
+    doubleprecision, intent(in), optional :: maxSigmaGrowth
     ! General use, indexes
     integer :: nd
     ! The analog to a listUnit, reports
@@ -583,11 +586,18 @@ contains
       else
         this%isotropicThreshold = defaultIsotropicThreshold
       end if
+      ! Max sigma growth
+      if ( present(maxSigmaGrowth) ) then 
+        this%maxSigmaGrowth = maxSigmaGrowth
+      else
+        this%maxSigmaGrowth = defaultMaxSigmaGrowth
+      end if
     else
       ! Should assign eveything to default values
       this%boundKernelSizeFormat = defaultBoundKernelSizeFormat
-      this%minRoughnessFormat = defaultMinRoughnessFormat
-      this%isotropicThreshold = defaultIsotropicThreshold
+      this%minRoughnessFormat    = defaultMinRoughnessFormat
+      this%isotropicThreshold    = defaultIsotropicThreshold
+      this%maxSigmaGrowth        = defaultMaxSigmaGrowth
       ! Effective weight format is defined as zero by default at histogram  
     end if 
 
@@ -1718,15 +1728,20 @@ contains
     ! with intel fortran compiler. Somehow reduction 
     ! of multiple matrices in one loop is not so stable
     ! and may lead to stack memory errors.
-    ! CX
-    !$omp parallel do schedule( dynamic, 1 ) & 
+    !$omp parallel                           & 
     !$omp default( none )                    &
     !$omp shared( this )                     &
     !$omp shared( activeGridCells )          &
-    !$omp shared( curvatureBandwidth )       &
+    !$omp shared( curvatureBandwidth )       & 
     !$omp firstprivate( kernelSDX )          &
+    !$omp firstprivate( kernelSDY )          &
+    !$omp firstprivate( kernelSDZ )          &
     !$omp reduction( +:curvatureX )          &
-    !$omp private( n )                       &
+    !$omp reduction( +:curvatureY )          &
+    !$omp reduction( +:curvatureZ )          
+    ! CX
+    !$omp do schedule( dynamic, 1 )  &
+    !$omp private( n )               &
     !$omp private( gc )                       
     do n = 1, this%nComputeBins
   
@@ -1736,7 +1751,6 @@ contains
       ! Set kernel 
       call this%SetKernelSD(gc, kernelSDX, curvatureBandwidth( 1, n ), &
                                              this%kernelSDXDatabase, 1 )
-
       ! Compute curvatures
       curvatureX( &
               gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
@@ -1753,17 +1767,11 @@ contains
                       gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
               )
     end do
-    !$omp end parallel do
+    !$omp end do nowait
     ! CY
-    !$omp parallel do schedule( dynamic, 1 ) & 
-    !$omp default( none )                    &
-    !$omp shared( this )                     &
-    !$omp shared( activeGridCells )          &
-    !$omp shared( curvatureBandwidth )       &
-    !$omp firstprivate( kernelSDY )          &
-    !$omp reduction( +:curvatureY )          &
-    !$omp private( n )                       &
-    !$omp private( gc )                       
+    !$omp do schedule( dynamic, 1 )  & 
+    !$omp private( n )               &
+    !$omp private( gc )               
     do n = 1, this%nComputeBins
   
       ! Assign gc pointer 
@@ -1772,7 +1780,6 @@ contains
       ! Set kernel 
       call this%SetKernelSD(gc, kernelSDY, curvatureBandwidth( 2, n ), &
                                              this%kernelSDYDatabase, 2 )
-
       ! Compute curvatures
       curvatureY( &
               gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
@@ -1789,18 +1796,11 @@ contains
                       gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
               )
     end do
-    !$omp end parallel do
-
+    !$omp end do nowait
     ! CZ
-    !$omp parallel do schedule( dynamic, 1 ) & 
-    !$omp default( none )                    &
-    !$omp shared( this )                     &
-    !$omp shared( activeGridCells )          &
-    !$omp shared( curvatureBandwidth )       &
-    !$omp firstprivate( kernelSDZ )          &
-    !$omp reduction( +:curvatureZ )          &
-    !$omp private( n )                       &
-    !$omp private( gc )                       
+    !$omp do schedule( dynamic, 1 )  & 
+    !$omp private( n )               &
+    !$omp private( gc )               
     do n = 1, this%nComputeBins
   
       ! Assign gc pointer 
@@ -1809,7 +1809,6 @@ contains
       ! Set kernel 
       call this%SetKernelSD(gc, kernelSDZ, curvatureBandwidth( 3, n ), &
                                              this%kernelSDZDatabase, 3 )
-
       ! Compute curvatures
       curvatureZ( &
               gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
@@ -1826,7 +1825,9 @@ contains
                       gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
               )
     end do
-    !$omp end parallel do
+    !$omp end do
+
+    !$omp end parallel
     call kernelSDX%ResetMatrix()
     call kernelSDY%ResetMatrix()
     call kernelSDZ%ResetMatrix()
@@ -3039,6 +3040,15 @@ contains
     doubleprecision :: errorMetricSmoothingOld
     doubleprecision :: errorMetricConvergence
     doubleprecision, dimension(3) :: smoothingCarrier
+    ! clock
+    !doubleprecision  :: elapsedTime
+    !integer          :: clockCountStart, clockCountStop
+    !integer          :: clockCountRate, clockCountMax
+    ! loop n estimate
+    doubleprecision  :: nEstimate
+    doubleprecision  :: kernelSigmaScale
+    doubleprecision  :: kernelScale
+    doubleprecision  :: density
     !------------------------------------------------------------------------------
 
     ! Initialize vars
@@ -3255,35 +3265,43 @@ contains
     do m = 1, nOptLoops
 
       ! nEstimate
-      nEstimateArray = 0d0
       smoothingCarrier = 0d0
+      nEstimate        = 0d0
+      kernelSigmaScale = 0d0
+      kernelScale      = 0d0
+      density          = 0d0
       !$omp parallel do schedule( dynamic, 1 ) &
       !$omp default( none )                    &
       !$omp shared( this )                     &
       !$omp shared( activeGridCells )          &
       !$omp shared( densityEstimateGrid )      &
       !$omp shared( nEstimateArray )           &
-      !$omp shared( densityEstimateArray )     &
       !$omp shared( kernelSigmaSupportScale )  &
       !$omp shared( kernelSmoothingScale )     &
       !$omp shared( onePlusNDimQuarter )       &
       !$omp firstprivate( kernelSigma )        &
       !$omp firstprivate( smoothingCarrier )   &
+      !$omp firstprivate( nEstimate )          &
+      !$omp firstprivate( kernelSigmaScale )   &
+      !$omp firstprivate( kernelScale )        &
+      !$omp firstprivate( density )            &
       !$omp shared( nDim )                     &
       !$omp private( n )                       &            
       !$omp private( gc )            
       do n = 1, this%nComputeBins
-
+      
         ! Assign gc pointer
         gc => activeGridCells( n )
+        density          = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
+        kernelSigmaScale = kernelSigmaSupportScale(n) 
+        kernelScale      = kernelSmoothingScale(n) 
 
-        !if (  kernelSigmaSupportScale( n ) .lt. 0d0 ) cycle ! yes ?
-        smoothingCarrier =  kernelSigmaSupportScale(n) 
         ! Set kernel sigma
+        smoothingCarrier(:) =  kernelSigmaScale
         call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
 
-        ! Compute estimate
-        nEstimateArray( n ) = sum(&
+        ! Compute n estimate
+        nEstimate = sum(&
           densityEstimateGrid(&
               gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
               gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
@@ -3295,21 +3313,28 @@ contains
 
         ! Scale for the support kernel !
         ! - Eq. 23 in Sole-Mari et al. (2019)
-        kernelSigmaSupportScale(n) = nEstimateArray(n)**(0.5)*kernelSmoothingScale(n)**onePlusNDimQuarter/&
-                       ( ( 4d0*densityEstimateArray(n) )**0.25 )*this%supportDimensionConstant
-        ! Could it be removed ? 
+        kernelSigmaScale = nEstimate**(0.5)*kernelScale**onePlusNDimQuarter/&
+                       ( ( 4d0*density )**0.25 )*this%supportDimensionConstant
+
+        ! Bound support size
         if ( this%boundKernels ) then 
-         if (kernelSigmaSupportScale(n).gt.this%maxKernelSize(this%maxSizeDimId)) &
-                 kernelSigmaSupportScale(n)=this%maxKernelSize(this%maxSizeDimId)
-         if (kernelSigmaSupportScale(n).lt.this%minKernelSize(this%minSizeDimId)) &
-                 kernelSigmaSupportScale(n)=this%minKernelSize(this%minSizeDimId)
+         if (kernelSigmaScale.gt.this%maxSigmaGrowth*kernelSigmaSupportScale(n)) &
+           kernelSigmaScale=this%maxSigmaGrowth*kernelSigmaSupportScale(n)
+         kernelSigmaScale = minval(& 
+           (/&
+             kernelSigmaScale,                               &
+             this%maxKernelSize(this%maxSizeDimId)           & 
+           /),dim=1)
+         if (kernelSigmaScale.lt.this%minKernelSize(this%minSizeDimId)) &
+                 kernelSigmaScale=this%minKernelSize(this%minSizeDimId)
         end if 
 
-        smoothingCarrier = kernelSigmaSupportScale(n)
+        ! Update kernel sigma
+        smoothingCarrier(:) = kernelSigmaScale
         call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
-
-        ! Compute estimate
-        nEstimateArray( n ) = sum(&
+         
+        ! Compute n estimate
+        nEstimate = sum(&
           densityEstimateGrid(&
               gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
               gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
@@ -3318,6 +3343,10 @@ contains
               gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
               gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
               gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2)) )
+
+        ! To arrays
+        nEstimateArray( n )          = nEstimate
+        kernelSigmaSupportScale( n ) = kernelSigmaScale
 
       end do
       !$omp end parallel do
@@ -3386,9 +3415,6 @@ contains
         densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
       end do
       call kernel%ResetMatrix()
-
-      ! Update smoothing scale ( not necessary )
-      !call prComputeKernelSmoothingScale( this, kernelSmoothing, kernelSmoothingScale )
 
       ! A proxy to error: relative density change
       errorMetricArray = 0d0
