@@ -64,7 +64,7 @@ program GPKDE
   outputUnit = 113 
   !-----------------------------------------------
   ! Set version
-  version = '0.0.1'
+  version = '1.0.0'
   ! Set the default termination message
   terminationMessage = "Normal termination."
   ! Compiler 
