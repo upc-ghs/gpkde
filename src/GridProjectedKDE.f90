@@ -100,6 +100,7 @@ module GridProjectedKDEModule
     integer        , dimension(3)      :: deltaBinsOrigin
     integer        , dimension(3)      :: nBins
     logical                            :: adaptGridToCoords
+    doubleprecision                    :: borderFraction
 
     ! Variables
     doubleprecision, dimension(:,:,:), pointer :: densityEstimateGrid
@@ -324,11 +325,11 @@ contains
   ! Some arguments candidates to be deprecated
   ! - logKernelDatabase
   subroutine prInitialize( this,& 
-                     domainSize, binSize, domainOrigin, adaptGridToCoords, &
+     domainSize, binSize, domainOrigin, adaptGridToCoords, borderFraction, &
       initialSmoothing, initialSmoothingFactor, initialSmoothingSelection, & 
                                  nOptimizationLoops, databaseOptimization, &
                          minHOverLambda, maxHOverLambda, deltaHOverLambda, &
-                                                        logKernelDatabase, & ! Deprecate ?
+                                                        logKernelDatabase, &
                                                   interpretAdvancedParams, &
                                          minRoughnessFormat, minRoughness, & 
                             minRelativeRoughness, minRoughnessLengthScale, &
@@ -351,6 +352,7 @@ contains
     doubleprecision, dimension(3), intent(in)           :: binSize
     doubleprecision, dimension(3), intent(in), optional :: domainOrigin
     logical                      , intent(in), optional :: adaptGridToCoords
+    doubleprecision              , intent(in), optional :: borderFraction
     ! Initial smoothing
     doubleprecision, dimension(3), intent(in), optional :: initialSmoothing
     doubleprecision              , intent(in), optional :: initialSmoothingFactor
@@ -407,6 +409,11 @@ contains
       this%adaptGridToCoords = adaptGridToCoords
     else
       this%adaptGridToCoords = defaultAdaptGridToCoords
+    end if 
+    if ( present(borderFraction) ) then
+      this%borderFraction = borderFraction
+    else
+      this%borderFraction = defaultBorderFraction
     end if 
     ! Stop if all bin sizes are zero
     if ( all( binSize .lt. 0d0 ) ) then 
@@ -2561,7 +2568,6 @@ contains
     doubleprecision, dimension(3) :: maxCoords
     doubleprecision, dimension(3) :: maxSubGridCoords
     doubleprecision, dimension(3) :: deltaCoords 
-    doubleprecision               :: borderFraction 
     doubleprecision, dimension(3) :: subGridSize
     integer, dimension(3)         :: subGridNBins
     doubleprecision, dimension(3) :: subGridOrigin
@@ -2588,7 +2594,6 @@ contains
     localNOptimizationLoops = this%nOptimizationLoops
     this%isotropic = .false.
     this%useGlobalSmoothing = .false.
-    borderFraction = defaultBorderFraction
 
     ! Process optional arguments !
     if ( present( nOptimizationLoops ) ) then 
@@ -2678,9 +2683,9 @@ contains
       maxSubGridCoords = this%domainSize + this%domainOrigin
       where ( this%binSize .ne. 0d0 )
         ! For the minimum coordinates, substract half the border fraction
-        minSubGridCoords   = minCoords - 0.5*borderFraction*deltaCoords
+        minSubGridCoords   = minCoords - 0.5*this%borderFraction*deltaCoords
         ! For the maximum coordinates, add half the border fraction
-        maxSubGridCoords   = maxCoords + 0.5*borderFraction*deltaCoords
+        maxSubGridCoords   = maxCoords + 0.5*this%borderFraction*deltaCoords
       end where
       
       ! Limit these coordinates by domain specs

@@ -44,6 +44,7 @@ program GPKDE
   doubleprecision, dimension(3) :: binSize     
   doubleprecision, dimension(3) :: domainOrigin
   logical                       :: adaptToCoords
+  doubleprecision               :: borderFraction = 0.05
   ! kernels
   doubleprecision, dimension(3) :: initialSmoothing
   doubleprecision, dimension(3) :: kernelParams
@@ -254,6 +255,25 @@ program GPKDE
       write(logUnit,'(a)') 'Will allocate grid for reconstruction adapted to given points.'
     end if 
   end if 
+  ! If adapting, try to read a border fraction
+  if ( adaptToCoords ) then 
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    if ( r.ne.0d0 ) then
+      ! If a value was given, it should be greater than zero
+      ! Is there an upper boundary ? Bound to one just in case 
+      if ( (r.lt.0d0).or.(r.gt.1d0) ) then 
+        if ( logUnit .gt. 0 ) then  
+          write(logUnit,'(a)') 'Given border fraction is less than zero. It should be between 0 and 1. Stop.'
+        end if 
+        call ustop('Given border fraction is less than zero. It should be between 0 and 1. Stop.')
+      end if
+      ! Ok 
+      borderFraction = r
+      if ( logUnit .gt. 0 ) then  
+        write(logUnit,'(a,es18.9e3)') 'Domain border fraction was set to :', borderFraction 
+      end if 
+    end if 
+  end if
 
   ! Read binSize
   read(simUnit, '(a)') line
@@ -773,6 +793,7 @@ program GPKDE
       domainSize, binSize,                                  &
       domainOrigin              = domainOrigin,             &
       adaptGridToCoords         = adaptToCoords,            & 
+      borderFraction            = borderFraction,           &
       nOptimizationLoops        = nOptLoops,                &
       databaseOptimization      = kernelDatabase,           &
       minHOverLambda            = kernelParams(1),          &
@@ -797,6 +818,7 @@ program GPKDE
       domainSize, binSize,                                  &
       domainOrigin              = domainOrigin,             & 
       adaptGridToCoords         = adaptToCoords,            & 
+      borderFraction            = borderFraction,           &
       nOptimizationLoops        = nOptLoops,                &
       databaseOptimization      = kernelDatabase,           &
       minHOverLambda            = kernelParams(1),          &
