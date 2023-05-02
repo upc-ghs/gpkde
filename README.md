@@ -1,5 +1,5 @@
 # gpkde
-Fortran code for Grid Projected Kernel Density Estimation of Discrete Particles Distributions
+Fortran Code for Grid Projected Kernel Density Estimation of Discrete Particle Distributions
 
 ![](img/banner.png)
 
@@ -12,10 +12,10 @@ It works as a standalone software by reading an input simulation file, which con
 Some basic command line arguments have been implemented in order to control program execution. These can be requested as help with the instruction ``gpkde --help`` or ``gpkde -h``, which displays the following message in console:
  
 ```
-GPKDE version 0.0.1               
+GPKDE version *.*.*               
 Program compiled Apr 12 2023 19:44:24 with GFORTRAN compiler (ver. *.*.*)       
 
-Fortran code for Grid Projected Kernel Density Estimation of discrete particles distributions
+Fortran code for Grid Projected Kernel Density Estimation of discrete particle distributions
 
 usage:
 

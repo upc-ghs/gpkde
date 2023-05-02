@@ -1094,7 +1094,7 @@ contains
   !----------------------------------------------------------------------------------------
 
     write(output_unit,'(a)') &
-     'Fortran code for Grid Projected Kernel Density Estimation of discrete particles distributions'
+     'Fortran code for Grid Projected Kernel Density Estimation of discrete particle distributions'
     write(output_unit, *) 
     write(output_unit, '(a)') 'usage:'
     write(output_unit, *) 
