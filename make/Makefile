@@ -19,9 +19,6 @@ ${SOURCEDIR1}
 FC = gfortran
 FFLAGS = -O2 -fopenmp -fbacktrace -ffpe-summary=overflow -ffpe-trap=overflow,zero,invalid -fall-intrinsics -Wtabs -Wline-truncation -Wunused-label -Wunused-variable -pedantic -std=f2008 -Wcharacter-truncation -cpp
 
-#DEBUG
-#FFLAGS = -g -Og -Wall -fcheck=all -fopenmp -fbacktrace -ffpe-summary=overflow -ffpe-trap=overflow,zero,invalid -fall-intrinsics -Wtabs -Wline-truncation -Wunused-label -Wunused-variable -pedantic -std=f2008 -Wcharacter-truncation -cpp
-
 # Define the C compile flags
 CC = gcc
 CFLAGS = -O3 -D_UF 
