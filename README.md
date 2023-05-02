@@ -42,6 +42,7 @@ A set of possible use cases of the reconstruction module are included as example
 
 - [1D Gaussian distribution](examples/ex01_1dnormal/)
 - [2D Heterogeneous distribution](examples/ex02_2dhet/)
+- [3D Heterogeneous distribution](examples/ex03_3dhet/)
 
 ## Compilation 
 Repository includes two makefiles at the folder `make`:
