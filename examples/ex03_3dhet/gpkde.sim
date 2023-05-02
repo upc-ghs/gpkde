@@ -1,0 +1,13 @@
+# GPKDE for a 3D heterogeneous distribution
+ex03data.csv
+0	224000
+gpkde.out
+0	0	0
+500	150	100	1
+1	1	1
+20
+0	0.02
+1
+0.25	0.1	10
+0
+0
