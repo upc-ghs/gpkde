@@ -1,6 +1,8 @@
 # gpkde
 Fortran code for Grid Projected Kernel Density Estimation of Discrete Particles Distributions
 
+![](img/banner.png)
+
 ## Overview
 The program performs Grid Projected Kernel Density Estimation (GPKDE) of a discrete dataset in one, two or three dimensional domains and is parallelized with the OpenMP library. 
 
