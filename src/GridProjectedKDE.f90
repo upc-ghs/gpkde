@@ -142,7 +142,6 @@ module GridProjectedKDEModule
     doubleprecision, dimension(3) :: meanCoords
     doubleprecision, dimension(3) :: stdCoords
     doubleprecision               :: stdSigmaScale
-    doubleprecision               :: varSigmaScale
     doubleprecision               :: hSigmaScale
 
     ! Limit max kernel size to fit consistently inside 
@@ -2819,8 +2818,9 @@ contains
     end do 
     this%stdSigmaScale = product( this%stdCoords, mask=(this%dimensionMask.eq.1))
     this%stdSigmaScale = this%stdSigmaScale**(1d0/nDim)
-    this%hSigmaScale   = this%stdSigmaScale*( 4d0/((nDim + 2d0)*this%histogram%nEffective) )**(1d0/(nDim+4d0))
-    if( this%stdSigmaScale.ne.0d0 ) this%varSigmaScale = 1d0/((4d0*pi)**nDim*this%histogram%nEffective*this%stdSigmaScale)
+    ! Selects hSigmaScale based on nPoints instead of nEffective
+    this%hSigmaScale   = this%stdSigmaScale*( 4d0/((nDim + 2d0)*this%histogram%nPoints) )**(1d0/(nDim+4d0))
+    !this%hSigmaScale   = this%stdSigmaScale*( 4d0/((nDim + 2d0)*this%histogram%nEffective) )**(1d0/(nDim+4d0))
     if( this%stdSigmaScale .eq. 0d0 ) then 
      if ( this%reportToOutUnit ) then
       write(this%outFileUnit, *  )
@@ -2880,11 +2880,11 @@ contains
           this%initialSmoothing(nd) = 0d0
         end if
       end do 
-      if ( this%reportToOutUnit ) then
+    end if 
+    if ( this%reportToOutUnit ) then
       write( this%outFileUnit, '(A)' ) ' GPKDE compute density '
       write( this%outFileUnit, *) '  initialSmoothing   :', this%initialSmoothing
-      end if
-    end if 
+    end if
    
     ! Logging
     if ( this%reportToOutUnit ) then 

@@ -463,7 +463,6 @@ contains
       this%counts=this%wcounts**2/this%counts
     end where
     this%totalMass     = sum(weights)
-    ! NEEDS REVIEW
     this%nEffective    = sum(this%counts)
     this%nPoints       = size(weights)
     this%effectiveMass = 1d0
