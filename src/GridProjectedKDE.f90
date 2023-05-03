@@ -567,7 +567,7 @@ contains
     else
       this%histogram%effectiveWeightFormat = defaultEffectiveWeightFormat   
     end if 
-print *, 'ASD', this%histogram%effectiveWeightFormat
+
     ! Process advanced parameters !
      
     advancedOptions = .false.
