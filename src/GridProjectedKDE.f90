@@ -555,12 +555,19 @@ contains
     else 
       this%deltaHOverLambda = defaultDeltaHOverLambda
     end if
-    if ( present( logKernelDatabase ) ) then ! ? DEPRECATE ? 
+    if ( present( logKernelDatabase ) ) then ! Deprecate ? 
       this%logKernelDatabase = logKernelDatabase
     else 
       this%logKernelDatabase = defaultLogKernelDatabase
     end if
-
+    ! Effective weight format 
+    ! Effective weight format is defined as zero by default at histogram  
+    if ( present(effectiveWeightFormat) ) then 
+      this%histogram%effectiveWeightFormat = effectiveWeightFormat   
+    else
+      this%histogram%effectiveWeightFormat = defaultEffectiveWeightFormat   
+    end if 
+print *, 'ASD', this%histogram%effectiveWeightFormat
     ! Process advanced parameters !
      
     advancedOptions = .false.
@@ -580,12 +587,6 @@ contains
       else
         this%minRoughnessFormat = defaultMinRoughnessFormat
       end if 
-      ! Effective weight format 
-      if ( present(effectiveWeightFormat) ) then 
-        this%histogram%effectiveWeightFormat = effectiveWeightFormat   
-      else
-        this%histogram%effectiveWeightFormat = defaultEffectiveWeightFormat   
-      end if 
       ! Isotropic threshold
       if ( present(isotropicThreshold) ) then 
         this%isotropicThreshold = isotropicThreshold
@@ -604,7 +605,6 @@ contains
       this%minRoughnessFormat    = defaultMinRoughnessFormat
       this%isotropicThreshold    = defaultIsotropicThreshold
       this%maxSigmaGrowth        = defaultMaxSigmaGrowth
-      ! Effective weight format is defined as zero by default at histogram  
     end if 
 
 

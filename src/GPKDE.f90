@@ -181,6 +181,41 @@ program GPKDE
     end if 
   end if  
 
+  ! Looks for an effective weight format in case input format is only (x,y,z,w)
+  if (inputDataFormat.eq.1) then 
+    ! effectiveWeightFormat
+    ! 0: compute effective number of points as Kish (1965,1992)
+    ! 1: compute average particles weight 
+    call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+    select case(n)
+    case(0)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Effective weight starting from effective number of points (Kish, 1965,1992).'
+      end if
+      effectiveWeightFormat = n
+    case(1)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Effective weight obtained as the average over particles.'
+      end if
+      effectiveWeightFormat = n
+    case(2)
+      if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Histogram calculates both counts and weights, bandwidth selected with counts.'
+      end if
+      effectiveWeightFormat = n
+    case(3)
+      if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Histogram calculates both counts and weights, bandwidth selected with cell effective counts.'
+      end if
+      effectiveWeightFormat = n
+    case default
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Given effective weight format is not available. Stop.'
+      end if
+      call ustop('Given effective weight format is not available. Stop.')
+    end select
+  end if  
+
   ! Open data file
   open(dataUnit, file=dataFile,access='sequential',form="formatted")
   if ( nlines.eq.0 ) then 
@@ -682,70 +717,29 @@ program GPKDE
         write(logUnit,'(a,es18.9e3)') 'IsotropicThreshold was set to: ', isotropicThreshold
       end if
 
-      ! Continue to effectiveWeightFormat
+      ! Continue to useGlobalSmoothing
       read(simUnit, '(a)', iostat=iostatus) line
       if ( iostatus.lt.0 ) then
         if ( logUnit.gt.0 ) then 
           write(logUnit,'(a)') 'No further advanced options were given. Continue.'
         end if
       else
-       ! effectiveWeightFormat
-       ! 0: compute effective number of points as Kish (1965,1992)
-       ! 1: compute average particles weight 
+       ! 0: local smoothing selection
+       ! 1: global smoothing selection
        icol = 1
        call urword(line, icol, istart, istop, 2, n, r, 0, 0)
        select case(n)
-       case(0)
-         if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Effective weight starting from effective number of points (Kish, 1965,1992).'
-         end if
-         effectiveWeightFormat = n
        case(1)
          if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Effective weight obtained as the average over particles.'
+           write(logUnit,'(a)') 'Smoothing is computed using global expressions.'
          end if
-         effectiveWeightFormat = n
-       case(2)
-         if ( logUnit.gt.0 ) then 
-         write(logUnit,'(a)') 'Histogram calculates both counts and weights, bandwidth selected with counts.'
-         end if
-         effectiveWeightFormat = n
-       case(3)
-         if ( logUnit.gt.0 ) then 
-         write(logUnit,'(a)') 'Histogram calculates both counts and weights, bandwidth selected with effective counts.'
-         end if
-         effectiveWeightFormat = n
+         useGlobalSmoothing = .true.
        case default
-         if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Given effective weight format is not available. Stop.'
-         end if
-         call ustop('Given effective weight format is not available. Stop.')
+         ! Not even report, this is the most default option
+         useGlobalSmoothing = .false.
        end select
 
-       ! Continue to useGlobalSmoothing
-       ! 0: apply the localized algorithm 
-       ! 1: compute quantities using global expressions 
-       read(simUnit, '(a)', iostat=iostatus) line
-       if ( iostatus.lt.0 ) then
-         if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'No further advanced options were given. Continue.'
-         end if
-       else
-        icol = 1
-        call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-        select case(n)
-        case(1)
-          if ( logUnit.gt.0 ) then 
-            write(logUnit,'(a)') 'Smoothing is computed using global expressions.'
-          end if
-          useGlobalSmoothing = .true.
-        case default
-          ! Not even report, this is the most default option
-          useGlobalSmoothing = .false.
-        end select
-       end if ! useGlobalSmoothing
-
-      end if ! effectiveWeightFormat
+      end if ! useGlobalSmoothing
 
      end if ! isotropicThreshold
 
