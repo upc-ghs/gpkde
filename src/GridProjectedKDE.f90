@@ -1029,13 +1029,16 @@ contains
         this%SetKernelSD2D => prSetKernelSD2DBrute
       end if 
     end if
-    if ( nDim .eq. 3 ) then 
+    if ( nDim .eq. 3 ) then
+#ifdef __GFORTRAN__ 
       this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
+#endif
+#ifdef __INTEL_COMPILER
+      this%ComputeNetRoughnessEstimate => prComputeNetRoughness3DIndep
+#endif
       if ( this%databaseOptimization ) then 
-        !this%SetKernelSD3D => prSetKernelSD3DFromDatabase
         this%SetKernelSD => prSetKernelSDFromDatabase
       else
-        !this%SetKernelSD3D => prSetKernelSD3DBrute
         this%SetKernelSD => prSetKernelSDBrute
       end if 
     end if
@@ -2093,6 +2096,432 @@ contains
 
 
   end subroutine prComputeNetRoughness3D
+
+
+  ! NET ROUGHNESS WITH INDEPENDENT CURVATURE PARALLEL LOOPS
+  ! net roughness
+  ! 3D
+  subroutine prComputeNetRoughness3DIndep( this, activeGridCells, curvatureBandwidth, &
+                                roughnessXXArray, roughnessYYArray, roughnessZZArray, &
+                                          netRoughnessArray, kernelSigmaSupportScale, &
+                                                      kernelSDX, kernelSDY, kernelSDZ ) 
+    !-----------------------------------------------------------------------------
+    ! Net roughness in 3D
+    !
+    !  - Eq. 13c in Sole-Mari et al. (2019)
+    !
+    !-----------------------------------------------------------------------------
+    ! Specifications 
+    !-----------------------------------------------------------------------------
+    !input
+    class( GridProjectedKDEType ), target :: this
+    type( GridCellType ), dimension(:), intent(in), target :: activeGridCells
+    doubleprecision, dimension(:,:), intent(in)            :: curvatureBandwidth
+    doubleprecision, dimension(:), intent(in)              :: kernelSigmaSupportScale
+    type( KernelSecondDerivativeXType ), intent(inout)     :: kernelSDX
+    type( KernelSecondDerivativeYType ), intent(inout)     :: kernelSDY
+    type( KernelSecondDerivativeZType ), intent(inout)     :: kernelSDZ
+    ! out
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessXXArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessYYArray
+    doubleprecision, dimension(:), intent(inout), target   :: roughnessZZArray
+    doubleprecision, dimension(:), intent(inout)           :: netRoughnessArray
+    ! local 
+    type( GridCellType ), pointer                          :: gc => null()
+    doubleprecision, dimension(:,:,:), allocatable         ::  curvatureX
+    doubleprecision, dimension(:,:,:), allocatable         ::  curvatureY
+    doubleprecision, dimension(:,:,:), allocatable         ::  curvatureZ
+    doubleprecision, dimension(:,:,:), allocatable         :: curvatureXY
+    doubleprecision, dimension(:,:,:), allocatable         :: curvatureXZ
+    doubleprecision, dimension(:,:,:), allocatable         :: curvatureYZ
+    type( KernelMultiGaussianType )                        :: kernelSigma
+    doubleprecision, dimension(3)                          :: smoothingCarrier
+    integer :: n 
+    doubleprecision :: roughnessXY, roughnessXZ, roughnessYZ 
+    !------------------------------------------------------------------------------
+    allocate(  curvatureX( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate(  curvatureY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate(  curvatureZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate( curvatureXY( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate( curvatureXZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    allocate( curvatureYZ( this%nBins(1), this%nBins(2), this%nBins(3) ) )
+    !------------------------------------------------------------------------------
+
+    ! Initialize 
+    curvatureX(:,:,:)  = 0d0
+    curvatureY(:,:,:)  = 0d0
+    curvatureZ(:,:,:)  = 0d0
+
+    ! Curvatures, kappa
+    ! Computed one at time for compatibility 
+    ! with intel fortran compiler. Somehow reduction 
+    ! of multiple matrices in one loop is not so stable
+    ! and may lead to stack memory errors.
+    ! CX
+    !$omp parallel do schedule( dynamic, 1 ) &
+    !$omp default( none )                    &
+    !$omp shared( this )                     &
+    !$omp shared( activeGridCells )          &
+    !$omp shared( curvatureBandwidth )       & 
+    !$omp firstprivate( kernelSDX )          &
+    !$omp reduction( +:curvatureX )          &          
+    !$omp private( n )                       &
+    !$omp private( gc )                       
+    do n = 1, this%nComputeBins
+  
+      ! Assign gc pointer 
+      gc => activeGridCells(n)
+  
+      ! Set kernel 
+      call this%SetKernelSD(gc, kernelSDX, curvatureBandwidth( 1, n ), &
+                                             this%kernelSDXDatabase, 1 )
+      ! Compute curvatures
+      curvatureX( &
+              gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+              gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+              gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+          ) = curvatureX( &
+              gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+              gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+              gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+          ) + this%histogram%counts(                             &
+              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSDMatrix(  &
+                      gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
+                      gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
+                      gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
+              )
+    end do
+    !$omp end parallel do  
+    ! CY
+    !$omp parallel do schedule( dynamic, 1 ) &
+    !$omp default( none )                    &
+    !$omp shared( this )                     &
+    !$omp shared( activeGridCells )          &
+    !$omp shared( curvatureBandwidth )       & 
+    !$omp firstprivate( kernelSDY )          &
+    !$omp reduction( +:curvatureY )          &
+    !$omp private( n )                       &
+    !$omp private( gc )                       
+    do n = 1, this%nComputeBins
+  
+      ! Assign gc pointer 
+      gc => activeGridCells(n)
+  
+      ! Set kernel 
+      call this%SetKernelSD(gc, kernelSDY, curvatureBandwidth( 2, n ), &
+                                             this%kernelSDYDatabase, 2 )
+      ! Compute curvatures
+      curvatureY( &
+              gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+              gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+              gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+          ) = curvatureY( &
+              gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+              gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+              gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+          ) + this%histogram%counts(                             &
+              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSDMatrix(  &
+                      gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
+                      gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
+                      gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
+              )
+    end do
+    !$omp end parallel do
+    ! CZ
+    !$omp parallel do schedule( dynamic, 1 ) &
+    !$omp default( none )                    &
+    !$omp shared( this )                     &
+    !$omp shared( activeGridCells )          &
+    !$omp shared( curvatureBandwidth )       & 
+    !$omp firstprivate( kernelSDZ )          &
+    !$omp reduction( +:curvatureZ )          &
+    !$omp private( n )                       &
+    !$omp private( gc )               
+    do n = 1, this%nComputeBins
+  
+      ! Assign gc pointer 
+      gc => activeGridCells(n)
+  
+      ! Set kernel 
+      call this%SetKernelSD(gc, kernelSDZ, curvatureBandwidth( 3, n ), &
+                                             this%kernelSDZDatabase, 3 )
+      ! Compute curvatures
+      curvatureZ( &
+              gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+              gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+              gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+          ) = curvatureZ( &
+              gc%kernelSDXGSpan(1):gc%kernelSDXGSpan(2), &
+              gc%kernelSDYGSpan(1):gc%kernelSDYGSpan(2), & 
+              gc%kernelSDZGSpan(1):gc%kernelSDZGSpan(2)  & 
+          ) + this%histogram%counts(                             &
+              gc%id(1), gc%id(2), gc%id(3) )*gc%kernelSDMatrix(  &
+                      gc%kernelSDXMSpan(1):gc%kernelSDXMSpan(2), &
+                      gc%kernelSDYMSpan(1):gc%kernelSDYMSpan(2), & 
+                      gc%kernelSDZMSpan(1):gc%kernelSDZMSpan(2)  & 
+              )
+    end do
+    !$omp end parallel do
+    call kernelSDX%ResetMatrix()
+    call kernelSDY%ResetMatrix()
+    call kernelSDZ%ResetMatrix()
+
+    curvatureX = curvatureX/this%histogram%binVolume
+    curvatureY = curvatureY/this%histogram%binVolume
+    curvatureZ = curvatureZ/this%histogram%binVolume
+    ! Matrix from curvature kernels is lambda**2*KernelVMatrix
+    curvatureX = curvatureX/( this%binSize(1)**2 )
+    curvatureY = curvatureY/( this%binSize(2)**2 )
+    curvatureZ = curvatureZ/( this%binSize(3)**2 )
+
+    ! Compute curvatures product
+    curvatureX  = curvatureX*curvatureX
+    curvatureY  = curvatureY*curvatureY
+    curvatureZ  = curvatureZ*curvatureZ
+    curvatureXY = curvatureX*curvatureY
+    curvatureXZ = curvatureX*curvatureZ
+    curvatureYZ = curvatureY*curvatureZ
+
+    ! Net roughness
+    roughnessXXArray  = 0d0 
+    roughnessYYArray  = 0d0 
+    roughnessZZArray  = 0d0 
+    netRoughnessArray = 0d0
+    if ( this%useGlobalSmoothing ) then
+      ! If global smoothing, then the integral is over 
+      ! the whole domain and kernels are considered to 
+      ! be isotropic 
+      roughnessXXArray(:) = sum(curvatureX)
+      roughnessYYArray(:) = sum(curvatureY)
+      roughnessZZArray(:) = sum(curvatureZ)
+      netRoughnessArray   = &
+        roughnessXXArray + roughnessYYArray + roughnessZZArray + & 
+        2d0*sum(curvatureXY) + 2d0*sum(curvatureXZ) + 2d0*sum(curvatureYZ)
+
+      ! Deallocate
+      deallocate(  curvatureX )
+      deallocate(  curvatureY )
+      deallocate(  curvatureZ )
+      deallocate( curvatureXY )
+      deallocate( curvatureXZ )
+      deallocate( curvatureYZ )
+
+      ! Done
+      return
+    end if
+
+    ! Continue to local form !
+
+    ! Initialize kernelSigma
+    call kernelSigma%Initialize( this%binSize, matrixRange=defaultKernelRange )
+
+    roughnessXY       = 0d0
+    roughnessXZ       = 0d0
+    roughnessYZ       = 0d0
+    smoothingCarrier  = 0d0
+    if ( .not. this%isotropic ) then
+      ! Anisotropic  
+      !$omp parallel do schedule( dynamic, 1 ) &
+      !$omp default( none )                    &
+      !$omp shared( this )                     &
+      !$omp shared( activeGridCells )          &
+      !$omp shared( curvatureX )               &
+      !$omp shared( curvatureY )               &
+      !$omp shared( curvatureZ )               &
+      !$omp shared( curvatureXY )              &
+      !$omp shared( curvatureYZ )              &
+      !$omp shared( curvatureXZ )              &
+      !$omp shared( roughnessXXArray )         &
+      !$omp shared( roughnessYYArray )         &
+      !$omp shared( roughnessZZArray )         &
+      !$omp shared( netRoughnessArray )        &
+      !$omp firstprivate( roughnessXY )        &
+      !$omp firstprivate( roughnessXZ )        &
+      !$omp firstprivate( roughnessYZ )        &
+      !$omp firstprivate( kernelSigma )        &
+      !$omp firstprivate( smoothingCarrier )   &
+      !$omp shared( kernelSigmaSupportScale )  &
+      !$omp private( n )                       &
+      !$omp private( gc )                       
+      do n = 1, this%nComputeBins
+
+        gc => activeGridCells(n)
+        smoothingCarrier(:) = kernelSigmaSupportScale(n)
+        call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
+
+        ! Directional roughness 
+        roughnessXXArray( n ) = sum(&
+          curvatureX(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessYYArray( n ) = sum(&
+          curvatureY(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessZZArray( n ) = sum(&
+          curvatureZ(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessXY = sum(&
+          curvatureXY(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessXZ = sum(&
+          curvatureXZ(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessYZ = sum(&
+          curvatureYZ(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        ! Net roughness
+        netRoughnessArray( n ) = 3d0*( roughnessXXArray(n)*roughnessYYArray(n)*roughnessZZArray(n) )**(1d0/3d0) 
+        if ( roughnessYZ.gt.0d0 ) netRoughnessArray(n) = netRoughnessArray(n) + & 
+            2d0*roughnessYZ*( roughnessXXArray(n)**2/roughnessYYArray(n)/roughnessZZArray(n) )**(1d0/6d0)
+        if ( roughnessXZ.gt.0d0 ) netRoughnessArray(n) = netRoughnessArray(n) + & 
+            2d0*roughnessXZ*( roughnessYYArray(n)**2/roughnessXXArray(n)/roughnessZZArray(n) )**(1d0/6d0)
+        if ( roughnessXY.gt.0d0 ) netRoughnessArray(n) = netRoughnessArray(n) + & 
+            2d0*roughnessXY*( roughnessZZArray(n)**2/roughnessXXArray(n)/roughnessYYArray(n) )**(1d0/6d0)
+      end do
+      !$omp end parallel do
+    else
+      ! Isotropic
+      !$omp parallel do schedule( dynamic, 1 ) &
+      !$omp default( none )                    &
+      !$omp shared( this )                     &
+      !$omp shared( activeGridCells )          &
+      !$omp shared( curvatureX )               &
+      !$omp shared( curvatureY )               &
+      !$omp shared( curvatureZ )               &
+      !$omp shared( curvatureXY )              &
+      !$omp shared( curvatureYZ )              &
+      !$omp shared( curvatureXZ )              &
+      !$omp shared( roughnessXXArray )         &
+      !$omp shared( roughnessYYArray )         &
+      !$omp shared( roughnessZZArray )         &
+      !$omp shared( netRoughnessArray )        &
+      !$omp firstprivate( roughnessXY )        &
+      !$omp firstprivate( roughnessXZ )        &
+      !$omp firstprivate( roughnessYZ )        &
+      !$omp firstprivate( kernelSigma )        &
+      !$omp firstprivate( smoothingCarrier )   &
+      !$omp shared( kernelSigmaSupportScale )  &
+      !$omp private( n )                       &
+      !$omp private( gc )                       
+      do n = 1, this%nComputeBins
+
+        gc => activeGridCells(n)
+        smoothingCarrier(:) = kernelSigmaSupportScale(n)
+        call this%SetKernelSigma( gc, kernelSigma, smoothingCarrier )
+
+        ! Directional roughness
+        roughnessXXArray( n ) = sum(&
+          curvatureX(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessYYArray( n ) = sum(&
+          curvatureY(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessZZArray( n ) = sum(&
+          curvatureZ(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessXY = sum(&
+          curvatureXY(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessXZ = sum(&
+          curvatureXZ(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        roughnessYZ = sum(&
+          curvatureYZ(&
+              gc%kernelSigmaXGSpan(1):gc%kernelSigmaXGSpan(2), &
+              gc%kernelSigmaYGSpan(1):gc%kernelSigmaYGSpan(2), & 
+              gc%kernelSigmaZGSpan(1):gc%kernelSigmaZGSpan(2)  & 
+          )*gc%kernelSigmaMatrix(&
+              gc%kernelSigmaXMSpan(1):gc%kernelSigmaXMSpan(2), &
+              gc%kernelSigmaYMSpan(1):gc%kernelSigmaYMSpan(2), & 
+              gc%kernelSigmaZMSpan(1):gc%kernelSigmaZMSpan(2) )) 
+        ! Net roughness
+        netRoughnessArray( n ) = roughnessXXArray(n) + 2d0*roughnessXY + 2d0*roughnessXZ + &
+                                 roughnessYYArray(n) + 2d0*roughnessYZ + roughnessZZArray(n)
+      end do
+      !$omp end parallel do
+    end if 
+    call kernelSigma%ResetMatrix() 
+
+    ! Deallocate
+    deallocate(  curvatureX )
+    deallocate(  curvatureY )
+    deallocate(  curvatureZ )
+    deallocate( curvatureXY )
+    deallocate( curvatureXZ )
+    deallocate( curvatureYZ )
+
+
+    ! Done
+    return
+
+
+  end subroutine prComputeNetRoughness3DIndep
+
 
 
 
