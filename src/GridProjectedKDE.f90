@@ -1030,11 +1030,10 @@ contains
       end if 
     end if
     if ( nDim .eq. 3 ) then
-#ifdef __GFORTRAN__ 
-      this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
-#endif
 #ifdef __INTEL_COMPILER
       this%ComputeNetRoughnessEstimate => prComputeNetRoughness3DIndep
+#else
+      this%ComputeNetRoughnessEstimate => prComputeNetRoughness3D
 #endif
       if ( this%databaseOptimization ) then 
         this%SetKernelSD => prSetKernelSDFromDatabase
