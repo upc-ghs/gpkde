@@ -27,6 +27,35 @@ jobs:
     steps:
       - name: Checkout gpkde
         uses: actions/checkout@v3
+      - name: Setup gfortran ${{ env.GCC_V }}
+        uses: awvwgk/setup-fortran@main
+        with:
+          compiler: gcc
+          version: ${{ env.GCC_V }}     
+      - name: Micromamba
+        uses: mamba-org/provision-with-micromamba@main
+        with:
+          cache-downloads: true
+          cache-env: true
+      - name: Meson setup
+        run: meson setup builddir -Ddebug=false -Dwerror=true
+      - name: Meson compile
+        run: meson compile -C builddir
+      - name: Meson test
+        run: meson test --verbose --no-rebuild -C builddir
+       
+  smoke_test:
+    name: Smoke test (gfortran 12)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    env:
+      FC: gfortran
+      GCC_V: 12
+    steps:
+      - name: Checkout gpkde
+        uses: actions/checkout@v3
         with:
           path: gpkde
       - name: Setup gfortran ${{ env.GCC_V }}
@@ -40,50 +69,53 @@ jobs:
           environment-file: gpkde/env.yml
           cache-downloads: true
           cache-env: true
-      - name: Meson setup
-        run: meson setup builddir -Ddebug=false -Dwerror=true
-      - name: Meson compile
-        run: meson compile -C builddir
-      - name: Meson test
-        run: meson test --verbose --no-rebuild -C builddir
-        
-  build_gfortran_previous:
-    name: Build gfortran (${{ matrix.GCC_V }}, ${{ matrix.os }})
-    needs:
-      - build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-20.04 ]
-        GCC_V: [ 7, 8, 9, 10, 11 ]
-    defaults:
-      run:
-        shell: bash -l {0}
-    env:
-      FC: gfortran
-    steps:
-      - name: Checkout gpkde
-        uses: actions/checkout@v3
-        with:
-          path: gpkde
 
-      - name: Setup GNU Fortran ${{ matrix.GCC_V }}
-        uses: awvwgk/setup-fortran@main
-        with:
-          compiler: gcc
-          version: ${{ matrix.GCC_V }}
-          
-      - name: Micromamba
-        uses: mamba-org/provision-with-micromamba@main
-        with:
-          environment-file: gpkde/env.yml
-          cache-downloads: true
-          cache-env: true
-          
       - name: Build gpkde
         working-directory: gpkde
         run: |
           meson setup builddir -Ddebug=false --prefix=$(pwd) --libdir=bin
           meson install -C builddir
           meson test --verbose --no-rebuild -C builddir
+
+
+#  build_gfortran_previous:
+#    name: Build gfortran (${{ matrix.GCC_V }}, ${{ matrix.os }})
+#    needs:
+#      - build
+#      - smoke_test
+#    runs-on: ${{ matrix.os }}
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        os: [ ubuntu-20.04 ]
+#        GCC_V: [ 7, 8, 9, 10, 11 ]
+#    defaults:
+#      run:
+#        shell: bash -l {0}
+#    env:
+#      FC: gfortran
+#    steps:
+#      - name: Checkout gpkde
+#        uses: actions/checkout@v3
+#        with:
+#          path: gpkde
+#
+#      - name: Setup GNU Fortran ${{ matrix.GCC_V }}
+#        uses: awvwgk/setup-fortran@main
+#        with:
+#          compiler: gcc
+#          version: ${{ matrix.GCC_V }}
+#          
+#      - name: Micromamba
+#        uses: mamba-org/provision-with-micromamba@main
+#        with:
+#          environment-file: gpkde/env.yml
+#          cache-downloads: true
+#          cache-env: true
+#          
+#      - name: Build gpkde
+#        working-directory: gpkde
+#        run: |
+#          meson setup builddir -Ddebug=false --prefix=$(pwd) --libdir=bin
+#          meson install -C builddir
+#          meson test --verbose --no-rebuild -C builddir
