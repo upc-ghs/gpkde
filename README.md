@@ -1,5 +1,6 @@
 # gpkde
 Fortran Code for Grid Projected Kernel Density Estimation of Discrete Particle Distributions
+[![GPKDE continuous integration](https://github.com/upc-ghs/gpkde/actions/workflows/ci.yml/badge.svg)](https://github.com/upc-ghs/gpkde/actions/workflows/ci.yml)
 
 ![](img/banner.png)
 
