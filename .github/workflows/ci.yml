@@ -40,7 +40,13 @@ jobs:
           environment-file: gpkde/env.yml
           cache-downloads: true
           cache-env: true
-
+      - name: Meson setup
+        run: meson setup builddir -Ddebug=false -Dwerror=true
+      - name: Meson compile
+        run: meson compile -C builddir
+      - name: Meson test
+        run: meson test --verbose --no-rebuild -C builddir
+        
   build_gfortran_previous:
     name: Build gfortran (${{ matrix.GCC_V }}, ${{ matrix.os }})
     needs:
@@ -75,9 +81,9 @@ jobs:
           cache-downloads: true
           cache-env: true
           
-      #- name: Build modflow6
-      #  working-directory: modflow6
-      #  run: |
-      #    meson setup builddir -Ddebug=false --prefix=$(pwd) --libdir=bin
-      #    meson install -C builddir
-      #    meson test --verbose --no-rebuild -C builddir
+      - name: Build gpkde
+        working-directory: gpkde
+        run: |
+          meson setup builddir -Ddebug=false --prefix=$(pwd) --libdir=bin
+          meson install -C builddir
+          meson test --verbose --no-rebuild -C builddir
