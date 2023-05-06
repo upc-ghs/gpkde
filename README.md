@@ -36,7 +36,7 @@ For bug reports and updates, follow:
 ```
 
 ## Simulation file
-For details about the configuration of input files please refer to the program [Documentation](doc/gpkde_IO_001_tmp.pdf). 
+For details about the configuration of input files please refer to the program [Documentation](doc/gpkde_IO_100.pdf). 
 
 ## Examples 
 A set of possible use cases of the reconstruction module are included as example files in this repository. The currently available simulations include:
@@ -48,7 +48,7 @@ A set of possible use cases of the reconstruction module are included as example
 ## Compilation 
 Repository includes two makefiles at the folder `make`:
 
-- `Makefile`: for the `gfortran` compiler, with compilation verified for `gfortran>=12`.
+- `Makefile`: for the `gfortran` compiler, with compilation verified for `gfortran>=8.4.0`.
 - `Makefile-ifort`: for the `ifort` compiler, with compilation verified for `ifort@2021.9.0`.
 
 For users familiarized with Visual Studio, the folder `msvs` contains the project/solution files, and a Windows binary/executable is available at the folder `bin/`.
