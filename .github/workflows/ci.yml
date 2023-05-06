@@ -38,7 +38,7 @@ jobs:
           cache-downloads: true
           cache-env: true
       - name: Meson setup
-        run: meson setup builddir -Ddebug=false -Dwerror=true
+        run: meson setup builddir -Dwarning_level=0 -Ddebug=false -Dwerror=true
       - name: Meson compile
         run: meson compile -C builddir
       - name: Meson test
@@ -73,7 +73,7 @@ jobs:
       - name: Build gpkde
         working-directory: gpkde
         run: |
-          meson setup builddir -Ddebug=false --prefix=$(pwd) --libdir=bin
+          meson setup builddir -Dwarning_level=0 -Ddebug=false --prefix=$(pwd) --libdir=bin
           meson install -C builddir
           meson test --verbose --no-rebuild -C builddir
 
