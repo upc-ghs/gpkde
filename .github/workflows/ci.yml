@@ -17,7 +17,7 @@ on:
 jobs:
   build:
     name: Build (gfortran 12)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash -l {0}
@@ -34,6 +34,13 @@ jobs:
         with:
           compiler: gcc
           version: ${{ env.GCC_V }}
+          
+      - name: Micromamba
+        uses: mamba-org/provision-with-micromamba@main
+        with:
+          environment-file: gpkde/env.yml
+          cache-downloads: true
+          cache-env: true
 
   build_gfortran_previous:
     name: Build gfortran (${{ matrix.GCC_V }}, ${{ matrix.os }})
@@ -61,7 +68,14 @@ jobs:
         with:
           compiler: gcc
           version: ${{ matrix.GCC_V }}
-
+          
+      - name: Micromamba
+        uses: mamba-org/provision-with-micromamba@main
+        with:
+          environment-file: gpkde/env.yml
+          cache-downloads: true
+          cache-env: true
+          
       #- name: Build modflow6
       #  working-directory: modflow6
       #  run: |
