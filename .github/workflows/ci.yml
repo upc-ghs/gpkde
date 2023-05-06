@@ -66,7 +66,7 @@ jobs:
       - name: Micromamba
         uses: mamba-org/provision-with-micromamba@main
         with:
-          environment-file: gpkde/env.yml
+          environment-file: gpkde/environment.yml
           cache-downloads: true
           cache-env: true
 
@@ -109,7 +109,7 @@ jobs:
 #      - name: Micromamba
 #        uses: mamba-org/provision-with-micromamba@main
 #        with:
-#          environment-file: gpkde/env.yml
+#          environment-file: gpkde/environment.yml
 #          cache-downloads: true
 #          cache-env: true
 #          
