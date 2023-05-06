@@ -36,7 +36,7 @@ For bug reports and updates, follow:
 ```
 
 ## Simulation file
-For details about the configuration of input files please refer to the program [Documentation](doc/gpkde_IO_100.pdf). 
+For details about the configuration of input files please refer to the program [Documentation](doc/gpkde_IO_v100.pdf). 
 
 ## Examples 
 A set of possible use cases of the reconstruction module are included as example files in this repository. The currently available simulations include:
