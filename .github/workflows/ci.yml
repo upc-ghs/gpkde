@@ -25,16 +25,15 @@ jobs:
       FC: gfortran
       GCC_V: 12
     steps:
-
       - name: Checkout gpkde
         uses: actions/checkout@v3
-      
+        with:
+          path: gpkde
       - name: Setup gfortran ${{ env.GCC_V }}
         uses: awvwgk/setup-fortran@main
         with:
           compiler: gcc
-          version: ${{ env.GCC_V }}
-          
+          version: ${{ env.GCC_V }}     
       - name: Micromamba
         uses: mamba-org/provision-with-micromamba@main
         with:
