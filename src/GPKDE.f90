@@ -3,7 +3,9 @@ program GPKDE
   use GridProjectedKDEModule, only: GridProjectedKDEType
   use UTL8MODULE,only : urword, ustop, u8rdcom
   use CompilerVersion,only : get_compiler_txt
+#ifdef _OPENMP
   use omp_lib ! OpenMP
+#endif
   !-----------------------------------------------
   implicit none
   type(GridProjectedKDEType), allocatable      :: gpkdeObj 
@@ -97,12 +99,16 @@ program GPKDE
   else
     logUnit = -logUnit
   end if
+#ifdef _OPENMP
   ! Get the number of threads for the parallel region
   if ( parallel ) then
     ompNumThreads = omp_get_max_threads()
   else
     ompNumThreads = 1
   end if
+#else
+  ompNumThreads = 1
+#endif
   !-----------------------------------------------
 
   ! Open the simulation input file 
@@ -935,6 +941,7 @@ contains
     logType    = 1
     parallel   = .false.
     nprocs     = 0
+    nprocschar = ""
 
     ! Loop through the command-line arguments (if any)
     na = 1
@@ -968,6 +975,7 @@ contains
           else
             call ustop('Conflicting log file names on the command line. Stop.')
           end if
+#ifdef _OPENMP
         case ("-parallel","-p","--parallel")
           ! -parallel option
           parallel = .true.
@@ -982,6 +990,7 @@ contains
             read(nprocschar,*) nprocs
             if( nprocs .gt. 1 ) parallel = .true.
           end if
+#endif
         case ('-h', "--help")
           ! --help
           call DisplayHelpMessage(progname)
@@ -1003,6 +1012,7 @@ contains
     ! If log file name not specified, set to default
     if (logFile == "") logFile = "gpkde.log"
 
+#ifdef _OPENMP
     ! Set parallel processes
     if ( parallel .and. (nprocs .eq. 0) ) then 
       ! If parallel and no np specified, set number of processors 
@@ -1020,10 +1030,12 @@ contains
       nprocs = omp_get_max_threads()
       call omp_set_num_threads( nprocs )
     end if 
-
+#else
+    parallel = .false.
+    nprocs   = 1
+#endif 
 
     return
-
 
   end subroutine ParseCommandLine
 
@@ -1093,6 +1105,7 @@ contains
   use, intrinsic :: iso_fortran_env, only: output_unit 
   implicit none
   character(len=*), intent(in) :: progname
+#ifdef _OPENMP
   character(len=*), parameter  :: helpmessage = &
    "(/,&
    &'options:',/,&
@@ -1107,6 +1120,20 @@ contains
    &'For bug reports and updates, follow:                                             ',/,&
    &'  https://github.com/upc-ghs/gpkde                                               ',/,&
    &/)"
+#else
+  character(len=*), parameter  :: helpmessage = &
+   "(/,&
+   &'options:',/,&
+   &'                                                                                 ',/,&
+   &'  -h         --help                Show this message                             ',/,&
+   &'  -l  <str>  --logname    <str>    Write program logs to <str>                   ',/,&
+   &'  -nl        --nolog               Do not write log file                         ',/,&
+   &'  -v         --version             Show program version                          ',/,&
+   &'                                                                                 ',/,&
+   &'For bug reports and updates, follow:                                             ',/,&
+   &'  https://github.com/upc-ghs/gpkde                                               ',/,&
+   &/)"
+#endif
   !----------------------------------------------------------------------------------------
 
     write(output_unit,'(a)') &
