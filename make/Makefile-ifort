@@ -1,5 +1,5 @@
 # makefile created on 03-2023
-# using the gfortran fortran and gcc c/c++ compilers.
+# using the intel fortran compiler. 
 
 # Define the directories for the object and module files,
 # the executable, and the executable name and path.
@@ -16,6 +16,7 @@ ${SOURCEDIR1}
 .SUFFIXES: .c .cpp .f .f90 .F90 .fpp .o
 
 # Define the Fortran compile flags
+# Note: pass the flag -DREAL32 for single precision
 FC = ifort
 FFLAGS = -Ofast -traceback -qopenmp -ipo -fpe0 -fpp -no-heap-arrays
 
@@ -27,6 +28,8 @@ CFLAGS = -O3 -D_UF
 SYSLIBS = 
 
 OBJECTS = \
+$(OBJDIR)/Precision.o \
+$(OBJDIR)/Constants.o \
 $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridCell.o \
