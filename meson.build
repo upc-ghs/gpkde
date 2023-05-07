@@ -1,3 +1,4 @@
+## Project ##
 project(
   'GPKDE',
   'fortran',
@@ -9,7 +10,9 @@ project(
     'fortran_std=f2008',
 ])
 
-# OPT
+## Parameters ##
+
+# Optimization
 if get_option('optimization') == '3'
   error('Only optimization levels <= 2 are supported')
 endif
@@ -30,6 +33,18 @@ else
   with_omp = false
 endif 
 message('Compile with OpenMP:', with_omp)
+
+# Precision
+with_single_precision = get_option('real32')
+if with_single_precision
+  single_precision = true
+  message('Compile with single precision: REAL32')
+else
+  single_precision = false
+  message('Compile with double precision: REAL64')
+endif 
+
+
 
 fc    = meson.get_compiler('fortran')
 fc_id = fc.get_id()
@@ -52,6 +67,9 @@ if fc_id == 'gcc'
                    ]
   if with_omp
     compile_args += ['-fopenmp']
+  endif
+  if single_precision
+    compile_args += ['-DREAL32']
   endif
 
   # Options specific to profile
@@ -90,6 +108,9 @@ if fc_id == 'intel-cl'
   if with_omp
     compile_args += ['/Qopenmp'] # OpenMP
   endif
+  if single_precision
+    compile_args += ['-DREAL32']
+  endif
 
 elif fc_id == 'intel'
   # linux and macOS
@@ -105,6 +126,9 @@ elif fc_id == 'intel'
 
   if with_omp
     compile_args += ['-qopenmp'] # OpenMP
+  endif
+  if single_precision
+    compile_args += ['-DREAL32']
   endif
 
 endif

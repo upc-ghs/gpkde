@@ -1,4 +1,6 @@
 sources = files(
+  'Precision.F90',
+  'Constants.f90',
   'Histogram.f90',
   'KernelMultiGaussian.f90',
   'GridCell.f90', 
