@@ -17,7 +17,7 @@ ${SOURCEDIR1}
 
 # Define the Fortran compile flags
 FC = gfortran
-FFLAGS = -O2 -fopenmp -fbacktrace -ffpe-summary=overflow -ffpe-trap=overflow,zero,invalid -fall-intrinsics -Wtabs -Wline-truncation -Wunused-label -Wunused-variable -pedantic -std=f2008 -Wcharacter-truncation -cpp
+FFLAGS = -O2 -fopenmp -fbacktrace -ffpe-summary=overflow -ffpe-trap=overflow,zero,invalid -fall-intrinsics -Wtabs -Wline-truncation -Wunused-label -Wunused-variable -pedantic -std=f2008 -Wcharacter-truncation -cpp 
 
 # Define the C compile flags
 CC = gcc
@@ -27,6 +27,8 @@ CFLAGS = -O3 -D_UF
 SYSLIBS = 
 
 OBJECTS = \
+$(OBJDIR)/Precision.o \
+$(OBJDIR)/Constants.o \
 $(OBJDIR)/Histogram.o \
 $(OBJDIR)/KernelMultiGaussian.o \
 $(OBJDIR)/GridCell.o \

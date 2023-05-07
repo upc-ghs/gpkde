@@ -1,16 +1,18 @@
 ! GPKDE.f90
 program GPKDE
   use GridProjectedKDEModule, only: GridProjectedKDEType
-  use UTL8MODULE,only : urword, ustop, u8rdcom
-  use CompilerVersion,only : get_compiler_txt
+  use UTL8MODULE, only            : urword, ustop, u8rdcom
+  use CompilerVersion, only       : get_compiler_txt
+  use PrecisionModule, only       : fp
+  use ConstantsModule, only       : fZERO, fONE
 #ifdef _OPENMP
   use omp_lib ! OpenMP
 #endif
   !-----------------------------------------------
   implicit none
-  type(GridProjectedKDEType), allocatable      :: gpkdeObj 
-  doubleprecision, dimension(:,:), allocatable :: dataCarrier
-  doubleprecision, dimension(:), allocatable   :: weightsCarrier
+  type(GridProjectedKDEType), allocatable :: gpkdeObj 
+  real(fp), dimension(:,:), allocatable   :: dataCarrier
+  real(fp), dimension(:), allocatable     :: weightsCarrier
   logical :: parallel = .false.
   character(len=200) :: simFile, logFile, dataFile, outputFile
   integer            :: simUnit, dataUnit, logUnit, logType, outputUnit
@@ -18,7 +20,7 @@ program GPKDE
   character(len=100) :: terminationMessage
   character(len=90)  :: compilerVersionText
   integer            :: ompNumThreads
-  doubleprecision    :: relativeErrorConvergence
+  real(fp)           :: relativeErrorConvergence
   logical            :: exists
   logical            :: kernelDatabase
   logical            :: isotropicKernels
@@ -26,39 +28,39 @@ program GPKDE
   integer            :: nlines, io, id
   integer            :: inputDataFormat
   integer            :: nOptLoops
-  doubleprecision    :: initialSmoothingFactor
+  real(fp)           :: initialSmoothingFactor
   integer            :: initialSmoothingSelection 
   logical            :: exportOptimizationVariables
-  doubleprecision    :: uniformMass
+  real(fp)           :: uniformMass
   logical            :: advancedOptions
   ! urword
   character(len=200) :: line
   integer            :: icol,istart,istop,n, iostatus
-  doubleprecision    :: r
+  real(fp)           :: r
   integer            :: errorCode
   integer            :: auxUnit = 0
   ! clock
-  doubleprecision    :: elapsedTime
+  real(fp)           :: elapsedTime
   integer            :: clockCountStart, clockCountStop
   integer            :: clockCountRate, clockCountMax
   ! grid
-  doubleprecision, dimension(3) :: domainSize  
-  doubleprecision, dimension(3) :: binSize     
-  doubleprecision, dimension(3) :: domainOrigin
-  logical                       :: adaptToCoords
-  doubleprecision               :: borderFraction = 0.05
+  real(fp), dimension(3) :: domainSize  
+  real(fp), dimension(3) :: binSize     
+  real(fp), dimension(3) :: domainOrigin
+  logical                :: adaptToCoords
+  real(fp)               :: borderFraction = 0.05_fp
   ! kernels
-  doubleprecision, dimension(3) :: initialSmoothing
-  doubleprecision, dimension(3) :: kernelParams
+  real(fp), dimension(3) :: initialSmoothing
+  real(fp), dimension(3) :: kernelParams
   ! advanced options, some with default values
-  integer            :: minRoughnessFormat = 0
-  doubleprecision    :: minRelativeRoughness
-  doubleprecision    :: minRoughnessLengthScale
-  doubleprecision    :: minRoughness
-  integer            :: effectiveWeightFormat  = 0
-  integer            :: boundKernelSizeFormat  = 0
-  doubleprecision    :: isotropicThreshold     = 0.9
-  logical            :: useGlobalSmoothing     = .false.
+  integer     :: minRoughnessFormat = 0
+  real(fp)    :: minRelativeRoughness
+  real(fp)    :: minRoughnessLengthScale
+  real(fp)    :: minRoughness
+  integer     :: effectiveWeightFormat  = 0
+  integer     :: boundKernelSizeFormat  = 0
+  real(fp)    :: isotropicThreshold     = 0.9_fp
+  logical     :: useGlobalSmoothing     = .false.
   !-----------------------------------------------
   simUnit    = 111
   logUnit    = 911
@@ -177,13 +179,13 @@ program GPKDE
   ! Looks for a uniform weight in case input format is only (x,y,z)
   if (inputDataFormat.eq.0) then 
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    if ( r .gt. 0d0 ) then
+    if ( r .gt. fZERO ) then
       uniformMass = r 
       if ( logUnit .gt. 0 ) then 
         write(logUnit, '(a,es18.9e3)') 'Given a uniform weight for the particle distribution: ', uniformMass 
       end if
     else
-      uniformMass = 1d0 
+      uniformMass = fONE
     end if 
   end if  
 
@@ -299,10 +301,10 @@ program GPKDE
   ! If adapting, try to read a border fraction
   if ( adaptToCoords ) then 
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-    if ( r.ne.0d0 ) then
+    if ( r.ne.fZERO ) then
       ! If a value was given, it should be greater than zero
       ! Is there an upper boundary ? Bound to one just in case 
-      if ( (r.lt.0d0).or.(r.gt.1d0) ) then 
+      if ( (r.lt.fZERO).or.(r.gt.fONE) ) then 
         if ( logUnit .gt. 0 ) then  
           write(logUnit,'(a)') 'Given border fraction is less than zero. It should be between 0 and 1. Stop.'
         end if 
@@ -326,25 +328,25 @@ program GPKDE
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   binSize(3) = r
   ! Health control
-  if ( any(binSize.lt.0d0) ) then
+  if ( any(binSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
       write(logUnit,'(a)') 'One of the binSizes is negative. They should be positive. Stop.'
     end if 
     call ustop('One of the binSizes is negative. They should be positive. Stop.')
   end if 
-  if ( all(binSize.lt.0d0) ) then
+  if ( all(binSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
       write(logUnit,'(a)') 'All binSizes are less than zero. They should be positive. Stop.'
     end if 
     call ustop('All binSizes are less than zero. They should be positive. Stop.')
   end if 
-  if ( any(domainSize.lt.0d0) ) then
+  if ( any(domainSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
       write(logUnit,'(a)') 'One of the domainSizes is negative. They should be positive. Stop.'
     end if 
     call ustop('One of the domainSizes is negative. They should be positive. Stop.')
   end if 
-  if ( all(domainSize.lt.0d0) ) then
+  if ( all(domainSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
       write(logUnit,'(a)') 'All domainSizes are less than zero. They should be positive. Stop.'
     end if 
@@ -408,7 +410,7 @@ program GPKDE
     end if
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     relativeErrorConvergence = r
-    if ( (logUnit.gt.0).and.(relativeErrorConvergence.gt.0d0) ) then 
+    if ( (logUnit.gt.0).and.(relativeErrorConvergence.gt.fZERO) ) then 
       write(logUnit,'(a,es18.9e3)') 'Relative error convergence set to: ', relativeErrorConvergence
     end if
   case(1)
@@ -477,7 +479,7 @@ program GPKDE
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'GPKDE will compute raw kernels.'
     end if
-    kernelParams(:) = 0d0
+    kernelParams(:) = fZERO
   end if 
 
   ! Selection of initial smoothing
@@ -490,8 +492,8 @@ program GPKDE
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'Initial smoothing is selected from the global estimate of Silverman (1986). '
     end if
-    initialSmoothing(:) = 0d0
-    initialSmoothingFactor = 1d0
+    initialSmoothing(:) = fZERO
+    initialSmoothingFactor = fONE
     initialSmoothingSelection = 0 
   else
     icol = 1
@@ -501,20 +503,20 @@ program GPKDE
       if ( logUnit.gt.0 ) then 
         write(logUnit,'(a)') 'Initial smoothing is selected from the global estimate of Silverman (1986). '
       end if
-      initialSmoothing(:) = 0d0
-      initialSmoothingFactor = 1d0
+      initialSmoothing(:) = fZERO
+      initialSmoothingFactor = fONE
       initialSmoothingSelection = n 
     case(1)
       if ( logUnit.gt.0 ) then 
         write(logUnit,'(a)') 'Initial smoothing specified as a factor multiplying characteristic bin size.'
       end if
       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-      initialSmoothing(:) = 0d0
+      initialSmoothing(:) = fZERO
       initialSmoothingFactor = r
-      if ( (logUnit.gt.0).and.(initialSmoothingFactor.gt.0d0) ) then 
+      if ( (logUnit.gt.0).and.(initialSmoothingFactor.gt.fZERO) ) then 
         write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set to: ', initialSmoothingFactor
       end if
-      if ( initialSmoothingFactor .le. 0d0 ) then 
+      if ( initialSmoothingFactor .le. fZERO ) then 
         call ustop('Invalid initial smoothing factor, it should greater than zero. Stop.')
       end if 
       initialSmoothingSelection = n 
@@ -530,11 +532,11 @@ program GPKDE
       initialSmoothing(2) = r
       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
       initialSmoothing(3) = r
-      initialSmoothingFactor = 1d0
-      if ( any( initialSmoothing .lt. 0d0 ) ) then 
+      initialSmoothingFactor = fONE
+      if ( any( initialSmoothing .lt. fZERO ) ) then 
         call ustop('Invalid value for initial smoothing, it should greater or equal to zero. Stop.')
       end if 
-      if ( all( initialSmoothing .le. 0d0 ) ) then 
+      if ( all( initialSmoothing .le. fZERO ) ) then 
         call ustop('Invalid values for initial smoothing, at least one should be positive. Stop.')
       end if 
       initialSmoothingSelection = n 
@@ -606,20 +608,20 @@ program GPKDE
       ! Shall override kernel database params ?
       ! Read min relative kernel size (minHOverLambda)
       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-      if ( r.le.0d0 ) then 
+      if ( r.le.fZERO ) then 
         if ( logUnit.gt.0 ) then 
-          write(logUnit,'(a)') 'Invalid min kernel size. Should be .gt. 0d0. Stop.'
+          write(logUnit,'(a)') 'Invalid min kernel size. Should be .gt. 0. Stop.'
         end if
-       call ustop('Invalid min kernel size. Should be .gt. 0d0. Stop.')
+       call ustop('Invalid min kernel size. Should be .gt. 0. Stop.')
       end if 
       kernelParams(1) = r
       ! Read max relative kernel size (maxHOverLambda)
       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-      if ( (r.le.0d0).or.(r.le.kernelParams(1)) ) then 
+      if ( (r.le.fZERO).or.(r.le.kernelParams(1)) ) then 
         if ( logUnit.gt.0 ) then 
-          write(logUnit,'(a)') 'Invalid max kernel size. Should be .gt. 0d0 and .gt. min given value. Stop.'
+          write(logUnit,'(a)') 'Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.'
         end if
-       call ustop('Invalid max kernel size. Should be .gt. 0d0 and .gt. min given value. Stop.')
+       call ustop('Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.')
       end if
       kernelParams(3) = r
     case(2)
@@ -645,7 +647,7 @@ program GPKDE
      ! 0: Gaussian, computes the std deviation of particles and default relative roughness
      ! 1: User provides minRelativeRoughness and a characteristic length scale
      ! 2: User provides the minRoughness
-     ! 3: Unbounded, computes all values .gt. 0d0
+     ! 3: Unbounded, computes all values .gt. 0
      icol = 1
      call urword(line, icol, istart, istop, 2, n, r, 0, 0)
      select case(n)
@@ -659,22 +661,22 @@ program GPKDE
          write(logUnit,'(a)') 'Min roughness computed from user input parameters.'
        end if
        minRoughnessFormat = n
-       ! Read min relative roughness: should be .gt. 0d0 
+       ! Read min relative roughness: should be .gt. 0
        call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-       if ( r.lt.0d0 ) then 
+       if ( r.lt.fZERO ) then 
          if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Invalid minRelativeRoughness. Should be .ge. 0d0. Stop.'
+           write(logUnit,'(a)') 'Invalid minRelativeRoughness. Should be .ge. 0. Stop.'
          end if
-        call ustop('Invalid minRelativeRoughness. Should be .ge. 0d0. Stop.')
+        call ustop('Invalid minRelativeRoughness. Should be .ge. 0. Stop.')
        end if 
        minRelativeRoughness = r
        ! Read characteristic length scale: cannot be zero
        call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-       if ( r.le.0d0 ) then 
+       if ( r.le.fZERO ) then 
          if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Invalid minRoughnessLengthScale. Should be .gt. 0d0. Stop.'
+           write(logUnit,'(a)') 'Invalid minRoughnessLengthScale. Should be .gt. 0. Stop.'
          end if
-        call ustop('Invalid minRoughnessLengthScale. Should be .gt. 0d0. Stop.')
+        call ustop('Invalid minRoughnessLengthScale. Should be .gt. 0. Stop.')
        end if 
        minRoughnessLengthScale = r
      case(2)
@@ -682,13 +684,13 @@ program GPKDE
          write(logUnit,'(a)') 'Min roughness given by user.'
        end if
        minRoughnessFormat = n
-       ! Read min roughness: should be .ge. 0d0 
+       ! Read min roughness: should be .ge. 0
        call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-       if ( r.lt.0d0 ) then 
+       if ( r.lt.fZERO ) then 
          if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Invalid minRoughness. Should be .ge. 0d0. Stop.'
+           write(logUnit,'(a)') 'Invalid minRoughness. Should be .ge. 0. Stop.'
          end if
-        call ustop('Invalid minRoughness. Should be .ge. 0d0. Stop.')
+        call ustop('Invalid minRoughness. Should be .ge. 0. Stop.')
        end if 
        minRoughness = r
      case(3)
@@ -712,7 +714,7 @@ program GPKDE
      else
       icol = 1
       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-      if ( (r.lt.0d0).or.(r.gt.1d0) ) then 
+      if ( (r.lt.fZERO).or.(r.gt.fONE) ) then 
         if ( logUnit.gt.0 ) then 
           write(logUnit,'(a)') 'Given isotropicThreshold is invalid. Should be between 0 and 1. Stop.'
         end if

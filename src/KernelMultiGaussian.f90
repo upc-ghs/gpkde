@@ -1,18 +1,18 @@
 module KernelMultiGaussianModule
-  !------------------------------------------------------------------------------
+  !--------------------------------------------------------------------------------
   ! Module that provides grid-projected MultiGaussian kernels 
-  !------------------------------------------------------------------------------
+  !--------------------------------------------------------------------------------
+  use PrecisionModule, only : fp 
+  use ConstantsModule, only : fZERO, fONE, fTWO, fTHREE, fFIVE, pi, sqrtPi, sqrtTwo
   implicit none
+  !--------------------------------------------------------------------------------
 
   ! Parameters
-  doubleprecision, parameter :: pi      = 4.d0*atan(1.d0)
-  doubleprecision, parameter :: sqrtPi  = sqrt(4.d0*atan(1.d0))
-  doubleprecision, parameter :: sqrtTwo = sqrt(2d0)
-  integer, parameter         :: defaultKernelRange   = 3
-  integer, parameter         :: defaultKernelSDRange = 4
-
+  integer, parameter                 :: defaultKernelRange   = 3
+  integer, parameter                 :: defaultKernelSDRange = 4
   ! Common vars, will be updated according to init function
   integer                            :: nDim          = 3
+  real(fp)                           :: fNDim         = 3.0_fp
   integer, dimension(3)              :: dimensionMask = (/1,1,1/)
   integer                            :: idDim1, idDim2
   integer, dimension(:), allocatable :: dimensions
@@ -23,13 +23,13 @@ module KernelMultiGaussianModule
   type, public, abstract :: KernelType
       
     ! Properties
-    doubleprecision, dimension(3) :: binSize     = 0d0
-    doubleprecision, dimension(3) :: bandwidth   = 0d0
-    integer                       :: matrixRange 
-    integer, dimension(3)         :: matrixPositiveShape = 0 
-    logical                       :: shouldIntegrateOne 
-    doubleprecision, dimension(:,:,:), allocatable :: matrix
-    doubleprecision, dimension(:,:,:), allocatable :: bmatrix
+    real(fp), dimension(3) :: binSize     = fZERO
+    real(fp), dimension(3) :: bandwidth   = fZERO
+    integer                :: matrixRange 
+    integer , dimension(3) :: matrixPositiveShape = 0 
+    logical                :: shouldIntegrateOne 
+    real(fp), dimension(:,:,:), allocatable :: matrix
+    real(fp), dimension(:,:,:), allocatable :: bmatrix
 
   contains 
       
@@ -95,10 +95,11 @@ module KernelMultiGaussianModule
       ! Specifications 
       !------------------------------------------------------------------------------
       import :: KernelType
-      class( KernelType ) :: this 
-      integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
-      doubleprecision, dimension(:)    , allocatable :: hLambda
-      doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
+      import :: fp
+      class( KernelType )                     :: this 
+      integer , dimension(:,:,:), intent(in)  :: zPXGrid, zPYgrid, zPZGrid
+      real(fp), dimension(:)    , allocatable :: hLambda
+      real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
       integer :: nx, ny, nz
       !------------------------------------------------------------------------------
     end subroutine ComputeKernelMatrix
@@ -114,10 +115,10 @@ contains
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none
-    class( KernelType ) :: this 
-    doubleprecision, dimension(:)  :: binSize
-    integer, intent(in), optional  :: matrixRange
-    integer, dimension(:), intent(in), optional  :: dimensionMask
+    class( KernelType )                           :: this 
+    real(fp), dimension(:)                        :: binSize
+    integer , intent(in), optional                :: matrixRange
+    integer , dimension(:), intent(in), optional  :: dimensionMask
     !------------------------------------------------------------------------------
 
     ! Assign binSize 
@@ -144,8 +145,8 @@ contains
     class( KernelType ) :: this 
     !------------------------------------------------------------------------------
 
-    this%bandwidth = 0d0
-    this%binSize   = 0d0
+    this%bandwidth = fZERO
+    this%binSize   = fZERO
     this%matrixPositiveShape = 0
     this%matrixRange = defaultKernelRange ! Set to zero ?
 
@@ -166,7 +167,7 @@ contains
     !------------------------------------------------------------------------------
 
     if ( allocated( this%matrix ) ) deallocate( this%matrix )
-    this%bandwidth = 0d0
+    this%bandwidth = fZERO
     this%matrixPositiveShape = 0
 
   end subroutine prResetMatrix
@@ -185,7 +186,7 @@ contains
     if ( allocated( this%matrix ) ) deallocate( this%matrix )
     if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
 
-    this%bandwidth = 0d0
+    this%bandwidth = fZERO
     this%matrixPositiveShape = 0
 
 
@@ -205,6 +206,7 @@ contains
 
     this%matrixPositiveShape = source%matrixPositiveShape
     this%matrix              = source%matrix
+    this%shouldIntegrateOne  = source%shouldIntegrateOne
 
   end subroutine prCopyFrom
 
@@ -357,6 +359,12 @@ contains
       end select
     end do 
 
+    if ( this%shouldIntegrateOne ) then 
+      if ( ( abs( sum(this%matrix) ) .lt. 0.99 ) ) then  
+        write(*,*) 'Kernel does not integrate one and it should. Integral: ', sum(this%matrix)
+        stop
+      end if
+    end if 
 
   end subroutine prKernelReflection 
 
@@ -828,8 +836,8 @@ contains
     !------------------------------------------------------------------------------
     implicit none
     class( KernelType ) :: this
-    doubleprecision, dimension(:,:,:), intent(in)    :: sourceZeroPositive
-    doubleprecision, dimension(:,:,:), intent(inout) :: targetMatrix
+    real(fp), dimension(:,:,:), intent(in)    :: sourceZeroPositive
+    real(fp), dimension(:,:,:), intent(inout) :: targetMatrix
     ! local
     integer :: nx, ny, nz
     !------------------------------------------------------------------------------
@@ -862,7 +870,7 @@ contains
     !------------------------------------------------------------------------------
     implicit none
     class( KernelType ) :: this 
-    doubleprecision, dimension(3), intent(in) :: bandwidth
+    real(fp), dimension(3), intent(in) :: bandwidth
     ! local
     integer, dimension(:,:,:), allocatable    :: zPXGrid, zPYGrid, zPZGrid
     !------------------------------------------------------------------------------
@@ -874,7 +882,7 @@ contains
     ! dimension is zero
 
     ! This means that matrixPositiveShape will have a zero in the compressed dimension
-    where ( this%binSize .ne. 0d0 ) 
+    where ( this%binSize .ne. fZERO ) 
       this%matrixPositiveShape = ceiling( this%matrixRange*this%bandwidth/this%binSize )
     elsewhere
       this%matrixPositiveShape = 0
@@ -906,8 +914,8 @@ contains
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none 
-    doubleprecision, dimension(:,:,:), intent(in)  :: sourceMatrix
-    doubleprecision, dimension(:,:,:), allocatable :: transposedMatrix
+    real(fp), dimension(:,:,:), intent(in)  :: sourceMatrix
+    real(fp), dimension(:,:,:), allocatable :: transposedMatrix
     ! local
     integer, dimension(3) :: sourceShape
     integer :: n
@@ -934,8 +942,8 @@ contains
     !------------------------------------------------------------------------------
     implicit none 
     class( KernelType ), target :: this
-    doubleprecision, dimension(:,:,:), pointer :: sourceMatrix
-    doubleprecision, dimension(:,:,:), allocatable :: transposedMatrix
+    real(fp), dimension(:,:,:), pointer :: sourceMatrix
+    real(fp), dimension(:,:,:), allocatable :: transposedMatrix
     ! local
     integer, dimension(3) :: sourceShape
     integer :: n
@@ -970,6 +978,7 @@ contains
 
     dimensionMask = inDimensionMask
     nDim          = sum( dimensionMask )
+    fNDim         = real(nDim)
 
     ! Save dim mask into dimensions 
     if ( allocated( dimensions ) ) deallocate( dimensions )
@@ -1018,6 +1027,7 @@ contains
 
     dimensionMask = (/1,1,1/)
     nDim          = 3 
+    fNDim         = 3.0_fp 
     if( allocated( dimensions ) ) deallocate( dimensions ) 
 
   end subroutine ResetKernelDimensions
@@ -1032,13 +1042,13 @@ contains
     !------------------------------------------------------------------------------
     implicit none
     class( KernelMultiGaussianType ) :: this 
-    integer, dimension(:,:,:), intent(in) :: zPXGrid, zPYgrid, zPZGrid
+    integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local 
-    doubleprecision, dimension(3)                  :: hLambda
-    doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
-    integer :: nx, ny, nz
-    integer :: nd
-    doubleprecision :: summatrix
+    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
+    integer  :: nx, ny, nz
+    integer  :: nd
+    real(fp) :: summatrix
     !------------------------------------------------------------------------------
 
     this%shouldIntegrateOne = .true.
@@ -1057,23 +1067,21 @@ contains
     if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
     allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
-    !if ( all( this%bandwidth .eq. 0d0 ) ) this%matrix = 0d0 return
-    if ( all( this%bandwidth .eq. 0d0 ) ) then 
-      this%matrix = 0d0
+    if ( all( this%bandwidth .eq. fZERO ) ) then 
+      this%matrix = fZERO
       return
     end if
 
     ! Compute normalized smoothing bandwidth/lambda
-    hLambda = 0d0
-    where( this%binSize .ne. 0d0 ) 
+    hLambda = fZERO
+    where( this%binSize .ne. fZERO ) 
       hLambda = this%bandwidth/this%binSize
     end where
 
     ! Compute kernel
-    zeroPositiveMatrix(:,:,:) = (0.5**nDim)
-    !zeroPositiveMatrix(:,:,:) = (0.5**nDim)
+    zeroPositiveMatrix(:,:,:) = (0.5**fNDim)
     do nd=1,3
-      if ( hLambda(nd) .le. 0d0 ) cycle
+      if ( hLambda(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
           zeroPositiveMatrix = zeroPositiveMatrix*(         &
@@ -1095,7 +1103,7 @@ contains
 
     ! Normalization correction
     summatrix = sum( this%matrix )
-    if ( summatrix .ne. 0d0 ) this%matrix = this%matrix/summatrix
+    if ( summatrix .ne. fZERO ) this%matrix = this%matrix/summatrix
 
     return
 
@@ -1115,14 +1123,14 @@ contains
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none 
-    class( KernelSecondDerivativeXType ) :: this 
-    integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
+    class( KernelSecondDerivativeXType )    :: this 
+    integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local
-    doubleprecision, dimension(3) :: hLambda
-    doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
-    integer :: nx, ny, nz
-    integer :: nd
-    doubleprecision :: aDenom, aNum, aCoeff, summatrixsq
+    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
+    integer  :: nx, ny, nz
+    integer  :: nd
+    real(fp) :: aDenom, aNum, aCoeff, summatrixsq
     !------------------------------------------------------------------------------
 
     this%shouldIntegrateOne = .false.
@@ -1140,29 +1148,27 @@ contains
     if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
     allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
-    if ( all( this%bandwidth .eq. 0d0 ) ) then 
-      this%matrix = 0d0
+    if ( all( this%bandwidth .eq. fZERO ) ) then 
+      this%matrix = fZERO
       return
     end if
 
     ! Compute normalized smoothing bandwidth/lambda
-    hLambda = 0d0
-    where( this%binSize .ne. 0d0 ) 
+    hLambda = fZERO
+    where( this%binSize .ne. fZERO ) 
       hLambda = this%bandwidth/this%binSize
     end where
 
 
     ! Compute kernel
-    zeroPositiveMatrix(:,:,:) = 1d0
+    zeroPositiveMatrix(:,:,:) = fONE
     do nd=1,3
-      if ( hLambda(nd) .le. 0d0 ) cycle
+      if ( hLambda(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
-        !zeroPositiveMatrix = zeroPositiveMatrix*( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(1)**3 ) ) )*(&
-        !zeroPositiveMatrix = zeroPositiveMatrix*( -1d0/( this%vKernelNDimProd*( hLambda(1)**3d0 ) ) )*(&
-        zeroPositiveMatrix = zeroPositiveMatrix*( -1d0/( (2d0**(nDim-0.5))*sqrtPi*( hLambda(1)**3d0 ) ) )*(&
-                ( zPXGrid + 0.5 )*exp( -1d0*( ( zPXGrid + 0.5 )**2d0 )/( 2d0*( hLambda(1)**2d0 ) ) ) - &
-                ( zPXGrid - 0.5 )*exp( -1d0*( ( zPXGrid - 0.5 )**2d0 )/( 2d0*( hLambda(1)**2d0 ) ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( (fTWO**(fNDim-0.5))*sqrtPi*( hLambda(1)**fTHREE ) ) )*(&
+                ( zPXGrid + 0.5 )*exp( -fONE*( ( zPXGrid + 0.5 )**fTWO )/( fTWO*( hLambda(1)**fTWO ) ) ) - &
+                ( zPXGrid - 0.5 )*exp( -fONE*( ( zPXGrid - 0.5 )**fTWO )/( fTWO*( hLambda(1)**fTWO ) ) ) )
       case(2)
         zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - & 
                                                   erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
@@ -1178,8 +1184,8 @@ contains
     ! Kernel corrections
     aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
     aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
-    aCoeff = 1d0
-    if ( aDenom .ne. 0d0 ) aCoeff = -1d0*aNum/aDenom
+    aCoeff = fONE
+    if ( aDenom .ne. fZERO ) aCoeff = -fONE*aNum/aDenom
     where ( this%matrix > 0 )
       this%matrix = aCoeff*this%matrix
     end where
@@ -1187,19 +1193,17 @@ contains
     ! Health
     summatrixsq = sum( this%matrix**2 )
     if ( summatrixsq .lt. epsilon(aNum) ) then 
-      this%matrix = 0d0
+      this%matrix = fZERO
       return
     end if
 
     ! Correct kernel
     do nd=1,3
-      if ( hLambda(nd) .le. 0d0 ) cycle
+      if ( hLambda(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
         this%matrix = &
-          this%matrix*sqrt(3d0/( 2d0**(nDim+ 2d0)*pi**(0.5*nDim)*(hLambda(1)**5d0)*summatrixsq ))
-        !this%matrix = this%matrix*sqrt(3d0/( this%vNormConstantProd*(hLambda(1)**5d0)*summatrixsq ))
-        !this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(1)**5d0)*summatrixsq ) )
+          this%matrix*sqrt(fTHREE/( fTWO**(fNDim+ fTWO)*pi**(0.5*fNDim)*(hLambda(1)**fFIVE)*summatrixsq ))
       case(2)
         this%matrix = this%matrix/sqrt( hLambda(2) )
       case(3)
@@ -1220,14 +1224,14 @@ contains
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none 
-    class( KernelSecondDerivativeYType ) :: this 
-    integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
+    class( KernelSecondDerivativeYType )    :: this 
+    integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local
-    doubleprecision, dimension(3) :: hLambda
-    doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
-    integer :: nx, ny, nz
-    integer :: nd
-    doubleprecision :: aDenom, aNum, aCoeff, summatrixsq
+    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
+    integer  :: nx, ny, nz
+    integer  :: nd
+    real(fp) :: aDenom, aNum, aCoeff, summatrixsq
     !------------------------------------------------------------------------------
 
     this%shouldIntegrateOne = .false.
@@ -1245,32 +1249,30 @@ contains
     if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
     allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
-    if ( all( this%bandwidth .eq. 0d0 ) ) then 
-      this%matrix = 0d0
+    if ( all( this%bandwidth .eq. fZERO ) ) then 
+      this%matrix = fZERO
       return
     end if
 
     ! Compute normalized smoothing bandwidth/lambda
-    hLambda = 0d0
-    where( this%binSize .ne. 0d0 ) 
+    hLambda = fZERO
+    where( this%binSize .ne. fZERO ) 
       hLambda = this%bandwidth/this%binSize
     end where
 
 
     ! Compute kernel
-    zeroPositiveMatrix(:,:,:) = 1d0
+    zeroPositiveMatrix(:,:,:) = fONE
     do nd=1,3
-      if ( hLambda(nd) .le. 0d0 ) cycle
+      if ( hLambda(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
         zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - & 
                                                   erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )
       case(2)
-        !zeroPositiveMatrix = zeroPositiveMatrix*( -1/( ( 2**( nDim-0.5 ) )*sqrtPi*( hLambda(2)**3 ) ) )*(&
-        !zeroPositiveMatrix = zeroPositiveMatrix*( -1d0/( this%vKernelNDimProd*( hLambda(2)**3d0 ) ) )*(&
-        zeroPositiveMatrix = zeroPositiveMatrix*( -1d0/( (2d0**(nDim-0.5))*sqrtPi*( hLambda(2)**3d0 ) ) )*(&
-                ( zPYGrid + 0.5 )*exp( -1d0*( ( zPYGrid + 0.5 )**2d0 )/( 2d0*( hLambda(2)**2d0 ) ) ) - &
-                ( zPYGrid - 0.5 )*exp( -1d0*( ( zPYGrid - 0.5 )**2d0 )/( 2d0*( hLambda(2)**2d0 ) ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( (fTWO**(fNDim-0.5))*sqrtPi*( hLambda(2)**fTHREE ) ) )*(&
+                ( zPYGrid + 0.5 )*exp( -fONE*( ( zPYGrid + 0.5 )**fTWO )/( fTWO*( hLambda(2)**fTWO ) ) ) - &
+                ( zPYGrid - 0.5 )*exp( -fONE*( ( zPYGrid - 0.5 )**fTWO )/( fTWO*( hLambda(2)**fTWO ) ) ) )
       case(3)
         zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
                                                   erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
@@ -1283,8 +1285,8 @@ contains
     ! Kernel corrections
     aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
     aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
-    aCoeff = 1d0
-    if ( aDenom .gt. 0d0 ) aCoeff = -1d0*aNum/aDenom
+    aCoeff = fONE
+    if ( aDenom .gt. fZERO ) aCoeff = -fONE*aNum/aDenom
     where ( this%matrix > 0 )
       this%matrix = aCoeff*this%matrix
     end where
@@ -1292,21 +1294,19 @@ contains
     ! Health
     summatrixsq = sum( this%matrix**2 )
     if ( summatrixsq .lt. epsilon(aNum) ) then 
-      this%matrix = 0d0
+      this%matrix = fZERO
       return
     end if
 
     ! Correct kernel
     do nd=1,3
-      if ( hLambda(nd) .le. 0d0 ) cycle
+      if ( hLambda(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
         this%matrix = this%matrix/sqrt( hLambda(1) )
       case(2)
         this%matrix =& 
-          this%matrix*sqrt(3d0/( 2d0**(nDim + 2d0)*pi**(0.5*nDim)*(hLambda(2)**5d0)*summatrixsq ))
-        !this%matrix = this%matrix*sqrt(3d0/( this%vNormConstantProd*(hLambda(2)**5d0)*summatrixsq ))
-        !this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(2)**5d0)*summatrixsq ) )
+          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hLambda(2)**fFIVE)*summatrixsq ))
       case(3)
         this%matrix = this%matrix/sqrt( hLambda(3) )
       end select
@@ -1325,14 +1325,14 @@ contains
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none 
-    class( KernelSecondDerivativeZType ) :: this 
-    integer, dimension(:,:,:), intent(in)          :: zPXGrid, zPYgrid, zPZGrid
+    class( KernelSecondDerivativeZType )    :: this 
+    integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local
-    doubleprecision, dimension(3) :: hLambda
-    doubleprecision, dimension(:,:,:), allocatable :: zeroPositiveMatrix
-    integer :: nx, ny, nz
-    integer :: nd
-    doubleprecision :: aDenom, aNum, aCoeff, summatrixsq
+    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
+    integer  :: nx, ny, nz
+    integer  :: nd
+    real(fp) :: aDenom, aNum, aCoeff, summatrixsq
     !------------------------------------------------------------------------------
 
     this%shouldIntegrateOne = .false.
@@ -1350,21 +1350,21 @@ contains
     if ( allocated( this%bmatrix ) ) deallocate( this%bmatrix )
     allocate( this%bmatrix( 2*nx + 1, 2*ny + 1, 2*nz + 1 ) )
 
-    if ( all( this%bandwidth .eq. 0d0 ) ) then 
-      this%matrix = 0d0
+    if ( all( this%bandwidth .eq. fZERO ) ) then 
+      this%matrix = fZERO
       return
     end if
 
     ! Compute normalized smoothing bandwidth/lambda
-    hLambda = 0d0
-    where( this%binSize .ne. 0d0 ) 
+    hLambda = fZERO
+    where( this%binSize .ne. fZERO ) 
       hLambda = this%bandwidth/this%binSize
     end where
 
     ! Compute kernel
-    zeroPositiveMatrix(:,:,:) = 1d0
+    zeroPositiveMatrix(:,:,:) = fONE
     do nd=1,3
-      if ( hLambda(nd) .le. 0d0 ) cycle
+      if ( hLambda(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
         zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - & 
@@ -1373,10 +1373,9 @@ contains
         zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
                                                   erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
       case(3)
-        !zeroPositiveMatrix = zeroPositiveMatrix*( -1d0/( ( 2d0**( nDim-0.5 ) )*sqrtPi*( hLambda(3)**3d0 ) ) )*(&
-        zeroPositiveMatrix = zeroPositiveMatrix*( -1d0/( ( 2d0**(nDim-0.5) )*sqrtPi*( hLambda(3)**3d0 ) ) )*(&
-                ( zPZGrid + 0.5 )*exp( -1d0*( ( zPZGrid + 0.5 )**2d0 )/( 2d0*( hLambda(3)**2d0 ) ) ) - &
-                ( zPZGrid - 0.5 )*exp( -1d0*( ( zPZGrid - 0.5 )**2d0 )/( 2d0*( hLambda(3)**2d0 ) ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( ( fTWO**(fNDim-0.5) )*sqrtPi*( hLambda(3)**fTHREE ) ) )*(&
+                ( zPZGrid + 0.5 )*exp( -fONE*( ( zPZGrid + 0.5 )**fTWO )/( fTWO*( hLambda(3)**fTWO ) ) ) - &
+                ( zPZGrid - 0.5 )*exp( -fONE*( ( zPZGrid - 0.5 )**fTWO )/( fTWO*( hLambda(3)**fTWO ) ) ) )
       end select
     end do 
 
@@ -1386,8 +1385,8 @@ contains
     ! Kernel corrections
     aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
     aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
-    aCoeff = 1d0
-    if ( aDenom .gt. 0d0 ) aCoeff = -1d0*aNum/aDenom
+    aCoeff = fONE
+    if ( aDenom .gt. fZERO ) aCoeff = -fONE*aNum/aDenom
     where ( this%matrix > 0 )
       this%matrix = aCoeff*this%matrix
     end where
@@ -1395,13 +1394,13 @@ contains
     ! Health
     summatrixsq = sum( this%matrix**2 )
     if ( summatrixsq .lt. epsilon(aNum) ) then 
-      this%matrix = 0d0
+      this%matrix = fZERO
       return
     end if
 
     ! Correct kernel
     do nd=1,3
-      if ( hLambda(nd) .le. 0d0 ) cycle
+      if ( hLambda(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
         this%matrix = this%matrix/sqrt( hLambda(1) )
@@ -1409,9 +1408,7 @@ contains
         this%matrix = this%matrix/sqrt( hLambda(2) )
       case(3)
         this%matrix = &
-          this%matrix*sqrt(3d0/( 2d0**(nDim + 2d0)*pi**(0.5*nDim)*(hLambda(3)**5d0)*summatrixsq ))
-        !this%matrix = this%matrix*sqrt(3d0/( this%vNormConstantProd*(hLambda(3)**5d0)*summatrixsq ))
-        !this%matrix = this%matrix*sqrt(3/((2**( nDim + 2 ))*(pi**(0.5*nDim))*(hLambda(3)**5)*summatrixsq ) )
+          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hLambda(3)**fFIVE)*summatrixsq ))
       end select
     end do 
 
