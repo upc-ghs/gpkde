@@ -206,7 +206,6 @@ contains
 
     this%matrixPositiveShape = source%matrixPositiveShape
     this%matrix              = source%matrix
-    this%shouldIntegrateOne  = source%shouldIntegrateOne
 
   end subroutine prCopyFrom
 
@@ -359,12 +358,6 @@ contains
       end select
     end do 
 
-    if ( this%shouldIntegrateOne ) then 
-      if ( ( abs( sum(this%matrix) ) .lt. 0.99 ) ) then  
-        write(*,*) 'Kernel does not integrate one and it should. Integral: ', sum(this%matrix)
-        stop
-      end if
-    end if 
 
   end subroutine prKernelReflection 
 
@@ -1182,17 +1175,17 @@ contains
     call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
 
     ! Kernel corrections
-    aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
-    aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
+    aNum   = sum( this%matrix, mask=( this%matrix.gt.fZERO ) )
+    aDenom = sum( this%matrix, mask=( this%matrix.lt.fZERO ) )
     aCoeff = fONE
-    if ( aDenom .ne. fZERO ) aCoeff = -fONE*aNum/aDenom
-    where ( this%matrix > 0 )
+    if ( aDenom .gt. fZERO ) aCoeff = -fONE*aNum/aDenom
+    where ( this%matrix.gt.fZERO )
       this%matrix = aCoeff*this%matrix
     end where
 
     ! Health
-    summatrixsq = sum( this%matrix**2 )
-    if ( summatrixsq .lt. epsilon(aNum) ) then 
+    summatrixsq = sum( this%matrix**fTWO )
+    if ( summatrixsq.le.fZERO ) then 
       this%matrix = fZERO
       return
     end if
@@ -1283,17 +1276,17 @@ contains
     call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
 
     ! Kernel corrections
-    aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
-    aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
+    aNum   = sum( this%matrix, mask=( this%matrix.gt.fZERO ) )
+    aDenom = sum( this%matrix, mask=( this%matrix.lt.fZERO ) )
     aCoeff = fONE
     if ( aDenom .gt. fZERO ) aCoeff = -fONE*aNum/aDenom
-    where ( this%matrix > 0 )
+    where ( this%matrix.gt.fZERO )
       this%matrix = aCoeff*this%matrix
     end where
 
     ! Health
-    summatrixsq = sum( this%matrix**2 )
-    if ( summatrixsq .lt. epsilon(aNum) ) then 
+    summatrixsq = sum( this%matrix**fTWO )
+    if ( summatrixsq.le.fZERO ) then 
       this%matrix = fZERO
       return
     end if
@@ -1383,17 +1376,17 @@ contains
     call this%UnfoldZeroPositiveMatrix( zeroPositiveMatrix, this%matrix )
 
     ! Kernel corrections
-    aNum   = sum( this%matrix, mask=( this%matrix < 0 ) )
-    aDenom = sum( this%matrix, mask=( this%matrix > 0 ) )
+    aNum   = sum( this%matrix, mask=( this%matrix.gt.fZERO ) )
+    aDenom = sum( this%matrix, mask=( this%matrix.lt.fZERO ) )
     aCoeff = fONE
     if ( aDenom .gt. fZERO ) aCoeff = -fONE*aNum/aDenom
-    where ( this%matrix > 0 )
+    where ( this%matrix.gt.fZERO )
       this%matrix = aCoeff*this%matrix
     end where
 
     ! Health
-    summatrixsq = sum( this%matrix**2 )
-    if ( summatrixsq .lt. epsilon(aNum) ) then 
+    summatrixsq = sum( this%matrix**fTWO )
+    if ( summatrixsq.le.fZERO ) then 
       this%matrix = fZERO
       return
     end if

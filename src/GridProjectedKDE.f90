@@ -392,7 +392,6 @@ contains
     integer :: isThisFileOpen
     logical :: advancedOptions
     !---------------------------------------------------------------------------
-    print *, 'FLOATING PREC: ', fp
 
     ! Enable reporting to outUnit if given 
     if( present( outFileName ) ) then
@@ -1349,7 +1348,6 @@ contains
     curvature1  = fZERO
     curvature2  = fZERO
 
-print *, 'PRE CURVATURE'
     ! Choose curvature computation
     if ( ( this%idDim1 .eq. 1 ) .and. ( this%idDim2 .eq. 2 ) ) then 
       ! XY
@@ -1529,7 +1527,7 @@ print *, 'PRE CURVATURE'
     call kernelSDX%ResetMatrix()
     call kernelSDY%ResetMatrix()
     call kernelSDZ%ResetMatrix()
-print *, 'AFTER CURVATURE'
+
     curvature1 = curvature1/this%histogram%binVolume
     curvature2 = curvature2/this%histogram%binVolume
     ! Matrix from curvature kernels is lambda**2*KernelVMatrix
@@ -3651,7 +3649,7 @@ print *, 'AFTER CURVATURE'
       densityEstimateArray( n ) = densityEstimateGrid( gc%id(1), gc%id(2), gc%id(3) )
     end do
     call kernel%ResetMatrix()
-print *, 'MAX DENSITY', maxval(densityEstimateArray)
+
     ! Error monitoring
     errorRMSE = sqrt(sum( ((densityEstimateArray - rawDensity)/real(this%histogram%nPoints))**fTWO )/real(this%nComputeBins))
 
@@ -3794,21 +3792,15 @@ print *, 'MAX DENSITY', maxval(densityEstimateArray)
       !$omp end parallel do
       call kernelSigma%ResetMatrix()
 
-print *, 'MAX NESTIMATE ', maxval(nEstimateArray)
-print *, 'KERNELSIGMASUPPORT ', maxval(kernelSigmaSupportScale)
-
       ! Curvature bandwidths
       call this%ComputeCurvatureKernelBandwidth( densityEstimateArray, nEstimateArray, &
                                            kernelSmoothingScale, kernelSmoothingShape, & 
                                            kernelSigmaSupportScale, curvatureBandwidth )
-print *, maxval(curvatureBandwidth)
       ! Net roughness
       call this%ComputeNetRoughnessEstimate(activeGridCells, curvatureBandwidth, &
                            roughnessXXArray, roughnessYYArray, roughnessZZArray, &
                                      netRoughnessArray, kernelSigmaSupportScale, &
                                                  kernelSDX, kernelSDY, kernelSDZ )
-print *, maxval(netRoughnessArray)
-call exit(0)
       ! Optimal smoothing
       call this%ComputeOptimalSmoothingAndShape( nEstimateArray, netRoughnessArray, & 
                               roughnessXXArray, roughnessYYArray, roughnessZZArray, &
