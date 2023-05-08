@@ -8,6 +8,7 @@ project(
     'b_vscrt=static_from_buildtype', # Link runtime libraries statically on Windows
     'optimization=2',
     'fortran_std=f2008',
+    'warning_level=0',
 ])
 
 ## Parameters ##
@@ -23,17 +24,6 @@ else
 endif
 message('The used profile is:', profile)
 
-# OpenMP
-omp = dependency('openmp', language:'fortran')
-dependencies = [ ]
-if omp.found()
-  with_omp = true
-  dependencies = [ omp ]
-else
-  with_omp = false
-endif 
-message('Compile with OpenMP:', with_omp)
-
 # Precision
 with_single_precision = get_option('real32')
 if with_single_precision
@@ -44,6 +34,16 @@ else
   message('Compile with double precision: REAL64')
 endif 
 
+# OpenMP
+omp = dependency('openmp', language:'fortran')
+dependencies = [ ]
+if omp.found()
+  with_omp = true
+  dependencies = [ omp ]
+else
+  with_omp = false
+endif 
+message('Compile with OpenMP:', with_omp)
 
 
 fc    = meson.get_compiler('fortran')
@@ -140,5 +140,5 @@ add_project_link_arguments(fc.get_supported_arguments(link_args), language: 'for
 subdir('src')
 
 # Tests to evaluate installation success
-test('Test installation version', theexe, args : ['-v',])
-test('Test installation help', theexe, args : ['-h',])
+test('Test version', theexe, args : ['-v',])
+test('Test help   ', theexe, args : ['-h',])

@@ -1,13 +1,50 @@
 # gpkde
 Fortran Code for Grid Projected Kernel Density Estimation of Discrete Particle Distributions
-[![GPKDE continuous integration](https://github.com/upc-ghs/gpkde/actions/workflows/ci.yml/badge.svg)](https://github.com/upc-ghs/gpkde/actions/workflows/ci.yml)
+[![Continuous Integration](https://github.com/upc-ghs/gpkde/actions/workflows/ci.yml/badge.svg)](https://github.com/upc-ghs/gpkde/actions/workflows/ci.yml)
 
 ![](img/banner.png)
 
 ## Overview
 The program performs Grid Projected Kernel Density Estimation (GPKDE) of a discrete dataset in one, two or three dimensional domains and is parallelized with the OpenMP library. 
 
-It works as a standalone software by reading an input simulation file, which configures the loading of a source file with data points and additional parameters for defining the reconstruction grid and the optimization for bandwidth selection.
+It works as a standalone program by reading an input simulation file, which configures the loading of a source file with data points and additional parameters for defining the reconstruction grid and the optimization for bandwidth selection.
+
+## Building
+
+### Makefile
+Repository includes two makefiles at the folder `make`:
+
+- `Makefile`: for the `gfortran` compiler, with compilation verified for `gfortran>=8.4.0`.
+- `Makefile-ifort`: for the `ifort` compiler, with compilation verified for `ifort@2021.9.0`.
+
+Note: The preprocessor variable ``-DREAL32`` can be added to the compiler flags in order to compile with single precision floating point.
+
+### Meson
+The project can also be built with the [meson](https://mesonbuild.com/) build system:
+
+- Setup the project configuration
+
+```
+    meson setup builddir -Ddebug=false --prefix=$(pwd) --libdir=bin
+``` 
+- Compile 
+
+```
+    meson install -C builddir
+```
+
+- Basic tests
+
+```
+    meson test --verbose --no-rebuild -C builddir
+```
+
+Note: For building with single precision floating point, the option ``--Dreal32=true`` can be given to the setup instruction. 
+
+### Visual Studio and Windows
+The folder `msvs` contains the project and solution files verified for Visual Studio 2019 and 2022 on a Windows system. An executable file and complementary `dll`'s providing the OpenMP library are available at the folder `wbin/`. Users can make easy use of these files at a system level by extending the `PATH` environment variable, adding their specific address to the `wbin/` folder (as [here](https://www.itprotoday.com/windows-server/how-can-i-add-new-folder-my-system-path) or [here](https://windowsloop.com/how-to-add-to-windows-path/)).
+
+
 
 ## Command line interface
 Some basic command line arguments have been implemented in order to control program execution. These can be requested as help with the instruction ``gpkde --help`` or ``gpkde -h``, which displays the following message in console:
@@ -44,14 +81,6 @@ A set of possible use cases of the reconstruction module are included as example
 - [1D Gaussian distribution](examples/ex01_1dnormal/)
 - [2D Heterogeneous distribution](examples/ex02_2dhet/)
 - [3D Heterogeneous distribution](examples/ex03_3dhet/)
-
-## Compilation 
-Repository includes two makefiles at the folder `make`:
-
-- `Makefile`: for the `gfortran` compiler, with compilation verified for `gfortran>=8.4.0`.
-- `Makefile-ifort`: for the `ifort` compiler, with compilation verified for `ifort@2021.9.0`.
-
-For users familiarized with Visual Studio, the folder `msvs` contains the project/solution files, and a Windows binary/executable is available at the folder `bin/`.
 
 ## License
 MIT License
