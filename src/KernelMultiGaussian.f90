@@ -971,7 +971,7 @@ contains
 
     dimensionMask = inDimensionMask
     nDim          = sum( dimensionMask )
-    fNDim         = real(nDim)
+    fNDim         = real(nDim,fp)
 
     ! Save dim mask into dimensions 
     if ( allocated( dimensions ) ) deallocate( dimensions )

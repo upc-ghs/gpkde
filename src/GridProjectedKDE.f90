@@ -659,7 +659,7 @@ contains
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
       this%maxKernelSize(nd) = &
-        this%binSize(nd)*(defaultMaxSizeFactor*this%domainGridSize(nd) - 1)/real(defaultKernelRange)
+        this%binSize(nd)*(defaultMaxSizeFactor*this%domainGridSize(nd) - 1)/real(defaultKernelRange,fp)
      end do
      ! As the sigma kernel is isotropic, the maxSizeDimId 
      ! is given by the more restrictive dimension. 
@@ -668,14 +668,14 @@ contains
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
       this%maxKernelSDSize(nd) = & 
-        this%binSize(nd)*(defaultMaxSizeFactor*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange)
+        this%binSize(nd)*(defaultMaxSizeFactor*this%domainGridSize(nd) - 1)/real(defaultKernelSDRange,fp)
      end do
      ! Assign min kernel sizes, ensuring at least 2 positive shape cells, 
      ! Positive shape is obtained as ceiling 
      this%minKernelSize(:) = fZERO
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%minKernelSize(nd) = defaultMinSizeFactor*this%binSize(nd)/real(defaultKernelRange)
+      this%minKernelSize(nd) = defaultMinSizeFactor*this%binSize(nd)/real(defaultKernelRange,fp)
      end do
      ! As the sigma kernel is isotropic, the minSizeDimId 
      ! is given by the more restrictive dimension. 
@@ -683,7 +683,7 @@ contains
      this%minKernelSDSize(:) = fZERO
      do nd=1,3
       if ( this%dimensionMask(nd).eq.0 ) cycle
-      this%minKernelSDSize(nd) = defaultMinSizeFactor*this%binSize(nd)/real(defaultKernelSDRange)
+      this%minKernelSDSize(nd) = defaultMinSizeFactor*this%binSize(nd)/real(defaultKernelSDRange,fp)
      end do
     end select
 
@@ -912,7 +912,7 @@ contains
       if (this%domainGridSize(n) .eq. 1) dimensionMask(n) = 0 
     end do 
     nDim  = sum(dimensionMask)
-    fNDim = real(nDim)
+    fNDim = real(nDim,fp)
     this%dimensionMask = dimensionMask
     if ( nDim .le. 0 ) then 
       write(*,*) 'Error while initializing GPKDE dimensions. nDim .le. 0. Stop.'
@@ -3651,15 +3651,15 @@ contains
     call kernel%ResetMatrix()
 
     ! Error monitoring
-    errorRMSE = sqrt(sum( ((densityEstimateArray - rawDensity)/real(this%histogram%nPoints))**fTWO )/real(this%nComputeBins))
+    errorRMSE = sqrt(sum( ((densityEstimateArray - rawDensity)/real(this%histogram%nPoints,fp))**fTWO )/real(this%nComputeBins,fp))
 
     ! Initialize error metric 
     errorMetricArray = fZERO
     where ( kernelSmoothingScale .ne. fZERO ) 
       errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**fNDim)*(fFOUR*pi)**(0.5*fNDim)) + &
-      0.25*netRoughnessArray*kernelSmoothingScale**fFOUR)/(real(this%histogram%nPoints)**fTWO)
+      0.25*netRoughnessArray*kernelSmoothingScale**fFOUR)/(real(this%histogram%nPoints,fp)**fTWO)
     end where
-    errorALMISEProxy = sqrt(sum(errorMetricArray**fTWO)/real(this%nComputeBins))
+    errorALMISEProxy = sqrt(sum(errorMetricArray**fTWO)/real(this%nComputeBins,fp))
 
     ! Initialize smoothing error trackers
     errorMetricArray = fZERO
@@ -3863,7 +3863,7 @@ contains
                                    densityEstimateArrayOld/maxval(densityEstimateArrayOld) & 
                                 )/(densityEstimateArrayOld/maxval(densityEstimateArrayOld) )
       end where
-      errorMetricDensity = sqrt( sum(errorMetricArray**fTWO)/real(this%nComputeBins) )
+      errorMetricDensity = sqrt( sum(errorMetricArray**fTWO)/real(this%nComputeBins,fp) )
 
       ! A proxy to error: relative smoothing change
       errorMetricArray = fZERO
@@ -3871,18 +3871,18 @@ contains
         errorMetricArray = abs(kernelSmoothingScale - & 
              kernelSmoothingScaleOld)/kernelSmoothingScaleOld
       end where
-      errorMetricSmoothing = sqrt(sum(errorMetricArray**fTWO)/real(this%nComputeBins))
+      errorMetricSmoothing = sqrt(sum(errorMetricArray**fTWO)/real(this%nComputeBins,fp))
 
       ! A proxy to error: ALMISE
       errorMetricArray = fZERO
       where ( kernelSmoothingScale .ne. fZERO ) 
         errorMetricArray = (nEstimateArray/( (kernelSmoothingScale**fNDim)*(fFOUR*pi)**(0.5*fNDim)) + &
-        0.25*netRoughnessArray*kernelSmoothingScale**fFOUR)/(real(this%histogram%nPoints)**fTWO)
+        0.25*netRoughnessArray*kernelSmoothingScale**fFOUR)/(real(this%histogram%nPoints,fp)**fTWO)
       end where
-      errorALMISEProxy = sqrt(sum(errorMetricArray**fTWO)/real(this%nComputeBins))
+      errorALMISEProxy = sqrt(sum(errorMetricArray**fTWO)/real(this%nComputeBins,fp))
 
       ! A proxy to error: RMSE versus histogram density
-      errorRMSE = sqrt(sum(((densityEstimateArray - rawDensity)/real(this%histogram%nPoints))**fTWO)/real(this%nComputeBins))
+      errorRMSE = sqrt(sum(((densityEstimateArray - rawDensity)/real(this%histogram%nPoints,fp))**fTWO)/real(this%nComputeBins,fp))
 
       ! Error analysis:
       if ( .not. skipErrorBreak ) then
