@@ -201,6 +201,8 @@ module GridProjectedKDEModule
     procedure :: ComputeOptimalSmoothingAndShape => prComputeOptimalSmoothingAndShape
     procedure :: ExportDensity                   => prExportDensity
     procedure :: ExportDensityUnit               => prExportDensityUnit
+    procedure :: ExportDensityBinary             => prExportDensityBinary
+    procedure :: ExportDensityUnitBinary         => prExportDensityUnitBinary
   
   end type GridProjectedKDEType
   
@@ -446,7 +448,7 @@ contains
     if ( present( domainOrigin ) ) then 
       this%domainOrigin = domainOrigin
     else 
-      this%domainOrigin = (/0,0,0/)
+      this%domainOrigin = (/0.0_fp,0.0_fp,0.0_fp/)
     end if
 
     ! Depending on domainGridSize, is the number of dimensions of the GPDKE
@@ -549,73 +551,80 @@ contains
     else 
       this%databaseOptimization = defaultDatabaseOptimization
     end if
-    ! Process kernel database discretization parameters 
-    if ( present( minHOverLambda ) ) then
-      if ( minHOverLambda.gt.fZERO )then 
-        this%minHOverLambda = minHOverLambda
-      else
-        write(*,*) 'Error: Invalid value for minHOverLambda: should be greater than zero. Stop.'
+    ! If kernel database
+    if ( this%databaseOptimization ) then 
+     ! Process database discretization parameters 
+     if ( present( minHOverLambda ) ) then
+       if ( minHOverLambda.gt.fZERO )then 
+         this%minHOverLambda = minHOverLambda
+       else
+         write(*,*) 'Error: Invalid value for minHOverLambda: should be greater than zero. Stop.'
+         stop
+       end if
+     else 
+       this%minHOverLambda = defaultMinHOverLambda
+     end if
+     if ( present( maxHOverLambda ) ) then
+      if ( maxHOverLambda.gt.fZERO ) then 
+       if ( maxHOverLambda.le.this%minHOverLambda(1) ) then ! minhoverlambda is an array in memory
+        if ( this%reportToOutUnit ) then 
+        write( this%outFileUnit, *) 'Error: Invalid value for maxHOverLambda: should be greater than minHOverLambda.'
+        write( this%outFileUnit, *) '  Value of minHOverLambda: ', this%minHOverLambda(1)
+        write( this%outFileUnit, *) '  Value of maxHOverLamnda: ', maxHOverLambda
+        end if  
+        write(*,*) 'Error: Invalid value for maxHOverLambda: should be greater than minHOverLambda. Stop.'
         stop
+       end if
+       this%maxHOverLambda = maxHOverLambda
+      else
+       write(*,*) 'Error: Invalid value for maxHOverLambda: should be greater than zero. Stop.'
+       stop
       end if
-    else 
-      this%minHOverLambda = defaultMinHOverLambda
-    end if
-
-    if ( present( maxHOverLambda ) ) then
-     if ( maxHOverLambda.gt.fZERO ) then 
-      if ( maxHOverLambda.le.this%minHOverLambda(1) ) then ! minhoverlambda is an array in memory
+     else 
+      this%maxHOverLambda = defaultMaxHOverLambda
+      if ( this%maxHOverLambda(1).le.this%minHOverLambda(1) ) then 
        if ( this%reportToOutUnit ) then 
        write( this%outFileUnit, *) 'Error: Invalid value for maxHOverLambda: should be greater than minHOverLambda.'
-       write( this%outFileUnit, *) '  Value of minHOverLambda: ', this%minHOverLambda(1)
-       write( this%outFileUnit, *) '  Value of maxHOverLamnda: ', maxHOverLambda
+       write( this%outFileUnit, *) '  Value of minHOverLambda: ', this%minHOverLambda(1) 
+       write( this%outFileUnit, *) '  Value of maxHOverLamnda: ', this%maxHOverLambda(1)
        end if  
        write(*,*) 'Error: Invalid value for maxHOverLambda: should be greater than minHOverLambda. Stop.'
        stop
       end if
-      this%maxHOverLambda = maxHOverLambda
-     else
-      write(*,*) 'Error: Invalid value for maxHOverLambda: should be greater than zero. Stop.'
-      stop
      end if
-    else 
-     this%maxHOverLambda = defaultMaxHOverLambda
-     if ( this%maxHOverLambda(1).le.this%minHOverLambda(1) ) then 
-      if ( this%reportToOutUnit ) then 
-      write( this%outFileUnit, *) 'Error: Invalid value for maxHOverLambda: should be greater than minHOverLambda.'
-      write( this%outFileUnit, *) '  Value of minHOverLambda: ', this%minHOverLambda(1) 
-      write( this%outFileUnit, *) '  Value of maxHOverLamnda: ', this%maxHOverLambda(1)
-      end if  
-      write(*,*) 'Error: Invalid value for maxHOverLambda: should be greater than minHOverLambda. Stop.'
-      stop
-     end if
-    end if
-    if ( present( deltaHOverLambda ) ) then 
-     if ( deltaHOverLambda.gt.fZERO ) then 
-      if ( deltaHOverLambda.ge.this%maxHOverLambda(1) ) then ! maxhoverlambda is an array in memory
-       if ( this%reportToOutUnit ) then 
-       write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
-       write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
-       write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', deltaHOverLambda
-       end if  
-       write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
+     if ( present( deltaHOverLambda ) ) then 
+      if ( deltaHOverLambda.gt.fZERO ) then 
+       if ( deltaHOverLambda.ge.this%maxHOverLambda(1) ) then ! maxhoverlambda is an array in memory
+        if ( this%reportToOutUnit ) then 
+        write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
+        write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
+        write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', deltaHOverLambda
+        end if  
+        write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
+        stop
+       end if
+       this%deltaHOverLambda = deltaHOverLambda
+      else
+       write(*,*) 'Error: Invalid value for deltaHOverLambda: should be greater than zero. Stop.'
        stop
       end if
-      this%deltaHOverLambda = deltaHOverLambda
-     else
-      write(*,*) 'Error: Invalid value for deltaHOverLambda: should be greater than zero. Stop.'
-      stop
+     else 
+       this%deltaHOverLambda = defaultDeltaHOverLambda
+       if ( this%deltaHOverLambda(1).ge.this%maxHOverLambda(1) ) then 
+        if ( this%reportToOutUnit ) then 
+        write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
+        write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
+        write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', this%deltaHOverLambda(1)
+        end if  
+        write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
+        stop
+       end if
      end if
-    else 
-      this%deltaHOverLambda = defaultDeltaHOverLambda
-      if ( this%deltaHOverLambda(1).ge.this%maxHOverLambda(1) ) then 
-       if ( this%reportToOutUnit ) then 
-       write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
-       write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
-       write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', this%deltaHOverLambda(1)
-       end if  
-       write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
-       stop
-      end if
+    else
+     ! If no database, initialize with defaults
+     this%minHOverLambda   = defaultMinHOverLambda
+     this%maxHOverLambda   = defaultMaxHOverLambda
+     this%deltaHOverLambda = defaultDeltaHOverLambda
     end if
     if ( present( logKernelDatabase ) ) then ! Deprecate ? 
       this%logKernelDatabase = logKernelDatabase
@@ -2999,7 +3008,9 @@ contains
 
   ! Density computation manager 
   subroutine prComputeDensity( this, dataPoints, nOptimizationLoops, &
-      outputFileName, outputFileUnit, outputDataId, particleGroupId, &
+                                     outputFileName, outputFileUnit, &
+                               outputColumnFormat, outputDataFormat, &
+                                      outputDataId, particleGroupId, &
               persistentKernelDatabase, exportOptimizationVariables, & 
                                    skipErrorConvergence, unitVolume, &
                               scalingFactor, histogramScalingFactor, &
@@ -3019,6 +3030,8 @@ contains
     integer, intent(in), optional                :: nOptimizationLoops
     character(len=*), intent(in), optional       :: outputFileName
     integer, intent(in), optional                :: outputFileUnit
+    integer, intent(in), optional                :: outputColumnFormat
+    integer, intent(in), optional                :: outputDataFormat
     integer, intent(in), optional                :: outputDataId
     integer, intent(in), optional                :: particleGroupId
     logical, intent(in), optional                :: persistentKernelDatabase
@@ -3049,6 +3062,8 @@ contains
     logical               :: locExactPoint 
     logical               :: locIsotropic
     integer               :: localNOptimizationLoops
+    integer               :: locOutputColumnFormat
+    integer               :: locOutputDataFormat
     integer, dimension(2) :: dataPointsShape
     real(fp)              :: locRelativeErrorConvergence
     character(len=16)     :: timeChar
@@ -3061,10 +3076,10 @@ contains
     real(fp), dimension(3) :: maxSubGridCoords
     real(fp), dimension(3) :: deltaCoords 
     real(fp), dimension(3) :: subGridSize
-    integer, dimension(3)  :: subGridNBins
+    integer , dimension(3) :: subGridNBins
     real(fp), dimension(3) :: subGridOrigin
-    integer, dimension(3)  :: subGridOriginIndexes
-    integer, dimension(3)  :: subGridLimitIndexes
+    integer , dimension(3) :: subGridOriginIndexes
+    integer , dimension(3) :: subGridLimitIndexes
     ! clock
     real(fp)               :: elapsedTime
     integer                :: clockCountStart, clockCountStop
@@ -3464,13 +3479,43 @@ contains
     end if 
 
     ! Write output files !
-    if ( present( outputFileUnit ) .and. present( outputDataId ) .and. present( particleGroupId )) then
-      call this%ExportDensityUnit( outputFileUnit, outputDataId, particleGroupId )
-    else if ( present( outputFileUnit ) ) then
-      call this%ExportDensityUnit( outputFileUnit )
-    else if ( present( outputFileName ) ) then  
-      call this%ExportDensity( outputFileName )
-    end if
+    locOutputDataFormat = 0
+    if ( present( outputDataFormat ) ) then
+      locOutputDataFormat = outputDataFormat 
+    end if 
+    locOutputColumnFormat = 0
+    if ( present( outputColumnFormat ) ) then
+      locOutputColumnFormat = outputColumnFormat 
+    end if 
+
+    select case(locOutputDataFormat) 
+    case (0)
+      ! Text-Plain
+      if ( present( outputFileUnit ) .and. present( outputDataId ) .and. present( particleGroupId )) then
+        call this%ExportDensityUnit(&
+          outputFileUnit, outputDataId, particleGroupId, &
+                outputColumnFormat=locOutputColumnFormat )
+      else if ( present( outputFileUnit ) ) then
+        call this%ExportDensityUnit( outputFileUnit, &
+            outputColumnFormat=locOutputColumnFormat )
+      else if ( present( outputFileName ) ) then  
+        call this%ExportDensity( outputFileName, & 
+        outputColumnFormat=locOutputColumnFormat )
+      end if
+    case(1)
+      ! Binary
+      if ( present( outputFileUnit ) .and. present( outputDataId ) .and. present( particleGroupId )) then
+        call this%ExportDensityUnitBinary(& 
+          outputFileUnit, outputDataId, particleGroupId, &
+                outputColumnFormat=locOutputColumnFormat )
+      else if ( present( outputFileUnit ) ) then
+        call this%ExportDensityUnitBinary( outputFileUnit, & 
+                  outputColumnFormat=locOutputColumnFormat )
+      else if ( present( outputFileName ) ) then  
+        call this%ExportDensityBinary( outputFileName, &
+              outputColumnFormat=locOutputColumnFormat )
+      end if
+    end select
 
 
     ! Done
@@ -3481,7 +3526,7 @@ contains
   
 
   ! Density optimization
-  subroutine prComputeDensityOptimization( this, densityEstimateGrid, nOptimizationLoops, &
+subroutine prComputeDensityOptimization( this, densityEstimateGrid, nOptimizationLoops, &
                                        exportOptimizationVariables, skipErrorConvergence, &
                                                                 relativeErrorConvergence  )
     !------------------------------------------------------------------------------
@@ -5510,9 +5555,10 @@ contains
 
   ! Utils output files !
 
-  subroutine prExportDensityUnit( this, outputUnit, outputDataId, particleGroupId )
+  subroutine prExportDensityUnit( this, outputUnit, outputDataId, particleGroupId, &
+                                                                outputColumnFormat )
     !------------------------------------------------------------------------------
-    ! Export methods report cell indexes with respect to domain grid 
+    ! Export methods reporting cell indexes with respect to domain grid 
     !------------------------------------------------------------------------------
     ! Specifications 
     !------------------------------------------------------------------------------
@@ -5521,55 +5567,376 @@ contains
     integer, intent(in) :: outputUnit
     integer, optional, intent(in) :: outputDataId
     integer, optional, intent(in) :: particleGroupId
+    integer, optional, intent(in) :: outputColumnFormat
     integer :: ix, iy, iz
     integer :: dataId
+    integer :: columnFormat
+    integer :: idbinx, idbiny, idbinz
     !------------------------------------------------------------------------------
+
+    columnFormat = 0
+    if ( present( outputColumnFormat ) ) then 
+      select case(outputColumnFormat)
+      case(1)
+        ! bin ids, cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case(2)
+        ! cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case default
+        ! bin ids and density data
+        columnFormat = 0
+      end select
+    end if  
 
     if ( present( outputDataId ) .and. present( particleGroupId ) ) then
       ! Following column-major nesting
-      do iz = 1, this%nBins(3)
-        do iy = 1, this%nBins(2)
-          do ix = 1, this%nBins(1)
-            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
-            write(outputUnit,"(5I8,2es18.9e3)") outputDataId, particleGroupId, &
-            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
-            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+      select case(columnFormat)
+      case(0)
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              write(outputUnit,"(5I8,2es18.9e3)") outputDataId, particleGroupId, &
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
           end do
         end do
-      end do
+      case(1)
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit,"(5I8,3es18.9e3,2es18.9e3)") outputDataId, particleGroupId, &
+                                                                   idbinx, idbiny, idbinz, & 
+                        (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                        (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                        (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
+          end do
+        end do
+      case(2)
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit,"(2I8,3es18.9e3,2es18.9e3)") outputDataId, particleGroupId, &
+                        (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                        (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                        (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
+          end do
+        end do
+      end select
     else if ( present( outputDataId ) .or. present( particleGroupId ) ) then
       if( present(outputDataId) ) then
         dataId = outputDataId
       else
         dataId = particleGroupId
       end if
-      ! Following column-major nesting
-      do iz = 1, this%nBins(3)
-        do iy = 1, this%nBins(2)
-          do ix = 1, this%nBins(1)
-            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
-            write(outputUnit,"(4I8,2es18.9e3)") dataId, &
-            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
-            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+      select case(columnFormat)
+      case(0)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              write(outputUnit,"(4I8,2es18.9e3)") dataId, &
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
           end do
         end do
-      end do
+      case(1)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit,"(4I8,3es18.9e3,2es18.9e3)") dataId, idbinx, idbiny, idbinz, & 
+                         (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                         (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                         (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                  this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      case(2)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit,"(1I8,3es18.9e3,2es18.9e3)") dataId, &
+              (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+              (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+              (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      end select
     else
-      ! Following column-major nesting
-      do iz = 1, this%nBins(3)
-        do iy = 1, this%nBins(2)
-          do ix = 1, this%nBins(1)
-            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
-            write(outputUnit,"(3I8,2es18.9e3)") &
-            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
-            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+      select case(columnFormat)
+      case(0)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              write(outputUnit,"(3I8,2es18.9e3)") &
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
           end do
         end do
-      end do
+      case(1)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit,"(3I8,3es18.9e3,2es18.9e3)") idbinx, idbiny, idbinz, & 
+                 (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                 (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                 (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      case(2)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit,"(3es18.9e3,2es18.9e3)") & 
+                 (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                 (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                 (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      end select
     end if 
 
 
   end subroutine prExportDensityUnit
+
+
+  subroutine prExportDensityUnitBinary( this, outputUnit, outputDataId, particleGroupId, &
+                                                                      outputColumnFormat )
+    !------------------------------------------------------------------------------
+    ! Export methods reporting cell indexes with respect to domain grid 
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none 
+    class(GridProjectedKDEType) :: this
+    integer, intent(in) :: outputUnit
+    integer, optional, intent(in) :: outputDataId
+    integer, optional, intent(in) :: particleGroupId
+    integer, optional, intent(in) :: outputColumnFormat
+    integer :: ix, iy, iz
+    integer :: dataId
+    integer :: columnFormat
+    integer :: idbinx, idbiny, idbinz
+    !------------------------------------------------------------------------------
+
+    columnFormat = 0
+    if ( present( outputColumnFormat ) ) then 
+      select case(outputColumnFormat)
+      case(1)
+        ! bin ids, cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case(2)
+        ! cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case default
+        ! bin ids and density data
+        columnFormat = 0
+      end select
+    end if  
+
+    if ( present( outputDataId ) .and. present( particleGroupId ) ) then
+      ! Following column-major nesting
+      select case(columnFormat)
+      case(0)
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              write(outputUnit) outputDataId, particleGroupId, &
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
+          end do
+        end do
+      case(1)
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit) outputDataId, particleGroupId, &
+                                                                   idbinx, idbiny, idbinz, & 
+                        (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                        (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                        (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
+          end do
+        end do
+      case(2)
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit) outputDataId, particleGroupId, &
+                        (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                        (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                        (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
+          end do
+        end do
+      end select
+    else if ( present( outputDataId ) .or. present( particleGroupId ) ) then
+      if( present(outputDataId) ) then
+        dataId = outputDataId
+      else
+        dataId = particleGroupId
+      end if
+      select case(columnFormat)
+      case(0)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              write(outputUnit) dataId, &
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+            end do
+          end do
+        end do
+      case(1)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit) dataId, idbinx, idbiny, idbinz, & 
+                         (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                         (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                         (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                  this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      case(2)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit) dataId, &
+              (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+              (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+              (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      end select
+    else
+      select case(columnFormat)
+      case(0)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              write(outputUnit) &
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      case(1)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit) idbinx, idbiny, idbinz, & 
+                 (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                 (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                 (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      case(2)
+        ! Following column-major nesting
+        do iz = 1, this%nBins(3)
+          do iy = 1, this%nBins(2)
+            do ix = 1, this%nBins(1)
+              if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+              idbinx = ix+this%deltaBinsOrigin(1)
+              idbiny = iy+this%deltaBinsOrigin(2)
+              idbinz = iz+this%deltaBinsOrigin(3)
+              write(outputUnit) & 
+                 (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                 (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                 (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+                 this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+            end do
+          end do
+        end do
+      end select
+    end if 
+
+
+  end subroutine prExportDensityUnitBinary
+
+
 
 
   subroutine prExportOptimizationVariablesExtended( this, outputFileName, &
@@ -5624,40 +5991,187 @@ contains
   end subroutine prExportOptimizationVariablesExtended
 
 
-  subroutine prExportDensity( this, outputFileName )
+  subroutine prExportDensity( this, outputFileName, outputColumnFormat )
     !------------------------------------------------------------------------------
     ! 
     !------------------------------------------------------------------------------
     ! Specifications 
     !------------------------------------------------------------------------------
     implicit none 
-    class(GridProjectedKDEType) :: this
-    character(len=*), intent(in) :: outputFileName
+    class(GridProjectedKDEType)   :: this
+    character(len=*), intent(in)  :: outputFileName
+    integer, intent(in), optional :: outputColumnFormat
     integer :: ix, iy, iz
     integer :: outputUnit = 555
+    integer :: columnFormat
+    integer :: idbinx, idbiny, idbinz
     !------------------------------------------------------------------------------
+
+    columnFormat = 0
+    if ( present( outputColumnFormat ) ) then 
+      select case(outputColumnFormat)
+      case(1)
+        ! bin ids, cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case(2)
+        ! cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case default
+        ! bin ids and density data
+        columnFormat = 0
+      end select
+    end if  
 
     ! Write the output file name
     ! Add some default
-    open( outputUnit, file=outputFileName, status='replace' )
+    open( outputUnit, file=outputFileName, status='replace', access='sequential', form='formatted' )
 
-    ! Following column-major nesting
-    do iz = 1, this%nBins(3)
-      do iy = 1, this%nBins(2)
-        do ix = 1, this%nBins(1)
-          if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
-          ! cellids, density, histogram
-          write(outputUnit,"(3I8,2es18.9e3)")& 
-            ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
-            this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+    select case(columnFormat)
+    case(0)
+      ! Following column-major nesting
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+            ! cellids, density, histogram
+            write(outputUnit,"(3I8,2es18.9e3)")& 
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+          end do
         end do
       end do
-    end do
+    case(1)
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+            idbinx = ix+this%deltaBinsOrigin(1)
+            idbiny = iy+this%deltaBinsOrigin(2)
+            idbinz = iz+this%deltaBinsOrigin(3)
+            write(outputUnit,"(3I8,3es18.9e3,2es18.9e3)") idbinx, idbiny, idbinz, & 
+               (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+               (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+               (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+               this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+          end do
+        end do
+      end do
+    case(2)
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+            idbinx = ix+this%deltaBinsOrigin(1)
+            idbiny = iy+this%deltaBinsOrigin(2)
+            idbinz = iz+this%deltaBinsOrigin(3)
+            write(outputUnit,"(3es18.9e3,2es18.9e3)") &
+                      (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                      (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                      (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+               this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+          end do
+        end do
+      end do
+    end select
+
 
     ! Finished
     close(outputUnit)
 
+
   end subroutine prExportDensity
+
+
+  subroutine prExportDensityBinary( this, outputFileName, outputColumnFormat )
+    !------------------------------------------------------------------------------
+    ! 
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none 
+    class(GridProjectedKDEType)   :: this
+    character(len=*), intent(in)  :: outputFileName
+    integer, intent(in), optional :: outputColumnFormat
+    integer :: ix, iy, iz
+    integer :: outputUnit = 555
+    integer :: columnFormat
+    integer :: idbinx, idbiny, idbinz
+    !------------------------------------------------------------------------------
+
+    columnFormat = 0
+    if ( present( outputColumnFormat ) ) then 
+      select case(outputColumnFormat)
+      case(1)
+        ! bin ids, cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case(2)
+        ! cell coordinates and density data
+        columnFormat = outputColumnFormat
+      case default
+        ! bin ids and density data
+        columnFormat = 0
+      end select
+    end if  
+
+    ! Write the output file name
+    ! Add some default
+    open( outputUnit, file=outputFileName, status='replace', access='stream', form='unformatted' )
+
+    select case(columnFormat)
+    case(0)
+      ! Following column-major nesting
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+            ! cellids, density, histogram
+            write(outputUnit)& 
+              ix+this%deltaBinsOrigin(1), iy+this%deltaBinsOrigin(2), iz+this%deltaBinsOrigin(3), &
+              this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz ) 
+          end do
+        end do
+      end do
+    case(1)
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+            idbinx = ix+this%deltaBinsOrigin(1)
+            idbiny = iy+this%deltaBinsOrigin(2)
+            idbinz = iz+this%deltaBinsOrigin(3)
+            write(outputUnit) idbinx, idbiny, idbinz, & 
+               (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+               (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+               (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+               this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+          end do
+        end do
+      end do
+    case(2)
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          do ix = 1, this%nBins(1)
+            if ( this%densityEstimateGrid( ix, iy, iz ) .le. fZERO ) cycle
+            idbinx = ix+this%deltaBinsOrigin(1)
+            idbiny = iy+this%deltaBinsOrigin(2)
+            idbinz = iz+this%deltaBinsOrigin(3)
+            write(outputUnit) &
+                      (real(idbinx,fp) + 0.5_fp)*this%binSize(1) + this%domainOrigin(1), & 
+                      (real(idbiny,fp) + 0.5_fp)*this%binSize(2) + this%domainOrigin(2), &
+                      (real(idbinz,fp) + 0.5_fp)*this%binSize(3) + this%domainOrigin(3), &
+               this%densityEstimateGrid( ix, iy, iz ), this%histogram%counts( ix, iy, iz )
+          end do
+        end do
+      end do
+    end select
+
+
+    ! Finished
+    close(outputUnit)
+
+
+  end subroutine prExportDensityBinary
+
 
 
 end module GridProjectedKDEModule

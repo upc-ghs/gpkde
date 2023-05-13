@@ -27,6 +27,8 @@ program GPKDE
   logical            :: skipErrorConvergence
   integer            :: nlines, io, id
   integer            :: inputDataFormat
+  integer            :: outputColumnFormat
+  integer            :: outputDataFormat
   integer            :: nOptLoops
   real(fp)           :: initialSmoothingFactor
   integer            :: initialSmoothingSelection 
@@ -253,10 +255,63 @@ program GPKDE
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 0, n, r, 0, 0)
-  outputFile = line
+  outputFile = line(istart:istop)
   if ( logUnit .gt. 0 ) then 
     write( logUnit, '(a,a)') 'Reconstruction output will be written to file: ', adjustl(trim(outputFile))
   end if 
+
+  ! Look for an output column format
+  ! 0: bin ids, density data
+  ! 1: bin ids, cell coordinates, density data
+  ! 2: cell coordinates, density data
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  if ( n.le.0 ) then
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'Output column format will default to format 0 with bin ids and density data.' 
+    end if
+    outputColumnFormat = 0 
+  else
+    select case(n)
+    case(1)
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,I10)') 'Output column format 1 will write bin ids, cell coordinates and density data.' 
+      end if
+      outputColumnFormat = n
+    case(2)
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,I10)') 'Output column format 2 will write cell coordinates and density data.' 
+      end if
+      outputColumnFormat = n
+    case default
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,I10)') 'Output column format not valid, will default to format 0 with bin ids and density data.' 
+      end if
+    end select 
+  end if 
+
+  ! Look for an output data format
+  ! 0: text-plain
+  ! 1: binary 
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  if ( n.le.0 ) then
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'Output data format will default to text-plain data file.'
+    end if
+    outputDataFormat = 0 
+  else
+    select case(n)
+    case(1)
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,I10)') 'Output data format is binary.'
+      end if
+      outputDataFormat = n
+    case default
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,I10)') 'Output data format not valid, will default to format 0, text-plain file.' 
+      end if
+    end select 
+  end if 
+
 
   ! Read grid parameters
   if ( logUnit .gt. 0 ) then 
@@ -842,9 +897,19 @@ program GPKDE
 
 
   ! Initialize output unit/file
-  open(unit=outputUnit, &
-       file=outputFile, &
-     status='replace', form='formatted', access='sequential')
+  ! According to outputDataFormat
+  select case(outputDataFormat)
+  case(0)
+   ! Text-plain
+   open(unit=outputUnit, &
+        file=outputFile, &
+      status='replace', form='formatted', access='sequential')
+  case(1)
+   ! Binary
+   open(unit=outputUnit, &
+        file=outputFile, &
+      status='replace', form='unformatted', access='stream')
+  end select
   if ( logUnit .gt. 0 ) then
     write(logUnit,'(a)') 'Opened output unit for reconstruction. '
   end if
@@ -863,13 +928,15 @@ program GPKDE
   select case(inputDataFormat)
   case(0)
     ! Non weighted reconstruction
-    call gpkdeObj%ComputeDensity(          &
-     dataCarrier,                          &
-     outputFileUnit         = outputUnit,  &
-     computeRawDensity      = .true.,      &
-     scalingFactor          = uniformMass, & 
-     histogramScalingFactor = uniformMass, & ! For consistency with smoothed density 
-     isotropic              = isotropicKernels, &  
+    call gpkdeObj%ComputeDensity(                &
+     dataCarrier,                                &
+     outputFileUnit         = outputUnit,        &
+     outputColumnFormat     = outputColumnFormat,&
+     outputDataFormat       = outputDataFormat,  &
+     computeRawDensity      = .true.,            &
+     scalingFactor          = uniformMass,       & 
+     histogramScalingFactor = uniformMass,       & ! For consistency with smoothed density 
+     isotropic              = isotropicKernels,  &  
      useGlobalSmoothing     = useGlobalSmoothing, &  
      skipErrorConvergence   = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence,  &
@@ -878,13 +945,15 @@ program GPKDE
     )
   case(1)
     ! Weighted reconstruction
-    call gpkdeObj%ComputeDensity(         &
-     dataCarrier,                         &
-     outputFileUnit     = outputUnit,     &
-     computeRawDensity  = .true.,         &
-     weightedHistogram  = .true.,         &
-     weights            = weightsCarrier, &
-     isotropic          = isotropicKernels, & 
+    call gpkdeObj%ComputeDensity(            &
+     dataCarrier,                            &
+     outputFileUnit     = outputUnit,        &
+     outputColumnFormat = outputColumnFormat,&
+     outputDataFormat   = outputDataFormat,  &
+     computeRawDensity  = .true.,            &
+     weightedHistogram  = .true.,            &
+     weights            = weightsCarrier,    &
+     isotropic          = isotropicKernels,  & 
      useGlobalSmoothing = useGlobalSmoothing, &  
      skipErrorConvergence = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence, &
