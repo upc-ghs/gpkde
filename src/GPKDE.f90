@@ -129,6 +129,7 @@ program GPKDE
   call u8rdcom(simUnit, auxUnit, line, errorCode)
   dataFile = line
 
+
   ! Check existence 
   exists = .false.
   inquire (file=dataFile, exist=exists)
@@ -140,6 +141,7 @@ program GPKDE
     end if
   end if
   dataFile = trim(dataFile)
+
 
   ! Read an input format
   ! 0: x,y,z
@@ -164,6 +166,7 @@ program GPKDE
     call ustop('Input data format not available. Stop.') 
   end select
 
+
   ! Number of lines  
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   nlines = 0
@@ -178,6 +181,7 @@ program GPKDE
     end if 
   end if 
 
+
   ! Looks for a uniform weight in case input format is only (x,y,z)
   if (inputDataFormat.eq.0) then 
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -190,6 +194,7 @@ program GPKDE
       uniformMass = fONE
     end if 
   end if  
+
 
   ! Looks for an effective weight format in case input format is only (x,y,z,w)
   if (inputDataFormat.eq.1) then 
@@ -228,6 +233,7 @@ program GPKDE
     end select
   end if  
 
+
   ! Open data file
   open(dataUnit, file=dataFile,access='sequential',form="formatted")
   if ( nlines.eq.0 ) then 
@@ -262,6 +268,7 @@ program GPKDE
     write( logUnit, '(a,a)') 'Reconstruction output will be written to file: ', adjustl(trim(outputFile))
   end if 
 
+
   ! Look for an output column format
   ! 0: bin ids, density data
   ! 1: bin ids, cell coordinates, density data
@@ -291,6 +298,7 @@ program GPKDE
       end if
     end select 
   end if 
+
 
   ! Look for an output data format
   ! 0: text-plain
@@ -331,6 +339,7 @@ program GPKDE
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   domainOrigin(3) = r
   
+
   ! Read domainSize
   read(simUnit, '(a)') line
   icol = 1
@@ -340,6 +349,7 @@ program GPKDE
   domainSize(2) = r
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   domainSize(3) = r
+
 
   ! Read whether grids allocation for reconstruction should
   ! 0: follow domain size 
@@ -376,6 +386,7 @@ program GPKDE
       end if 
     end if 
   end if
+
 
   ! Read binSize
   read(simUnit, '(a)') line
@@ -415,6 +426,7 @@ program GPKDE
     write(logUnit,'(a)') 'Succesfully read reconstruction grid data.'
   end if 
 
+
   ! Read the max number of optimization loops
   read(simUnit, '(a)') line
   icol = 1
@@ -429,6 +441,7 @@ program GPKDE
   if ( logUnit .gt. 0 ) then
     write(logUnit,'(a,I4)') 'Optimization will consider the maximum number of loops: ', nOptLoops
   end if
+
 
   ! Export optimization variables 
   ! 0: does not export 
@@ -453,6 +466,7 @@ program GPKDE
     end if
     exportOptimizationVariables = .false.
   end select
+
 
   ! Skip error convergence ?
   ! 0: Break if convergence criteria is met 
@@ -481,6 +495,7 @@ program GPKDE
      call ustop('Skip error convergence parameter not valid. Should be 0 or 1. Stop.')
   end select
 
+
   ! Employ raw kernel computation or 
   ! kernel database ?
   ! 0: without kernel database, brute force
@@ -497,7 +512,37 @@ program GPKDE
   case default
      call ustop('Kernel specification kind not available. It should be 0 or 1 . Stop.')
   end select
- 
+
+
+  ! Read kernel size bounding format/limits 
+  ! 0: limit based on domain and bin size
+  ! 1: user give limit values
+  ! 2: unbounded
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  select case(n)
+  case(0)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Kernel sizes are bounded by domain constraints.'
+    end if
+    boundKernelSizeFormat = n 
+  case(1)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Kernel sizes are bounded based on user provided limits.'
+    end if
+    boundKernelSizeFormat = n
+  case(2)
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Kernel sizes are unbounded.'
+    end if
+    boundKernelSizeFormat = n 
+  case default
+    if ( logUnit.gt.0 ) then 
+      write(logUnit,'(a)') 'Given kernel bounding format is not valid. Stop.'
+    end if
+    call ustop('Given kernel bounding format is not valid. Stop.')
+  end select
+
+
   ! Isotropic kernels
   ! 0: default, anisotropic
   ! 1: isotropic
@@ -518,6 +563,9 @@ program GPKDE
      call ustop('Kernel anisotropy specification not available. It should be 0 or 1 . Stop.')
   end select
 
+
+  ! Load characteristic kernel sizes
+  kernelParams(:) = fZERO
   if ( kernelDatabase ) then
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'GPKDE will employ a kernel database.'
@@ -529,17 +577,55 @@ program GPKDE
     read(simUnit, '(a)') line
     icol = 1
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    if ( r.le.fZERO ) then 
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Invalid min kernel size. Should be .gt. 0. Stop.'
+      end if
+     call ustop('Invalid min kernel size. Should be .gt. 0. Stop.')
+    end if 
     kernelParams(1) = r
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     kernelParams(2) = r
+    ! Read max relative kernel size (maxHOverLambda)
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    if ( (r.le.fZERO).or.(r.le.kernelParams(1)) ) then 
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.'
+      end if
+     call ustop('Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.')
+    end if
     kernelParams(3) = r
-  else
+  else if ( boundKernelSizeFormat .eq. 1 ) then 
+    ! - min   h/lambda
+    ! - max   h/lambda
+    read(simUnit, '(a)') line
+    icol = 1
+    ! Read min relative kernel size (minHOverLambda)
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    if ( r.le.fZERO ) then 
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Invalid min kernel size. Should be .gt. 0. Stop.'
+      end if
+     call ustop('Invalid min kernel size. Should be .gt. 0. Stop.')
+    end if 
+    kernelParams(1) = r
+    ! Read max relative kernel size (maxHOverLambda)
+    call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+    if ( (r.le.fZERO).or.(r.le.kernelParams(1)) ) then 
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.'
+      end if
+     call ustop('Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.')
+    end if
+    kernelParams(3) = r
+  end if
+  ! If no kdb, report
+  if (.not. kernelDatabase ) then 
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'GPKDE will compute raw kernels.'
     end if
-    kernelParams(:) = fZERO
   end if 
+
 
   ! Selection of initial smoothing
   ! 0: automatic, based on Silverman (1986) global estimate
@@ -636,6 +722,7 @@ program GPKDE
     end select
   end if 
 
+
   ! Intepretation of advanced options
   if ( advancedOptions ) then
    ! Any advanced option ?  
@@ -647,172 +734,115 @@ program GPKDE
     end if
     call ustop('No advanced options were given. Stop.')
    else
-    ! Read kernel size bounding format/limits 
-    ! 0: limit based on domain and bin size
-    ! 1: user give limit values
-    ! 2: unbounded
+    ! Min roughness format
+    ! 0: Gaussian, computes the std deviation of particles and default relative roughness
+    ! 1: User provides minRelativeRoughness and a characteristic length scale
+    ! 2: User provides the minRoughness
+    ! 3: Unbounded, computes all values .gt. 0
     icol = 1
     call urword(line, icol, istart, istop, 2, n, r, 0, 0)
     select case(n)
     case(0)
       if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'Kernel sizes are bounded by domain constraints.'
+        write(logUnit,'(a)') 'Min roughness estimated as a Gaussian distribution.'
       end if
-      boundKernelSizeFormat = n 
+      minRoughnessFormat = n
     case(1)
       if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'Kernel sizes are bounded based on user provided limits.'
+        write(logUnit,'(a)') 'Min roughness computed from user input parameters.'
       end if
-      boundKernelSizeFormat = n
-      ! Shall override kernel database params ?
-      ! Read min relative kernel size (minHOverLambda)
+      minRoughnessFormat = n
+      ! Read min relative roughness: should be .gt. 0
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      if ( r.lt.fZERO ) then 
+        if ( logUnit.gt.0 ) then 
+          write(logUnit,'(a)') 'Invalid minRelativeRoughness. Should be .ge. 0. Stop.'
+        end if
+       call ustop('Invalid minRelativeRoughness. Should be .ge. 0. Stop.')
+      end if 
+      minRelativeRoughness = r
+      ! Read characteristic length scale: cannot be zero
       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
       if ( r.le.fZERO ) then 
         if ( logUnit.gt.0 ) then 
-          write(logUnit,'(a)') 'Invalid min kernel size. Should be .gt. 0. Stop.'
+          write(logUnit,'(a)') 'Invalid minRoughnessLengthScale. Should be .gt. 0. Stop.'
         end if
-       call ustop('Invalid min kernel size. Should be .gt. 0. Stop.')
+       call ustop('Invalid minRoughnessLengthScale. Should be .gt. 0. Stop.')
       end if 
-      kernelParams(1) = r
-      ! Read max relative kernel size (maxHOverLambda)
-      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-      if ( (r.le.fZERO).or.(r.le.kernelParams(1)) ) then 
-        if ( logUnit.gt.0 ) then 
-          write(logUnit,'(a)') 'Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.'
-        end if
-       call ustop('Invalid max kernel size. Should be .gt. 0 and .gt. min given value. Stop.')
-      end if
-      kernelParams(3) = r
+      minRoughnessLengthScale = r
     case(2)
       if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'Kernel sizes are unbounded.'
+        write(logUnit,'(a)') 'Min roughness given by user.'
       end if
-      boundKernelSizeFormat = n 
+      minRoughnessFormat = n
+      ! Read min roughness: should be .ge. 0
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      if ( r.lt.fZERO ) then 
+        if ( logUnit.gt.0 ) then 
+          write(logUnit,'(a)') 'Invalid minRoughness. Should be .ge. 0. Stop.'
+        end if
+       call ustop('Invalid minRoughness. Should be .ge. 0. Stop.')
+      end if 
+      minRoughness = r
+    case(3)
+      if ( logUnit.gt.0 ) then 
+        write(logUnit,'(a)') 'Min roughness is unbounded.'
+      end if
+      minRoughnessFormat = n
     case default
       if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'Given kernel bounding format is not valid. Stop.'
+        write(logUnit,'(a)') 'Min roughness format is not valid. Stop.'
       end if
-      call ustop('Given kernel bounding format is not valid. Stop.')
+      call ustop('Min roughness format is not valid. Stop.')
     end select
 
-    ! Continue to min limit roughness
+    ! Continue to isotropicThreshold
     read(simUnit, '(a)', iostat=iostatus) line
     if ( iostatus.lt.0 ) then
-      if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'No further advanced options were given. Continue.'
-      end if
+     if ( logUnit.gt.0 ) then 
+       write(logUnit,'(a)') 'No further advanced options were given. Continue.'
+     end if
     else
-     ! Min roughness format
-     ! 0: Gaussian, computes the std deviation of particles and default relative roughness
-     ! 1: User provides minRelativeRoughness and a characteristic length scale
-     ! 2: User provides the minRoughness
-     ! 3: Unbounded, computes all values .gt. 0
      icol = 1
-     call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-     select case(n)
-     case(0)
+     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+     if ( (r.lt.fZERO).or.(r.gt.fONE) ) then 
        if ( logUnit.gt.0 ) then 
-         write(logUnit,'(a)') 'Min roughness estimated as a Gaussian distribution.'
+         write(logUnit,'(a)') 'Given isotropicThreshold is invalid. Should be between 0 and 1. Stop.'
        end if
-       minRoughnessFormat = n
-     case(1)
-       if ( logUnit.gt.0 ) then 
-         write(logUnit,'(a)') 'Min roughness computed from user input parameters.'
-       end if
-       minRoughnessFormat = n
-       ! Read min relative roughness: should be .gt. 0
-       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-       if ( r.lt.fZERO ) then 
-         if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Invalid minRelativeRoughness. Should be .ge. 0. Stop.'
-         end if
-        call ustop('Invalid minRelativeRoughness. Should be .ge. 0. Stop.')
-       end if 
-       minRelativeRoughness = r
-       ! Read characteristic length scale: cannot be zero
-       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-       if ( r.le.fZERO ) then 
-         if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Invalid minRoughnessLengthScale. Should be .gt. 0. Stop.'
-         end if
-        call ustop('Invalid minRoughnessLengthScale. Should be .gt. 0. Stop.')
-       end if 
-       minRoughnessLengthScale = r
-     case(2)
-       if ( logUnit.gt.0 ) then 
-         write(logUnit,'(a)') 'Min roughness given by user.'
-       end if
-       minRoughnessFormat = n
-       ! Read min roughness: should be .ge. 0
-       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-       if ( r.lt.fZERO ) then 
-         if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Invalid minRoughness. Should be .ge. 0. Stop.'
-         end if
-        call ustop('Invalid minRoughness. Should be .ge. 0. Stop.')
-       end if 
-       minRoughness = r
-     case(3)
-       if ( logUnit.gt.0 ) then 
-         write(logUnit,'(a)') 'Min roughness is unbounded.'
-       end if
-       minRoughnessFormat = n
-     case default
-       if ( logUnit.gt.0 ) then 
-         write(logUnit,'(a)') 'Min roughness format is not valid. Stop.'
-       end if
-       call ustop('Min roughness format is not valid. Stop.')
-     end select
+       call ustop('Given isotropicThreshold is invalid. Should be between 0 and 1. Stop.')
+     end if
+     isotropicThreshold = r
+     if ( logUnit.gt.0 ) then 
+       write(logUnit,'(a,es18.9e3)') 'IsotropicThreshold was set to: ', isotropicThreshold
+     end if
 
-     ! Continue to isotropicThreshold
+     ! Continue to useGlobalSmoothing
      read(simUnit, '(a)', iostat=iostatus) line
      if ( iostatus.lt.0 ) then
-      if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a)') 'No further advanced options were given. Continue.'
-      end if
+       if ( logUnit.gt.0 ) then 
+         write(logUnit,'(a)') 'No further advanced options were given. Continue.'
+       end if
      else
+      ! 0: local smoothing selection
+      ! 1: global smoothing selection
       icol = 1
-      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-      if ( (r.lt.fZERO).or.(r.gt.fONE) ) then 
+      call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+      select case(n)
+      case(1)
         if ( logUnit.gt.0 ) then 
-          write(logUnit,'(a)') 'Given isotropicThreshold is invalid. Should be between 0 and 1. Stop.'
+          write(logUnit,'(a)') 'Smoothing is computed using global expressions.'
         end if
-        call ustop('Given isotropicThreshold is invalid. Should be between 0 and 1. Stop.')
-      end if
-      isotropicThreshold = r
-      if ( logUnit.gt.0 ) then 
-        write(logUnit,'(a,es18.9e3)') 'IsotropicThreshold was set to: ', isotropicThreshold
-      end if
+        useGlobalSmoothing = .true.
+      case default
+        ! Not even report, this is the most default option
+        useGlobalSmoothing = .false.
+      end select
 
-      ! Continue to useGlobalSmoothing
-      read(simUnit, '(a)', iostat=iostatus) line
-      if ( iostatus.lt.0 ) then
-        if ( logUnit.gt.0 ) then 
-          write(logUnit,'(a)') 'No further advanced options were given. Continue.'
-        end if
-      else
-       ! 0: local smoothing selection
-       ! 1: global smoothing selection
-       icol = 1
-       call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-       select case(n)
-       case(1)
-         if ( logUnit.gt.0 ) then 
-           write(logUnit,'(a)') 'Smoothing is computed using global expressions.'
-         end if
-         useGlobalSmoothing = .true.
-       case default
-         ! Not even report, this is the most default option
-         useGlobalSmoothing = .false.
-       end select
+     end if ! useGlobalSmoothing
 
-      end if ! useGlobalSmoothing
+    end if ! isotropicThreshold
 
-     end if ! isotropicThreshold
-
-    end if ! minRoughness
-
-   end if ! kernel size bounding 
+   end if ! minRoughness
 
   end if ! advancedOptions 
 

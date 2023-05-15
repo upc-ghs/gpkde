@@ -545,14 +545,17 @@ contains
     else 
       this%nOptimizationLoops = defaultNOptLoops
     end if
+
     ! Kernel database 
     if ( present( databaseOptimization ) ) then 
       this%databaseOptimization = databaseOptimization
     else 
       this%databaseOptimization = defaultDatabaseOptimization
     end if
-    ! If kernel database
-    if ( this%databaseOptimization ) then 
+
+    ! If kernel database or bound kernels by database params
+    if ( (this%databaseOptimization).or.(boundKernelSizeFormat.eq.1) ) then 
+
      ! Process database discretization parameters 
      if ( present( minHOverLambda ) ) then
        if ( minHOverLambda.gt.fZERO )then 
@@ -564,6 +567,7 @@ contains
      else 
        this%minHOverLambda = defaultMinHOverLambda
      end if
+
      if ( present( maxHOverLambda ) ) then
       if ( maxHOverLambda.gt.fZERO ) then 
        if ( maxHOverLambda.le.this%minHOverLambda(1) ) then ! minhoverlambda is an array in memory
@@ -592,45 +596,51 @@ contains
        stop
       end if
      end if
-     if ( present( deltaHOverLambda ) ) then 
-      if ( deltaHOverLambda.gt.fZERO ) then 
-       if ( deltaHOverLambda.ge.this%maxHOverLambda(1) ) then ! maxhoverlambda is an array in memory
-        if ( this%reportToOutUnit ) then 
-        write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
-        write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
-        write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', deltaHOverLambda
-        end if  
-        write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
+     
+     if ( this%databaseOptimization ) then 
+      if ( present( deltaHOverLambda ) ) then 
+       if ( deltaHOverLambda.gt.fZERO ) then 
+        if ( deltaHOverLambda.ge.this%maxHOverLambda(1) ) then ! maxhoverlambda is an array in memory
+         if ( this%reportToOutUnit ) then 
+         write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
+         write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
+         write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', deltaHOverLambda
+         end if  
+         write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
+         stop
+        end if
+        this%deltaHOverLambda = deltaHOverLambda
+       else
+        write(*,*) 'Error: Invalid value for deltaHOverLambda: should be greater than zero. Stop.'
         stop
        end if
-       this%deltaHOverLambda = deltaHOverLambda
-      else
-       write(*,*) 'Error: Invalid value for deltaHOverLambda: should be greater than zero. Stop.'
-       stop
+      else 
+        this%deltaHOverLambda = defaultDeltaHOverLambda
+        if ( this%deltaHOverLambda(1).ge.this%maxHOverLambda(1) ) then 
+         if ( this%reportToOutUnit ) then 
+         write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
+         write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
+         write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', this%deltaHOverLambda(1)
+         end if  
+         write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
+         stop
+        end if
       end if
-     else 
-       this%deltaHOverLambda = defaultDeltaHOverLambda
-       if ( this%deltaHOverLambda(1).ge.this%maxHOverLambda(1) ) then 
-        if ( this%reportToOutUnit ) then 
-        write( this%outFileUnit, *) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda.'
-        write( this%outFileUnit, *) '  Value of maxHOverLambda  : ', this%maxHOverLambda(1)
-        write( this%outFileUnit, *) '  Value of deltaHOverLamnda: ', this%deltaHOverLambda(1)
-        end if  
-        write(*,*) 'Error: Invalid value for deltaHOverLambda: should be less than maxHOverLambda. Stop.'
-        stop
-       end if
-     end if
+     end if 
+
     else
-     ! If no database, initialize with defaults
+     ! initialize with defaults
      this%minHOverLambda   = defaultMinHOverLambda
      this%maxHOverLambda   = defaultMaxHOverLambda
      this%deltaHOverLambda = defaultDeltaHOverLambda
     end if
+
     if ( present( logKernelDatabase ) ) then ! Deprecate ? 
       this%logKernelDatabase = logKernelDatabase
     else 
       this%logKernelDatabase = defaultLogKernelDatabase
     end if
+
     ! Effective weight format 
     ! Effective weight format is defined as zero by default at histogram  
     if ( present(effectiveWeightFormat) ) then 
@@ -639,45 +649,12 @@ contains
       this%histogram%effectiveWeightFormat = defaultEffectiveWeightFormat   
     end if 
 
-    ! Process advanced parameters !
-     
-    advancedOptions = .false.
-    if ( present(interpretAdvancedParams) ) then
-      advancedOptions = interpretAdvancedParams
-    end if 
-    if ( advancedOptions ) then
-      ! Bound kernel size format 
-      if ( present( boundKernelSizeFormat ) ) then 
-        this%boundKernelSizeFormat = boundKernelSizeFormat 
-      else
-        this%boundKernelSizeFormat = defaultBoundKernelSizeFormat
-      end if 
-      ! Min roughness format 
-      if ( present( minRoughnessFormat ) ) then 
-        this%minRoughnessFormat = minRoughnessFormat
-      else
-        this%minRoughnessFormat = defaultMinRoughnessFormat
-      end if 
-      ! Isotropic threshold
-      if ( present(isotropicThreshold) ) then 
-        this%isotropicThreshold = isotropicThreshold
-      else
-        this%isotropicThreshold = defaultIsotropicThreshold
-      end if
-      ! Max sigma growth
-      if ( present(maxSigmaGrowth) ) then 
-        this%maxSigmaGrowth = maxSigmaGrowth
-      else
-        this%maxSigmaGrowth = defaultMaxSigmaGrowth
-      end if
+    ! Bound kernel size format 
+    if ( present( boundKernelSizeFormat ) ) then 
+      this%boundKernelSizeFormat = boundKernelSizeFormat 
     else
-      ! Should assign eveything to default values
       this%boundKernelSizeFormat = defaultBoundKernelSizeFormat
-      this%minRoughnessFormat    = defaultMinRoughnessFormat
-      this%isotropicThreshold    = defaultIsotropicThreshold
-      this%maxSigmaGrowth        = defaultMaxSigmaGrowth
     end if 
-
 
     ! Determine kernel bounding  
     select case(this%boundKernelSizeFormat)
@@ -747,6 +724,38 @@ contains
       this%minKernelSDSize(nd) = defaultMinSizeFactor*this%binSize(nd)/real(defaultKernelSDRange,fp)
      end do
     end select
+
+    ! Process advanced parameters !
+     
+    advancedOptions = .false.
+    if ( present(interpretAdvancedParams) ) then
+      advancedOptions = interpretAdvancedParams
+    end if 
+    if ( advancedOptions ) then
+      ! Min roughness format 
+      if ( present( minRoughnessFormat ) ) then 
+        this%minRoughnessFormat = minRoughnessFormat
+      else
+        this%minRoughnessFormat = defaultMinRoughnessFormat
+      end if 
+      ! Isotropic threshold
+      if ( present(isotropicThreshold) ) then 
+        this%isotropicThreshold = isotropicThreshold
+      else
+        this%isotropicThreshold = defaultIsotropicThreshold
+      end if
+      ! Max sigma growth
+      if ( present(maxSigmaGrowth) ) then 
+        this%maxSigmaGrowth = maxSigmaGrowth
+      else
+        this%maxSigmaGrowth = defaultMaxSigmaGrowth
+      end if
+    else
+      ! Should assign eveything to default values
+      this%minRoughnessFormat    = defaultMinRoughnessFormat
+      this%isotropicThreshold    = defaultIsotropicThreshold
+      this%maxSigmaGrowth        = defaultMaxSigmaGrowth
+    end if 
 
     ! Interpret roughness parameters according to format
     select case(this%minRoughnessFormat)
