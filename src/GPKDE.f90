@@ -194,8 +194,10 @@ program GPKDE
   ! Looks for an effective weight format in case input format is only (x,y,z,w)
   if (inputDataFormat.eq.1) then 
     ! effectiveWeightFormat
-    ! 0: compute effective number of points as Kish (1965,1992)
+    ! 0: compute effective number of points at domain-level (Kish 1965,1992)
     ! 1: compute average particles weight 
+    ! 2: bandwidth selection based on particle positions and final mass density reconstruction
+    ! 3: bandwidth selection based on local effective particles and final mass density reconstruction
     call urword(line, icol, istart, istop, 2, n, r, 0, 0)
     select case(n)
     case(0)
@@ -265,6 +267,7 @@ program GPKDE
   ! 1: bin ids, cell coordinates, density data
   ! 2: cell coordinates, density data
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  outputColumnFormat = 0 
   if ( n.le.0 ) then
     if ( logUnit .gt. 0 ) then 
       write(logUnit, '(a)') 'Output column format will default to format 0 with bin ids and density data.' 
@@ -292,6 +295,7 @@ program GPKDE
   ! Look for an output data format
   ! 0: text-plain
   ! 1: binary 
+  outputDataFormat = 0 
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   if ( n.le.0 ) then
     if ( logUnit .gt. 0 ) then 
@@ -361,9 +365,9 @@ program GPKDE
       ! Is there an upper boundary ? Bound to one just in case 
       if ( (r.lt.fZERO).or.(r.gt.fONE) ) then 
         if ( logUnit .gt. 0 ) then  
-          write(logUnit,'(a)') 'Given border fraction is less than zero. It should be between 0 and 1. Stop.'
+          write(logUnit,'(a)') 'Border fraction should be between 0 and 1. Stop.'
         end if 
-        call ustop('Given border fraction is less than zero. It should be between 0 and 1. Stop.')
+        call ustop('Border fraction should be between 0 and 1. Stop.')
       end if
       ! Ok 
       borderFraction = r
