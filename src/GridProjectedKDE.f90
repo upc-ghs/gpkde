@@ -553,8 +553,17 @@ contains
       this%databaseOptimization = defaultDatabaseOptimization
     end if
 
+    ! Bound kernel size format 
+    if ( present( boundKernelSizeFormat ) ) then 
+      this%boundKernelSizeFormat = boundKernelSizeFormat 
+    else
+      this%boundKernelSizeFormat = defaultBoundKernelSizeFormat
+    end if 
+
     ! If kernel database or bound kernels by database params
-    if ( (this%databaseOptimization).or.(boundKernelSizeFormat.eq.1) ) then 
+    if (&
+      (this%databaseOptimization).or.   & 
+      (this%boundKernelSizeFormat.eq.1) ) then 
 
      ! Process database discretization parameters 
      if ( present( minHOverLambda ) ) then
@@ -647,13 +656,6 @@ contains
       this%histogram%effectiveWeightFormat = effectiveWeightFormat   
     else
       this%histogram%effectiveWeightFormat = defaultEffectiveWeightFormat   
-    end if 
-
-    ! Bound kernel size format 
-    if ( present( boundKernelSizeFormat ) ) then 
-      this%boundKernelSizeFormat = boundKernelSizeFormat 
-    else
-      this%boundKernelSizeFormat = defaultBoundKernelSizeFormat
     end if 
 
     ! Determine kernel bounding  
