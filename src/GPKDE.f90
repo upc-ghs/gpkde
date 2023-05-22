@@ -182,12 +182,14 @@ program GPKDE
   nlines = 0
   if ( n.le.0 ) then
     if ( logUnit .gt. 0 ) then 
-      write(logUnit, '(a)') 'No number of points was specified, will infer from the input file.' 
+      write(logUnit, '(a)') 'No number of points was specified, will infer from the input file.'
+      flush(logUnit) 
     end if 
   else
     nlines = n  
     if ( logUnit .gt. 0 ) then 
       write(logUnit, '(a,I10)') 'File will be read until line: ', nlines 
+      flush(logUnit) 
     end if 
   end if 
 
@@ -263,13 +265,13 @@ program GPKDE
        nlines = nlines + 1
      end do
      if ( logUnit .gt. 0 ) then 
-       write(logUnit, '(a,I10)') 'Detected number of lines in data file: ', nlines
+       write(logUnit, '(a,I10)') 'Detected number of points in data file: ', nlines
      end if 
      rewind(dataUnit)
    end if
   case(2,3)
    ! binary input
-   open(dataUnit, file=dataFile,access='stream',form='unformatted')
+   open(dataUnit, file=dataFile,access='stream',form='unformatted', status='old', action='read')
    if ( nlines.eq.0 ) then 
      ! Infer number of lines from file
      ! The number of lines is needed to allocate arrays
@@ -278,22 +280,24 @@ program GPKDE
      case(2)
       do
         do idd=1,3 ! x,y,z
-          read(dataUnit,iostat=io) 
+          read(dataUnit,iostat=io) r
           if (io/=0) exit
         end do
+        if (io/=0) exit
         nlines = nlines + 1
       end do
      case(3)
       do
         do idd=1,4 ! x,y,z,w
-          read(dataUnit,iostat=io) 
+          read(dataUnit,iostat=io) r
           if (io/=0) exit
         end do
+        if (io/=0) exit
         nlines = nlines + 1
       end do
      end select
      if ( logUnit .gt. 0 ) then 
-       write(logUnit, '(a,I10)') 'Detected number of lines in data file: ', nlines
+       write(logUnit, '(a,I10)') 'Detected number of points in data file: ', nlines
      end if 
      rewind(dataUnit)
    end if
@@ -314,6 +318,7 @@ program GPKDE
   outputFile = line(istart:istop)
   if ( logUnit .gt. 0 ) then 
     write( logUnit, '(a,a)') 'Reconstruction output will be written to file: ', adjustl(trim(outputFile))
+    flush(logUnit) 
   end if 
 
 
@@ -376,6 +381,7 @@ program GPKDE
   ! Read grid parameters
   if ( logUnit .gt. 0 ) then 
     write( logUnit, '(a)') 'Will read reconstruction grid parameters. '
+    flush(logUnit) 
   end if 
   ! domainOrigin
   read(simUnit, '(a)') line
@@ -472,6 +478,7 @@ program GPKDE
   end if 
   if ( logUnit.gt.0 ) then 
     write(logUnit,'(a)') 'Succesfully read reconstruction grid data.'
+    flush(logUnit) 
   end if 
 
 
@@ -756,16 +763,19 @@ program GPKDE
     case(0)
       if ( logUnit.gt.0 ) then 
         write(logUnit,'(a)') 'Will not interpret advanced options.'
+        flush(logUnit) 
       end if
     case(1)
       if ( logUnit.gt.0 ) then 
         write(logUnit,'(a)') 'Will interpret advanced options.'
+        flush(logUnit) 
       end if
       advancedOptions = .true.
     case default
       ! Defaults to false
       if ( logUnit.gt.0 ) then 
         write(logUnit,'(a)') 'Will not interpret advanced options.'
+        flush(logUnit) 
       end if
     end select
   end if 
@@ -899,6 +909,7 @@ program GPKDE
   ! Read data into arrays for reconstruction
   if ( logUnit.gt.0 ) then 
     write(logUnit,'(a)') 'GPKDE will load data into arrays.'
+    flush(logUnit) 
   end if
   select case(inputDataFormat)
   case(0)
@@ -931,6 +942,7 @@ program GPKDE
   end select
   if ( logUnit.gt.0 ) then 
     write(logUnit,'(a)') 'Loaded data into arrays.'
+    flush(logUnit)
   end if
 
 
@@ -1019,6 +1031,7 @@ program GPKDE
   ! Compute density
   if ( logUnit .gt. 0 ) then
     write(logUnit,'(a)') 'Will perform density reconstruction.'
+    flush(logUnit)
   end if
   call system_clock(clockCountStart, clockCountRate, clockCountMax)
   select case(inputDataFormat)
