@@ -25,7 +25,7 @@ program GPKDE
   logical            :: kernelDatabase
   logical            :: isotropicKernels
   logical            :: skipErrorConvergence
-  integer            :: nlines, io, id
+  integer            :: nlines, io, id, idd
   integer            :: inputDataFormat
   integer            :: outputColumnFormat
   integer            :: outputDataFormat
@@ -146,6 +146,8 @@ program GPKDE
   ! Read an input format
   ! 0: x,y,z
   ! 1: x, y, z, m 
+  ! 2: x,y,z      (binary)
+  ! 3: x, y, z, m (binary)
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
@@ -158,6 +160,14 @@ program GPKDE
   case(1)
     if ( logUnit .gt. 0 ) then 
       write(logUnit, '(a)') 'Input data expected to be specified as (x,y,z,weight).' 
+    end if 
+  case(2)
+    if ( logUnit .gt. 0 ) then 
+    write(logUnit, '(a)') 'Input file is binary with data expected to be specified as (x,y,z).' 
+    end if  
+  case(3)
+    if ( logUnit .gt. 0 ) then 
+    write(logUnit, '(a)') 'Input file is binary with data expected to be specified as (x,y,z,weight).' 
     end if 
   case default
     if ( logUnit .gt. 0 ) then 
@@ -183,7 +193,9 @@ program GPKDE
 
 
   ! Looks for a uniform weight in case input format is only (x,y,z)
-  if (inputDataFormat.eq.0) then 
+  if (&
+    (inputDataFormat.eq.0) .or. &
+    (inputDataFormat.eq.2) ) then
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     if ( r .gt. fZERO ) then
       uniformMass = r 
@@ -197,7 +209,9 @@ program GPKDE
 
 
   ! Looks for an effective weight format in case input format is only (x,y,z,w)
-  if (inputDataFormat.eq.1) then 
+  if (& 
+    (inputDataFormat.eq.1) .or. &
+    (inputDataFormat.eq.3) ) then 
     ! effectiveWeightFormat
     ! 0: compute effective number of points at domain-level (Kish 1965,1992)
     ! 1: compute average particles weight 
@@ -235,21 +249,55 @@ program GPKDE
 
 
   ! Open data file
-  open(dataUnit, file=dataFile,access='sequential',form="formatted")
-  if ( nlines.eq.0 ) then 
-    ! Infer number of lines from file
-    ! The number of lines is needed to allocate arrays
-    rewind(dataUnit)
-    do
-      read(dataUnit,*,iostat=io)
-      if (io/=0) exit
-      nlines = nlines + 1
-    end do
-    if ( logUnit .gt. 0 ) then 
-      write(logUnit, '(a,I10)') 'Detected number of lines in data file: ', nlines
-    end if 
-    rewind(dataUnit)
-  end if
+  select case(inputDataFormat)
+  case(0,1)
+   ! text-plain input
+   open(dataUnit, file=dataFile,access='sequential',form='formatted')
+   if ( nlines.eq.0 ) then 
+     ! Infer number of lines from file
+     ! The number of lines is needed to allocate arrays
+     rewind(dataUnit)
+     do
+       read(dataUnit,*,iostat=io)
+       if (io/=0) exit
+       nlines = nlines + 1
+     end do
+     if ( logUnit .gt. 0 ) then 
+       write(logUnit, '(a,I10)') 'Detected number of lines in data file: ', nlines
+     end if 
+     rewind(dataUnit)
+   end if
+  case(2,3)
+   ! binary input
+   open(dataUnit, file=dataFile,access='stream',form='unformatted')
+   if ( nlines.eq.0 ) then 
+     ! Infer number of lines from file
+     ! The number of lines is needed to allocate arrays
+     rewind(dataUnit)
+     select case(inputDataFormat)
+     case(2)
+      do
+        do idd=1,3 ! x,y,z
+          read(dataUnit,iostat=io) 
+          if (io/=0) exit
+        end do
+        nlines = nlines + 1
+      end do
+     case(3)
+      do
+        do idd=1,4 ! x,y,z,w
+          read(dataUnit,iostat=io) 
+          if (io/=0) exit
+        end do
+        nlines = nlines + 1
+      end do
+     end select
+     if ( logUnit .gt. 0 ) then 
+       write(logUnit, '(a,I10)') 'Detected number of lines in data file: ', nlines
+     end if 
+     rewind(dataUnit)
+   end if
+  end select
   if ( nlines.lt.1 ) then 
     call ustop('Data file does not have entries. Stop.')
   end if 
@@ -866,6 +914,20 @@ program GPKDE
     do id = 1, nlines
       read(dataUnit,*) dataCarrier( id, : ), weightsCarrier(id)
     end do
+  case(2)
+    ! x,y,z (binary) 
+    allocate( dataCarrier( nlines, 3 ) )
+    do id = 1, nlines
+      read(dataUnit) (dataCarrier( id, idd ), idd=1,3)
+    end do
+  case(3)
+    ! x,y,z,m (binary) 
+    allocate( dataCarrier( nlines, 3 ) )
+    allocate( weightsCarrier( nlines ) )
+    do id = 1, nlines
+      read(dataUnit) (dataCarrier( id, idd ), idd=1,3)
+      read(dataUnit) weightsCarrier(id)
+    end do
   end select
   if ( logUnit.gt.0 ) then 
     write(logUnit,'(a)') 'Loaded data into arrays.'
@@ -960,7 +1022,7 @@ program GPKDE
   end if
   call system_clock(clockCountStart, clockCountRate, clockCountMax)
   select case(inputDataFormat)
-  case(0)
+  case(0,2)
     ! Non weighted reconstruction
     call gpkdeObj%ComputeDensity(                &
      dataCarrier,                                &
@@ -977,7 +1039,7 @@ program GPKDE
      exportOptimizationVariables = exportOptimizationVariables,  &
      persistentKernelDatabase = .false. &
     )
-  case(1)
+  case(1,3)
     ! Weighted reconstruction
     call gpkdeObj%ComputeDensity(            &
      dataCarrier,                            &
