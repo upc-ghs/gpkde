@@ -352,9 +352,7 @@ contains
     !---------------------------------------------------------------------------
     ! Specifications 
     !---------------------------------------------------------------------------
-    !!DEV
     use PrecisionModule, only : fp 
-    !!DEV
     implicit none
     ! input
     class( GridProjectedKDEType ) :: this
@@ -3193,7 +3191,6 @@ contains
     ! Compute sub grid parameters if grids
     ! are to be adapted to the given coordinates 
     if ( this%adaptGridToCoords ) then
-
       maxCoords        = maxval( dataPoints, dim=1 ) 
       minCoords        = minval( dataPoints, dim=1 )
       deltaCoords      = abs( maxCoords - minCoords )

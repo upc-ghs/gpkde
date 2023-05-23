@@ -907,7 +907,8 @@ program GPKDE
   ! Done with interpretation of input parameters, and from now take action !
 
   ! Read data into arrays for reconstruction
-  if ( logUnit.gt.0 ) then 
+  if ( logUnit.gt.0 ) then
+    call system_clock(clockCountStart, clockCountRate, clockCountMax)
     write(logUnit,'(a)') 'GPKDE will load data into arrays.'
     flush(logUnit) 
   end if
@@ -941,10 +942,12 @@ program GPKDE
     end do
   end select
   if ( logUnit.gt.0 ) then 
+    call system_clock(clockCountStop, clockCountRate, clockCountMax)
+    elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
     write(logUnit,'(a)') 'Loaded data into arrays.'
+    write(logUnit, '(A,E15.5,A)') 'Loading time : ', elapsedTime, ' seconds'
     flush(logUnit)
   end if
-
 
   ! Initialize gpkde 
   if ( logUnit .gt. 0 ) then 
