@@ -6,3 +6,5 @@ The `python` routine `plotoutput.py` generates a figure comparing the smoothed a
 ```
 pip install -r requirements.txt
 ```
+
+Note: while modifying the grid input parameters in `gpkde.sim` like the bin or domain sizes, be sure to update these values also on `plotoutput.py` for consistency while plotting results.
