@@ -44,8 +44,13 @@ Note: For building with single precision floating point, the option ``--Dreal32=
 ### Visual Studio and Windows
 The folder `msvs` contains the project and solution files verified for Visual Studio 2019 and 2022 on a Windows system. An executable file and complementary `dll`'s providing the OpenMP library are available at the folder `wbin/`. Users can make easy use of these files at a system level by extending the `PATH` environment variable, adding their specific address to the `wbin/` folder (as [here](https://www.itprotoday.com/windows-server/how-can-i-add-new-folder-my-system-path) or [here](https://windowsloop.com/how-to-add-to-windows-path/)).
 
- The windows `.exe` is built with `/DREAL32` which requires less memory specially for large three dimensional problems. This option can be disabled by leaving empty the field `Project>Properties>Fortran>Preprocessor>Preprocessor Definitions`.
+The necessary `dll`'s can also be installed from the Intel and Visual Studio redistributables (`x86`), respectively:
 
+ - [Intel Fortran Compiler Runtime for Windows](https://www.intel.com/content/www/us/en/developer/articles/tool/compilers-redistributable-libraries-by-version.html) 
+ - [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+
+
+**Note**: The windows `.exe` is built with `/DREAL32` which requires less memory specially for large three dimensional problems. This option can be disabled in Visual Studio by leaving empty the field `Project>Properties>Fortran>Preprocessor>Preprocessor Definitions`.
 
 
 ## Command line interface
