@@ -1,4 +1,8 @@
-! GPKDE.f90
+! GPKDE.F90
+! 
+! Interface for the program GPKDE
+! 
+!-----------------------------------------------------------------
 program GPKDE
   use GridProjectedKDEModule, only: GridProjectedKDEType
   use UTL8MODULE, only            : urword, ustop, u8rdcom
