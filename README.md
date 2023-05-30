@@ -9,7 +9,14 @@ The program performs Grid Projected Kernel Density Estimation (GPKDE) of a discr
 
 It works as a standalone program by reading an input simulation file, which configures the loading of a source file with data points and additional parameters for defining the reconstruction grid and the optimization for bandwidth selection.
 
-## Building
+## Build
+
+### Get the code
+Clone the repository
+
+```
+git clone https://github.com/upc-ghs/gpkde.git
+```
 
 ### Makefile
 Repository includes two makefiles at the folder `make`:

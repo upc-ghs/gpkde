@@ -4,7 +4,7 @@ sources = files(
   'Histogram.f90',
   'KernelMultiGaussian.f90',
   'GridCell.f90', 
-  'GridProjectedKDE.f90',
+  'GridProjectedKDE.F90',
   'compilerversion.fpp', 
   'openspec.f90', 
   'utl7.f',
@@ -15,7 +15,7 @@ core   = static_library('core',
                       sources,  
                       dependencies: dependencies)
 theexe = executable('gpkde', 
-                    'GPKDE.f90', 
+                    'GPKDE.F90', 
                     link_with: [core],  
                     dependencies: dependencies, 
                     install: true)

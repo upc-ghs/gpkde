@@ -454,27 +454,27 @@ program GPKDE
   ! Health control
   if ( any(binSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
-      write(logUnit,'(a)') 'One of the binSizes is negative. They should be positive. Stop.'
+      write(logUnit,'(a)') 'One of the bin sizes is negative. They should be positive. Stop.'
     end if 
-    call ustop('One of the binSizes is negative. They should be positive. Stop.')
+    call ustop('One of the bin sizes is negative. They should be positive. Stop.')
   end if 
   if ( all(binSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
-      write(logUnit,'(a)') 'All binSizes are less than zero. They should be positive. Stop.'
+      write(logUnit,'(a)') 'All bin sizes are less than zero. They should be positive. Stop.'
     end if 
-    call ustop('All binSizes are less than zero. They should be positive. Stop.')
+    call ustop('All bin sizes are less than zero. They should be positive. Stop.')
   end if 
   if ( any(domainSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
-      write(logUnit,'(a)') 'One of the domainSizes is negative. They should be positive. Stop.'
+      write(logUnit,'(a)') 'One of the domain sizes is negative. They should be positive. Stop.'
     end if 
-    call ustop('One of the domainSizes is negative. They should be positive. Stop.')
+    call ustop('One of the domain sizes is negative. They should be positive. Stop.')
   end if 
   if ( all(domainSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
-      write(logUnit,'(a)') 'All domainSizes are less than zero. They should be positive. Stop.'
+      write(logUnit,'(a)') 'All domain sizes are less than zero. They should be positive. Stop.'
     end if 
-    call ustop('All domainSizes are less than zero. They should be positive. Stop.')
+    call ustop('All domain sizes are less than zero. They should be positive. Stop.')
   end if 
   if ( logUnit.gt.0 ) then 
     write(logUnit,'(a)') 'Succesfully read reconstruction grid data.'

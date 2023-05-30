@@ -498,7 +498,7 @@ contains
       end if
     end if
     if ( this%reportToOutUnit ) then 
-      write( this%outFileUnit, *) '  Histogram determines dimensions to be analyzed based on binSize.'
+      write( this%outFileUnit, *) '  Histogram determines dimensions to be analyzed based on bin sizes.'
       write( this%outFileUnit, *) '  Will compute Histogram considering ', this%histogram%nDim, ' dimensions.'
     end if  
     
