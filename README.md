@@ -24,7 +24,7 @@ Repository includes two makefiles at the folder `make`:
 - `Makefile`: for the `gfortran` compiler, with compilation verified for `gfortran>=8.4.0`.
 - `Makefile-ifort`: for the `ifort` compiler, with compilation verified for `ifort@2021.9.0`.
 
-Note: The preprocessor variable ``-DREAL32`` can be added to the compiler flags in order to build with single precision floating point.
+**Note**: The preprocessor variable ``-DREAL32`` can be added to the compiler flags in order to build with single precision floating point. Compilation via makefiles create the folder `make/objtemp`. It is recommended to remove this folder while developing source code or integrating program changes for a consistent compilation.
 
 ### Meson
 The project can also be built with the [meson](https://mesonbuild.com/) build system:
@@ -46,7 +46,7 @@ The project can also be built with the [meson](https://mesonbuild.com/) build sy
     meson test --verbose --no-rebuild -C builddir
 ```
 
-Note: For building with single precision floating point, the option ``--Dreal32=true`` can be given to the setup instruction. 
+**Note**: For building with single precision floating point, the option ``--Dreal32=true`` can be given to the setup instruction. 
 
 ### Visual Studio and Windows
 The folder `msvs` contains the project and solution files verified for Visual Studio 2019 and 2022 on a Windows system. An executable file and complementary `dll`'s providing the OpenMP library are available at the folder `wbin/`. Users can make easy use of these files at a system level by extending the `PATH` environment variable, adding their specific address to the `wbin/` folder (as [here](https://www.itprotoday.com/windows-server/how-can-i-add-new-folder-my-system-path) or [here](https://windowsloop.com/how-to-add-to-windows-path/)).
