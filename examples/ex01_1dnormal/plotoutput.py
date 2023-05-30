@@ -10,7 +10,6 @@ from scipy.stats import norm
 
 basedir = os.getcwd()
 fname   = 'gpkde.out'
-log     = 'gpkde.log'
 
 # load density
 df = pd.read_csv( os.path.join( basedir, fname ) ,
