@@ -57,7 +57,7 @@ The necessary `dll`'s can also be installed from the Intel and Visual Studio red
  - [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 
 
-**Note**: The windows executable `gpkdesp.exe` is built with `/DREAL32` which requires less memory specially for large three dimensional problems. This option is enabled by default in the Visual Studio solution/project files and can be disabled by leaving empty the field `Project>Properties>Fortran>Preprocessor>Preprocessor Definitions`. The executable `gpkde.exe` is built with double precision floating point.
+**Note**: The windows executable `gpkdesp.exe` is built with single precision floating point (`/DREAL32`) which requires less memory specially for large three dimensional problems. This option is enabled by default in the Visual Studio solution/project files and can be disabled at Configuration Manager by leaving empty the field `Project>Properties>Fortran>Preprocessor>Preprocessor Definitions`. The executable `gpkde.exe` is built with double precision floating point.
 
 
 ## Command line interface
