@@ -95,7 +95,7 @@ module KernelMultiGaussianModule
       import :: fp
       class( KernelType )                     :: this 
       integer , dimension(:,:,:), intent(in)  :: zPXGrid, zPYgrid, zPZGrid
-      real(fp), dimension(:)    , allocatable :: hLambda
+      real(fp), dimension(:)    , allocatable :: hDelta
       real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
       integer :: nx, ny, nz
       !------------------------------------------------------------------------------
@@ -696,7 +696,7 @@ contains
     class( KernelMultiGaussianType ) :: this 
     integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local 
-    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(3)                  :: hDelta
     real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
     integer  :: nx, ny, nz
     integer  :: nd
@@ -721,29 +721,29 @@ contains
       return
     end if
 
-    ! Compute normalized smoothing bandwidth/lambda
-    hLambda = fZERO
+    ! Compute normalized smoothing bandwidth/Delta
+    hDelta = fZERO
     where( this%binSize .ne. fZERO ) 
-      hLambda = this%bandwidth/this%binSize
+      hDelta = this%bandwidth/this%binSize
     end where
 
     ! Compute kernel
     zeroPositiveMatrix(:,:,:) = (0.5**fNDim)
     do nd=1,3
-      if ( hLambda(nd) .le. fZERO ) cycle
+      if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
           zeroPositiveMatrix = zeroPositiveMatrix*(         &
-            erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) & 
-          - erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )
+            erf( ( zPXGrid + 0.5 )/( hDelta(1)*sqrtTwo ) ) & 
+          - erf( ( zPXGrid - 0.5 )/( hDelta(1)*sqrtTwo ) ) )
       case(2)
           zeroPositiveMatrix = zeroPositiveMatrix*(         &
-            erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) & 
-          - erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+            erf( ( zPYGrid + 0.5 )/( hDelta(2)*sqrtTwo ) ) & 
+          - erf( ( zPYGrid - 0.5 )/( hDelta(2)*sqrtTwo ) ) )
       case(3)
           zeroPositiveMatrix = zeroPositiveMatrix*(         &
-            erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) & 
-          - erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+            erf( ( zPZGrid + 0.5 )/( hDelta(3)*sqrtTwo ) ) & 
+          - erf( ( zPZGrid - 0.5 )/( hDelta(3)*sqrtTwo ) ) )
       end select
     end do 
 
@@ -766,7 +766,7 @@ contains
     !
     ! Applies kernel corrections A.3 and A.4 in Sole-Mari et al. 2019
     !
-    ! Returns the product lambda_i**2*V^i
+    ! Returns the product Delta_i**2*V^i
     !
     !------------------------------------------------------------------------------
     ! Specifications 
@@ -775,7 +775,7 @@ contains
     class( KernelSecondDerivativeXType )    :: this 
     integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local
-    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(3)                  :: hDelta
     real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
     integer  :: nx, ny, nz
     integer  :: nd
@@ -800,28 +800,28 @@ contains
       return
     end if
 
-    ! Compute normalized smoothing bandwidth/lambda
-    hLambda = fZERO
+    ! Compute normalized smoothing bandwidth/Delta
+    hDelta = fZERO
     where( this%binSize .ne. fZERO ) 
-      hLambda = this%bandwidth/this%binSize
+      hDelta = this%bandwidth/this%binSize
     end where
 
 
     ! Compute kernel
     zeroPositiveMatrix(:,:,:) = fONE
     do nd=1,3
-      if ( hLambda(nd) .le. fZERO ) cycle
+      if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
-        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( (fTWO**(fNDim-0.5))*sqrtPi*( hLambda(1)**fTHREE ) ) )*(&
-                ( zPXGrid + 0.5 )*exp( -fONE*( ( zPXGrid + 0.5 )**fTWO )/( fTWO*( hLambda(1)**fTWO ) ) ) - &
-                ( zPXGrid - 0.5 )*exp( -fONE*( ( zPXGrid - 0.5 )**fTWO )/( fTWO*( hLambda(1)**fTWO ) ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( (fTWO**(fNDim-0.5))*sqrtPi*( hDelta(1)**fTHREE ) ) )*(&
+                ( zPXGrid + 0.5 )*exp( -fONE*( ( zPXGrid + 0.5 )**fTWO )/( fTWO*( hDelta(1)**fTWO ) ) ) - &
+                ( zPXGrid - 0.5 )*exp( -fONE*( ( zPXGrid - 0.5 )**fTWO )/( fTWO*( hDelta(1)**fTWO ) ) ) )
       case(2)
-        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - & 
-                                                  erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hDelta(2)*sqrtTwo ) ) - & 
+                                                  erf( ( zPYGrid - 0.5 )/( hDelta(2)*sqrtTwo ) ) )
       case(3)
-        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
-                                                  erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hDelta(3)*sqrtTwo ) ) - &
+                                                  erf( ( zPZGrid - 0.5 )/( hDelta(3)*sqrtTwo ) ) )
       end select
     end do 
 
@@ -846,17 +846,17 @@ contains
 
     ! Kernel correction
     ! Note: the cell volume is implicit in the non-dimensional bandwidhts,
-    ! further considering that this kernel is lambda_i**2*V^i
+    ! further considering that this kernel is Delta_i**2*V^i
     do nd=1,3
-      if ( hLambda(nd) .le. fZERO ) cycle
+      if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
         this%matrix = &
-          this%matrix*sqrt(fTHREE/( fTWO**(fNDim+ fTWO)*pi**(0.5*fNDim)*(hLambda(1)**fFIVE)*summatrixsq ))
+          this%matrix*sqrt(fTHREE/( fTWO**(fNDim+ fTWO)*pi**(0.5*fNDim)*(hDelta(1)**fFIVE)*summatrixsq ))
       case(2)
-        this%matrix = this%matrix/sqrt( hLambda(2) )
+        this%matrix = this%matrix/sqrt( hDelta(2) )
       case(3)
-        this%matrix = this%matrix/sqrt( hLambda(3) )
+        this%matrix = this%matrix/sqrt( hDelta(3) )
       end select
     end do 
 
@@ -876,7 +876,7 @@ contains
     class( KernelSecondDerivativeYType )    :: this 
     integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local
-    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(3)                  :: hDelta
     real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
     integer  :: nx, ny, nz
     integer  :: nd
@@ -901,28 +901,28 @@ contains
       return
     end if
 
-    ! Compute normalized smoothing bandwidth/lambda
-    hLambda = fZERO
+    ! Compute normalized smoothing bandwidth/Delta
+    hDelta = fZERO
     where( this%binSize .ne. fZERO ) 
-      hLambda = this%bandwidth/this%binSize
+      hDelta = this%bandwidth/this%binSize
     end where
 
 
     ! Compute kernel
     zeroPositiveMatrix(:,:,:) = fONE
     do nd=1,3
-      if ( hLambda(nd) .le. fZERO ) cycle
+      if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
-        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - & 
-                                                  erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hDelta(1)*sqrtTwo ) ) - & 
+                                                  erf( ( zPXGrid - 0.5 )/( hDelta(1)*sqrtTwo ) ) )
       case(2)
-        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( (fTWO**(fNDim-0.5))*sqrtPi*( hLambda(2)**fTHREE ) ) )*(&
-                ( zPYGrid + 0.5 )*exp( -fONE*( ( zPYGrid + 0.5 )**fTWO )/( fTWO*( hLambda(2)**fTWO ) ) ) - &
-                ( zPYGrid - 0.5 )*exp( -fONE*( ( zPYGrid - 0.5 )**fTWO )/( fTWO*( hLambda(2)**fTWO ) ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( (fTWO**(fNDim-0.5))*sqrtPi*( hDelta(2)**fTHREE ) ) )*(&
+                ( zPYGrid + 0.5 )*exp( -fONE*( ( zPYGrid + 0.5 )**fTWO )/( fTWO*( hDelta(2)**fTWO ) ) ) - &
+                ( zPYGrid - 0.5 )*exp( -fONE*( ( zPYGrid - 0.5 )**fTWO )/( fTWO*( hDelta(2)**fTWO ) ) ) )
       case(3)
-        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hLambda(3)*sqrtTwo ) ) - &
-                                                  erf( ( zPZGrid - 0.5 )/( hLambda(3)*sqrtTwo ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPZGrid + 0.5 )/( hDelta(3)*sqrtTwo ) ) - &
+                                                  erf( ( zPZGrid - 0.5 )/( hDelta(3)*sqrtTwo ) ) )
       end select
     end do 
 
@@ -947,17 +947,17 @@ contains
 
     ! Kernel correction
     ! Note: the cell volume is implicit in the non-dimensional bandwidhts,
-    ! further considering that this kernel is lambda_i**2*V^i
+    ! further considering that this kernel is Delta_i**2*V^i
     do nd=1,3
-      if ( hLambda(nd) .le. fZERO ) cycle
+      if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
-        this%matrix = this%matrix/sqrt( hLambda(1) )
+        this%matrix = this%matrix/sqrt( hDelta(1) )
       case(2)
         this%matrix =& 
-          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hLambda(2)**fFIVE)*summatrixsq ))
+          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hDelta(2)**fFIVE)*summatrixsq ))
       case(3)
-        this%matrix = this%matrix/sqrt( hLambda(3) )
+        this%matrix = this%matrix/sqrt( hDelta(3) )
       end select
     end do 
 
@@ -977,7 +977,7 @@ contains
     class( KernelSecondDerivativeZType )    :: this 
     integer, dimension(:,:,:), intent(in)   :: zPXGrid, zPYgrid, zPZGrid
     ! local
-    real(fp), dimension(3)                  :: hLambda
+    real(fp), dimension(3)                  :: hDelta
     real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
     integer  :: nx, ny, nz
     integer  :: nd
@@ -1001,27 +1001,27 @@ contains
       return
     end if
 
-    ! Compute normalized smoothing bandwidth/lambda
-    hLambda = fZERO
+    ! Compute normalized smoothing bandwidth/Delta
+    hDelta = fZERO
     where( this%binSize .ne. fZERO ) 
-      hLambda = this%bandwidth/this%binSize
+      hDelta = this%bandwidth/this%binSize
     end where
 
     ! Compute kernel
     zeroPositiveMatrix(:,:,:) = fONE
     do nd=1,3
-      if ( hLambda(nd) .le. fZERO ) cycle
+      if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
-        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hLambda(1)*sqrtTwo ) ) - & 
-                                                  erf( ( zPXGrid - 0.5 )/( hLambda(1)*sqrtTwo ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPXGrid + 0.5 )/( hDelta(1)*sqrtTwo ) ) - & 
+                                                  erf( ( zPXGrid - 0.5 )/( hDelta(1)*sqrtTwo ) ) )
       case(2)
-        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hLambda(2)*sqrtTwo ) ) - &
-                                                  erf( ( zPYGrid - 0.5 )/( hLambda(2)*sqrtTwo ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( erf( ( zPYGrid + 0.5 )/( hDelta(2)*sqrtTwo ) ) - &
+                                                  erf( ( zPYGrid - 0.5 )/( hDelta(2)*sqrtTwo ) ) )
       case(3)
-        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( ( fTWO**(fNDim-0.5) )*sqrtPi*( hLambda(3)**fTHREE ) ) )*(&
-                ( zPZGrid + 0.5 )*exp( -fONE*( ( zPZGrid + 0.5 )**fTWO )/( fTWO*( hLambda(3)**fTWO ) ) ) - &
-                ( zPZGrid - 0.5 )*exp( -fONE*( ( zPZGrid - 0.5 )**fTWO )/( fTWO*( hLambda(3)**fTWO ) ) ) )
+        zeroPositiveMatrix = zeroPositiveMatrix*( -fONE/( ( fTWO**(fNDim-0.5) )*sqrtPi*( hDelta(3)**fTHREE ) ) )*(&
+                ( zPZGrid + 0.5 )*exp( -fONE*( ( zPZGrid + 0.5 )**fTWO )/( fTWO*( hDelta(3)**fTWO ) ) ) - &
+                ( zPZGrid - 0.5 )*exp( -fONE*( ( zPZGrid - 0.5 )**fTWO )/( fTWO*( hDelta(3)**fTWO ) ) ) )
       end select
     end do 
 
@@ -1046,17 +1046,17 @@ contains
 
     ! Kernel correction
     ! Note: the cell volume is implicit in the non-dimensional bandwidhts,
-    ! further considering that this kernel is lambda_i**2*V^i
+    ! further considering that this kernel is Delta_i**2*V^i
     do nd=1,3
-      if ( hLambda(nd) .le. fZERO ) cycle
+      if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
-        this%matrix = this%matrix/sqrt( hLambda(1) )
+        this%matrix = this%matrix/sqrt( hDelta(1) )
       case(2)
-        this%matrix = this%matrix/sqrt( hLambda(2) )
+        this%matrix = this%matrix/sqrt( hDelta(2) )
       case(3)
         this%matrix = &
-          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hLambda(3)**fFIVE)*summatrixsq ))
+          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hDelta(3)**fFIVE)*summatrixsq ))
       end select
     end do 
 

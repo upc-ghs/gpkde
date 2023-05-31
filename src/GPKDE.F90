@@ -629,9 +629,9 @@ program GPKDE
       write(logUnit,'(a)') 'GPKDE will employ a kernel database.'
     end if
     ! Read kernel database params
-    ! - min   h/lambda
-    ! - delta h/lambda
-    ! - max   h/lambda
+    ! - min   h/delta
+    ! - delta h/delta
+    ! - max   h/delta
     read(simUnit, '(a)') line
     icol = 1
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -644,7 +644,7 @@ program GPKDE
     kernelParams(1) = r
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     kernelParams(2) = r
-    ! Read max relative kernel size (maxHOverLambda)
+    ! Read max relative kernel size (maxHOverDelta)
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     if ( (r.le.fZERO).or.(r.le.kernelParams(1)) ) then 
       if ( logUnit.gt.0 ) then 
@@ -654,11 +654,11 @@ program GPKDE
     end if
     kernelParams(3) = r
   else if ( boundKernelSizeFormat .eq. 1 ) then 
-    ! - min   h/lambda
-    ! - max   h/lambda
+    ! - min   h/delta
+    ! - max   h/delta
     read(simUnit, '(a)') line
     icol = 1
-    ! Read min relative kernel size (minHOverLambda)
+    ! Read min relative kernel size (minHOverDelta)
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     if ( r.le.fZERO ) then 
       if ( logUnit.gt.0 ) then 
@@ -667,7 +667,7 @@ program GPKDE
      call ustop('Invalid min kernel size. Should be .gt. 0. Stop.')
     end if 
     kernelParams(1) = r
-    ! Read max relative kernel size (maxHOverLambda)
+    ! Read max relative kernel size (maxHOverDelta)
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     if ( (r.le.fZERO).or.(r.le.kernelParams(1)) ) then 
       if ( logUnit.gt.0 ) then 
@@ -967,9 +967,9 @@ program GPKDE
       borderFraction            = borderFraction,           &
       nOptimizationLoops        = nOptLoops,                &
       databaseOptimization      = kernelDatabase,           &
-      minHOverLambda            = kernelParams(1),          &
-      deltaHOverLambda          = kernelParams(2),          &
-      maxHOverLambda            = kernelParams(3),          &
+      minHOverDelta             = kernelParams(1),          &
+      deltaHOverDelta           = kernelParams(2),          &
+      maxHOverDelta             = kernelParams(3),          &
       initialSmoothing          = initialSmoothing,         & 
       initialSmoothingFactor    = initialSmoothingFactor,   & 
       initialSmoothingSelection = initialSmoothingSelection,&
@@ -983,7 +983,6 @@ program GPKDE
       isotropicThreshold        = isotropicThreshold,       & 
       outFileName               = logFile                   &
     )
-    write(logUnit,'(a)') 'GPKDE is initialized. '
   else
     call gpkdeObj%Initialize(& 
       domainSize, binSize,                                  &
@@ -992,9 +991,9 @@ program GPKDE
       borderFraction            = borderFraction,           &
       nOptimizationLoops        = nOptLoops,                &
       databaseOptimization      = kernelDatabase,           &
-      minHOverLambda            = kernelParams(1),          &
-      deltaHOverLambda          = kernelParams(2),          &
-      maxHOverLambda            = kernelParams(3),          &
+      minHOverDelta             = kernelParams(1),          &
+      deltaHOverDelta           = kernelParams(2),          &
+      maxHOverDelta             = kernelParams(3),          &
       initialSmoothing          = initialSmoothing,         & 
       initialSmoothingFactor    = initialSmoothingFactor,   & 
       initialSmoothingSelection = initialSmoothingSelection,& 
@@ -1025,7 +1024,7 @@ program GPKDE
       status='replace', form='unformatted', access='stream')
   end select
   if ( logUnit .gt. 0 ) then
-    write(logUnit,'(a)') 'Opened output unit for reconstruction. '
+    write(logUnit,'(a)') 'Opened output unit for writing densities.'
   end if
 
   if ( logUnit .gt. 0 ) then 
