@@ -7,9 +7,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
+# arguments
+parser = argparse.ArgumentParser( description='Control plot options.' )
+parser.add_argument( '--fname', type=str, help='load data from the given fname' )
+args   = parser.parse_args()
 
+# fname
 basedir = os.getcwd()
-fname   = 'gpkde.out'
+if args.fname is None:
+    fname = 'gpkde.out'
+else:
+    fname = args.fname
 
 # load density
 df = pd.read_csv( os.path.join( basedir, fname ) ,

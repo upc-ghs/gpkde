@@ -8,6 +8,7 @@ make/gpkde*
 make/*.csv
 make/*output*
 
+*.vts*
 *.png*
 *.out*
 *.log*

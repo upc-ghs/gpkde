@@ -1,5 +1,5 @@
 '''
-Example 02 heterogeneous particle distribution
+Example 02 heterogeneous 2D distribution
 '''
 import os
 import numpy as np
@@ -7,9 +7,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
+import argparse
 
+# arguments
+parser = argparse.ArgumentParser( description='Control plot options.' )
+parser.add_argument( '--fname', type=str, help='load data from the given fname' )
+args   = parser.parse_args()
+
+# fname
 basedir = os.getcwd()
-fname   = 'gpkde.out'
+if args.fname is None:
+    fname = 'gpkde.out'
+else:
+    fname = args.fname
 
 # load density
 colx = 0
