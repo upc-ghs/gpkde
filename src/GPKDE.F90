@@ -1085,8 +1085,8 @@ program GPKDE
 
   ! Exit 
   elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
-  if ( logUnit.gt.0 ) write(logUnit, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
-  write(*, '(1X,A,E15.5,A)') 'Elapsed time = ', elapsedTime, ' seconds'
+  if ( logUnit.gt.0 ) write(logUnit, '(1X,A,E15.5,A)') 'Elapsed time : ', elapsedTime, ' seconds'
+  write(*, '(1X,A,E15.5,A)') 'Elapsed time : ', elapsedTime, ' seconds'
   write(*, '(a)') terminationMessage
   close( simUnit ) 
   if ( logType .gt. 0 ) close( logUnit ) 

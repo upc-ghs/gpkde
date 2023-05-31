@@ -427,7 +427,7 @@ contains
     end if 
     ! Stop if all bin sizes are zero
     if ( all( binSize .lt. fZERO ) ) then 
-      write(*,*) 'Error while initializing GPKDE, all binSizes are .lt. 0. Stop.'
+      write(*,*) 'Error: while initializing GPKDE, all binSizes are .lt. 0. Stop.'
       stop 
     end if 
     ! Initialize reconstruction grid parameters 
@@ -438,7 +438,7 @@ contains
     end where
     ! Stop if any the domainGridSize .lt. 1
     if ( any( this%domainGridSize .lt. 1 ) ) then 
-      write(*,*) 'Error while initializing GPKDE, some domainGridSize  .lt. 1. Stop.'
+      write(*,*) 'Error: while initializing GPKDE, some domainGridSize  .lt. 1. Stop.'
       stop 
     end if
     this%binSize    = binSize
@@ -798,7 +798,7 @@ contains
       outfmt = '(3X,A,3(1X,I9))'
       write( this%outFileUnit, outfmt) '- domainGridSize     :', this%domainGridSize
       write( this%outFileUnit, '(3X,A)') '---------------'
-      write( this%outFileUnit, '(3X,A)')      'Dimensionality for reconstruction is determined from domainGridSize.'
+      write( this%outFileUnit, '(3X,A)')      'Dimensionality for reconstruction is determined from domain grid size.'
       write( this%outFileUnit, '(3X,A,I2,A)') 'Will perform reconstruction in ', nDim, ' dimensions.'
       if ( this%initialSmoothingSelection.ge.1 ) then 
       outfmt = '(3X,A,3(1X,es18.9e3))'
@@ -3342,7 +3342,6 @@ contains
        write(this%outFileUnit, '(3X,A,I9)'       ) 'Active bins       :', this%nComputeBins
        write(this%outFileUnit, '(3X,A,I9)'       ) 'NPoints           :', this%histogram%nPoints
        write(this%outFileUnit, '(3X,A,es18.9e3)' ) 'NEffective        :', this%histogram%nEffective
-       write(this%outFileUnit, *  )
      end if 
     end if 
 
@@ -3372,7 +3371,6 @@ contains
       write(this%outFileUnit, '(3X,A,3(1X,es18.9e3))'     ) 'Std. dev. coordinates            :', this%stdCoords
       write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Std. sigma scale                 :', this%stdSigmaScale
       write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Global smoothing scale Silverman :', this%hSigmaScale
-      write(this%outFileUnit, *  )
      end if
     end if
 
@@ -3418,6 +3416,7 @@ contains
       end do 
     end if 
     if ( this%reportToOutUnit ) then
+      write(this%outFileUnit, *  )
       write( this%outFileUnit, '(1X,A)' ) 'Kernels info'
       write( this%outFileUnit, '(3X,A,3(1X,es18.9e3))') 'initialSmoothing   :', this%initialSmoothing
     end if
@@ -3460,7 +3459,7 @@ contains
         elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
         write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
         write(this%outFileUnit, '(1X,A,E15.5,A)')& 
-          '  Optimization time = ', elapsedTime, ' seconds'
+          '  Optimization time : ', elapsedTime, ' seconds'
         write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
       end if 
       ! Drop database ?
@@ -3481,7 +3480,7 @@ contains
         elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
         write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
         write(this%outFileUnit, '(1X,A,E15.5,A)')& 
-          '  Optimization time = ', elapsedTime, ' seconds'
+          '  Optimization time : ', elapsedTime, ' seconds'
         write( this%outFileUnit, '(A)' )'|-----------------------------------------------------------|'
       end if 
     end if 
@@ -4100,7 +4099,7 @@ subroutine prComputeDensityOptimization( this, densityEstimateGrid, nOptimizatio
         if ( errorALMISEProxyOld.gt.fZERO ) then 
           if ( abs(errorALMISEProxy - errorALMISEProxyOld)/errorALMISEProxyOld .lt. errorMetricConvergence ) then  
             if ( this%reportToOutUnit ) then 
-              write( this%outFileUnit, '(A,es13.4e2)' ) '    - ALMISE convergence ',&
+              write( this%outFileUnit, '(A,es13.4e2)' ) '    - ALMISE convergence :',&
                       abs(errorALMISEProxy - errorALMISEProxyOld)/errorALMISEProxyOld
             end if 
             ! Break
@@ -4110,7 +4109,7 @@ subroutine prComputeDensityOptimization( this, densityEstimateGrid, nOptimizatio
         ! Density convergence
         if ( errorMetricDensity .lt. errorMetricConvergence ) then  
           if ( this%reportToOutUnit ) then 
-            write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence ', errorMetricDensity
+            write( this%outFileUnit, '(A,es13.4e2)' ) '    - Density convergence :', errorMetricDensity
           end if 
           ! Break
           exit
@@ -4118,7 +4117,7 @@ subroutine prComputeDensityOptimization( this, densityEstimateGrid, nOptimizatio
         ! Smoothing convergence
         if ( ( errorMetricSmoothing .lt. errorMetricConvergence ) ) then 
           if ( this%reportToOutUnit ) then 
-            write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence ', errorMetricSmoothing
+            write( this%outFileUnit, '(A,es13.4e2)' ) '    - Bandwidth convergence :', errorMetricSmoothing
           end if
           ! Break
           exit
