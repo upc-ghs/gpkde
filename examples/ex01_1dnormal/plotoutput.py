@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import norm
+import argparse
 
 # arguments
 parser = argparse.ArgumentParser( description='Control plot options.' )
