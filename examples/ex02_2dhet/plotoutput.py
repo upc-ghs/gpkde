@@ -12,18 +12,18 @@ basedir = os.getcwd()
 fname   = 'gpkde.out'
 
 # load density
-df = pd.read_csv( os.path.join( basedir, fname ) ,
-            header=None,
-            delim_whitespace=True,
-            skiprows=0,
-            index_col=None
-        )
 colx = 0
 coly = 1
 colz = 2
 cold = 3
 colh = 4
-# one-base grid indexes
+df   = pd.read_csv( os.path.join( basedir, fname ) ,
+            header=None,
+            delim_whitespace=True,
+            skiprows=0,
+            index_col=None
+        )
+# grid indexes in output file are one-based
 binx = df[colx].to_numpy().astype(np.int32)
 biny = df[coly].to_numpy().astype(np.int32)
 
