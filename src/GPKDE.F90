@@ -28,7 +28,7 @@ program GPKDE
   logical            :: kernelDatabase
   logical            :: isotropicKernels
   logical            :: skipErrorConvergence
-  integer            :: nlines, io, id, idd
+  integer            :: nlines, io, id, idd, ndimcols
   integer            :: inputDataFormat
   integer            :: outputColumnFormat
   integer            :: outputDataFormat
@@ -132,7 +132,6 @@ program GPKDE
   call u8rdcom(simUnit, auxUnit, line, errorCode)
   dataFile = line
 
-
   ! Check existence 
   exists = .false.
   inquire (file=dataFile, exist=exists)
@@ -145,12 +144,15 @@ program GPKDE
   end if
   dataFile = trim(dataFile)
 
-
   ! Read an input format
   ! 0: x,y,z
   ! 1: x, y, z, m 
   ! 2: x,y,z      (binary)
   ! 3: x, y, z, m (binary)
+  ! 4: (1:ndimcols)
+  ! 5: (1:ndimcols), m 
+  ! 6: (1:ndimcols)    (binary)
+  ! 7: (1:ndimcols), m (binary)
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
@@ -172,12 +174,46 @@ program GPKDE
     if ( logUnit .gt. 0 ) then 
     write(logUnit, '(a)') 'Input file is binary with data expected to be specified as (x,y,z,weight).' 
     end if 
+  case(4)
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'Input data expected to be specified as (ndimcols).' 
+    end if  
+  case(5)
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a)') 'Input data expected to be specified as (ndimcols,weight).' 
+    end if 
+  case(6)
+    if ( logUnit .gt. 0 ) then 
+    write(logUnit, '(a)') 'Input file is binary with data expected to be specified as (ndimcols).' 
+    end if  
+  case(7)
+    if ( logUnit .gt. 0 ) then 
+    write(logUnit, '(a)') 'Input file is binary with data expected to be specified as (ndimcols,weight).' 
+    end if 
   case default
     if ( logUnit .gt. 0 ) then 
       write(logUnit, '(a)') 'Input data format not available. Stop.' 
     end if 
     call ustop('Input data format not available. Stop.') 
   end select
+
+
+  ! Look for ndimcols depending on the user provided input format
+  ndimcols = 3 
+  if ( inputDataFormat .ge. 4 ) then
+    call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+    if( (n.lt.1).or.(n.gt.3) ) then 
+      if ( logUnit .gt. 0 ) then 
+        write(logUnit, '(a,es18.9e3)') 'Invalid number of dimension colums. It should be at least 1 and maximum 3. Stop.'
+      end if
+      call ustop('Invalid number of dimension colums. It should be at least 1 and maximum 3. Stop.')
+    end if
+    ! Is a valid number
+    ndimcols = n
+    if ( logUnit .gt. 0 ) then 
+      write(logUnit, '(a,I4)') 'Reading the input file will consider that the number of coordinate columns is:', ndimcols
+    end if
+  end if
 
 
   ! Number of lines  
@@ -200,7 +236,9 @@ program GPKDE
   ! Looks for a uniform weight in case input format is only (x,y,z)
   if (&
     (inputDataFormat.eq.0) .or. &
-    (inputDataFormat.eq.2) ) then
+    (inputDataFormat.eq.2) .or. &
+    (inputDataFormat.eq.4) .or. &
+    (inputDataFormat.eq.6) ) then
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     if ( r .gt. fZERO ) then
       uniformMass = r 
@@ -216,7 +254,9 @@ program GPKDE
   ! Looks for an effective weight format in case input format is only (x,y,z,w)
   if (& 
     (inputDataFormat.eq.1) .or. &
-    (inputDataFormat.eq.3) ) then 
+    (inputDataFormat.eq.3) .or. &
+    (inputDataFormat.eq.5) .or. &
+    (inputDataFormat.eq.7) ) then 
     ! effectiveWeightFormat
     ! 0: compute effective number of points at domain-level (Kish 1965,1992)
     ! 1: compute average particles weight 
@@ -255,7 +295,7 @@ program GPKDE
 
   ! Open data file
   select case(inputDataFormat)
-  case(0,1)
+  case(0,1,4,5)
    ! text-plain input
    open(dataUnit, file=dataFile,access='sequential',form='formatted')
    if ( nlines.eq.0 ) then 
@@ -272,26 +312,28 @@ program GPKDE
      end if 
      rewind(dataUnit)
    end if
-  case(2,3)
+  case(2,3,6,7)
    ! binary input
    open(dataUnit, file=dataFile,access='stream',form='unformatted', status='old', action='read')
    if ( nlines.eq.0 ) then 
      ! Infer number of lines from file
      ! The number of lines is needed to allocate arrays
+     ! Notice that requires ndimcols for inference.
+     ! If inputDataFormat \in (2,3) ndimcols remained by default as 3.
      rewind(dataUnit)
      select case(inputDataFormat)
-     case(2)
+     case(2,6) ! without weight
       do
-        do idd=1,3 ! x,y,z
+        do idd=1,ndimcols ! x,y,z
           read(dataUnit,iostat=io) r
           if (io/=0) exit
         end do
         if (io/=0) exit
         nlines = nlines + 1
       end do
-     case(3)
+     case(3,7) ! with weight
       do
-        do idd=1,4 ! x,y,z,w
+        do idd=1,ndimcols+1 ! x,y,z,w
           read(dataUnit,iostat=io) r
           if (io/=0) exit
         end do
@@ -313,6 +355,7 @@ program GPKDE
   ! reconstruction parameters and perform 
   ! some health checks to throw out fast 
   ! in case of any inconsistencies.
+
 
   ! Read the outputFile
   read(simUnit, '(a)') line
@@ -568,7 +611,7 @@ program GPKDE
   case(1)
     kernelDatabase = .true.
   case default
-     call ustop('Kernel specification kind not available. It should be 0 or 1 . Stop.')
+    call ustop('Kernel specification kind not available. It should be 0 or 1 . Stop.')
   end select
 
 
@@ -916,31 +959,35 @@ program GPKDE
     flush(logUnit) 
   end if
   select case(inputDataFormat)
-  case(0)
+  case(0,4)
     ! x,y,z 
     allocate( dataCarrier( nlines, 3 ) )
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
     do id = 1, nlines
-      read(dataUnit,*) dataCarrier( id, : )
+      read(dataUnit,*) dataCarrier( id, 1:ndimcols )
     end do
-  case(1)
+  case(1,5)
     ! x,y,z,m 
     allocate( dataCarrier( nlines, 3 ) )
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
     allocate( weightsCarrier( nlines ) )
     do id = 1, nlines
-      read(dataUnit,*) dataCarrier( id, : ), weightsCarrier(id)
+      read(dataUnit,*) dataCarrier( id, 1:ndimcols ), weightsCarrier(id)
     end do
-  case(2)
+  case(2,6)
     ! x,y,z (binary) 
     allocate( dataCarrier( nlines, 3 ) )
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
     do id = 1, nlines
-      read(dataUnit) (dataCarrier( id, idd ), idd=1,3)
+      read(dataUnit) (dataCarrier( id, idd ), idd=1,ndimcols)
     end do
-  case(3)
+  case(3,7)
     ! x,y,z,m (binary) 
     allocate( dataCarrier( nlines, 3 ) )
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
     allocate( weightsCarrier( nlines ) )
     do id = 1, nlines
-      read(dataUnit) (dataCarrier( id, idd ), idd=1,3)
+      read(dataUnit) (dataCarrier( id, idd ), idd=1,ndimcols)
       read(dataUnit) weightsCarrier(id)
     end do
   end select
@@ -1040,7 +1087,7 @@ program GPKDE
   end if
   call system_clock(clockCountStart, clockCountRate, clockCountMax)
   select case(inputDataFormat)
-  case(0,2)
+  case(0,2,4,6)
     ! Non weighted reconstruction
     call gpkdeObj%ComputeDensity(                &
      dataCarrier,                                &
@@ -1057,7 +1104,7 @@ program GPKDE
      exportOptimizationVariables = exportOptimizationVariables,  &
      persistentKernelDatabase = .false. &
     )
-  case(1,3)
+  case(1,3,5,7)
     ! Weighted reconstruction
     call gpkdeObj%ComputeDensity(            &
      dataCarrier,                            &
