@@ -1,7 +1,12 @@
 ## 3D heterogeneous distribution
-Reconstruction of an heterogeneous distribution of particles generated with a Random Walk Particle Tracking solver on a three dimensional heterogeneous aquifer. 
+Reconstruction of an heterogeneous distribution of particles generated with a Random Walk Particle Tracking solver on a three dimensional heterogeneous aquifer.
+ 
+Run reconstruction
+```
+gpkde gpkde.sim
+```
 
-The `python` routine `exportovtk.py` generates a file for visualization with paraview. The `gpkde.vts` contains both the histogram and smoothed density reconstruction. Be sure that the packages `numpy, pandas and pyevtk` are installed. If not, a `requirements.txt` file is included and can be installed with
+The program writes density to `gpkde.out`. The `python` routine `exportovtk.py` generates the file `gpkde.vts` for visualization with `paraview`. The exported file contains both the histogram and smoothed density reconstruction. Be sure that the packages `numpy, pandas and pyevtk` are installed. If not, a `requirements.txt` file is included and can be installed with
 
 ```
 pip install -r requirements.txt
