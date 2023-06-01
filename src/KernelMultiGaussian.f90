@@ -779,7 +779,7 @@ contains
     real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
     integer  :: nx, ny, nz
     integer  :: nd
-    real(fp) :: aDenom, aNum, aCoeff, summatrixsq
+    real(fp) :: aDenom, aNum, aCoeff, summatrixsq, normprod
     !------------------------------------------------------------------------------
 
     this%shouldIntegrateOne = .false.
@@ -845,14 +845,17 @@ contains
     end if
 
     ! Kernel correction
-    ! Note: the cell volume is implicit in the non-dimensional bandwidhts,
+    ! Note: the cell volume is implicit in the non-dimensional bandwidths,
     ! further considering that this kernel is Delta_i**2*V^i
     do nd=1,3
       if ( hDelta(nd) .le. fZERO ) cycle
       select case(nd)
       case(1)
+        ! In order to handle limit cases, precompute the normalization product
+        normprod  = ( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hDelta(1)**fFIVE)*summatrixsq )
+        if ( normprod.le.fZERO ) this%matrix = fZERO; return; 
         this%matrix = &
-          this%matrix*sqrt(fTHREE/( fTWO**(fNDim+ fTWO)*pi**(0.5*fNDim)*(hDelta(1)**fFIVE)*summatrixsq ))
+          this%matrix*sqrt(fTHREE/normprod)
       case(2)
         this%matrix = this%matrix/sqrt( hDelta(2) )
       case(3)
@@ -880,7 +883,7 @@ contains
     real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
     integer  :: nx, ny, nz
     integer  :: nd
-    real(fp) :: aDenom, aNum, aCoeff, summatrixsq
+    real(fp) :: aDenom, aNum, aCoeff, summatrixsq, normprod
     !------------------------------------------------------------------------------
 
     this%shouldIntegrateOne = .false.
@@ -946,7 +949,7 @@ contains
     end if
 
     ! Kernel correction
-    ! Note: the cell volume is implicit in the non-dimensional bandwidhts,
+    ! Note: the cell volume is implicit in the non-dimensional bandwidths,
     ! further considering that this kernel is Delta_i**2*V^i
     do nd=1,3
       if ( hDelta(nd) .le. fZERO ) cycle
@@ -954,8 +957,11 @@ contains
       case(1)
         this%matrix = this%matrix/sqrt( hDelta(1) )
       case(2)
+        ! In order to handle limit cases, precompute the normalization product
+        normprod  = ( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hDelta(2)**fFIVE)*summatrixsq )
+        if ( normprod.le.fZERO ) this%matrix = fZERO; return; 
         this%matrix =& 
-          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hDelta(2)**fFIVE)*summatrixsq ))
+          this%matrix*sqrt(fTHREE/normprod)
       case(3)
         this%matrix = this%matrix/sqrt( hDelta(3) )
       end select
@@ -981,7 +987,7 @@ contains
     real(fp), dimension(:,:,:), allocatable :: zeroPositiveMatrix
     integer  :: nx, ny, nz
     integer  :: nd
-    real(fp) :: aDenom, aNum, aCoeff, summatrixsq
+    real(fp) :: aDenom, aNum, aCoeff, summatrixsq, normprod
     !------------------------------------------------------------------------------
 
     this%shouldIntegrateOne = .false.
@@ -1045,7 +1051,7 @@ contains
     end if
 
     ! Kernel correction
-    ! Note: the cell volume is implicit in the non-dimensional bandwidhts,
+    ! Note: the cell volume is implicit in the non-dimensional bandwidths,
     ! further considering that this kernel is Delta_i**2*V^i
     do nd=1,3
       if ( hDelta(nd) .le. fZERO ) cycle
@@ -1055,8 +1061,11 @@ contains
       case(2)
         this%matrix = this%matrix/sqrt( hDelta(2) )
       case(3)
-        this%matrix = &
-          this%matrix*sqrt(fTHREE/( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hDelta(3)**fFIVE)*summatrixsq ))
+        ! In order to handle limit cases, precompute the normalization product
+        normprod  = ( fTWO**(fNDim + fTWO)*pi**(0.5*fNDim)*(hDelta(3)**fFIVE)*summatrixsq )
+        if ( normprod.le.fZERO ) this%matrix = fZERO; return; 
+        this%matrix =& 
+          this%matrix*sqrt(fTHREE/normprod)
       end select
     end do 
 
