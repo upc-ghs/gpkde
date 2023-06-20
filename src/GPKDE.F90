@@ -642,7 +642,9 @@ program GPKDE
     end if
     call ustop('Given kernel bounding format is not valid. Stop.')
   end select
-
+  if ( logUnit.gt.0 ) then
+    flush(logUnit)
+  end if 
 
   ! Isotropic kernels
   ! 0: default, anisotropic
@@ -663,7 +665,6 @@ program GPKDE
   case default
      call ustop('Kernel anisotropy specification not available. It should be 0 or 1 . Stop.')
   end select
-
 
   ! Load characteristic kernel sizes
   kernelParams(:) = fZERO
@@ -724,6 +725,7 @@ program GPKDE
   if (.not. kernelDatabase ) then 
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'GPKDE will compute raw kernels.'
+      flush(logUnit)
     end if
   end if 
 
@@ -733,7 +735,7 @@ program GPKDE
   ! 1: user provides a factor scaling the characteristic bin size
   ! 2: user provides the initial smoothing array
   read(simUnit, '(a)', iostat=iostatus) line
-  if ( iostatus.lt.0 ) then
+  if ( iostatus/=0 ) then
     ! Not given, take as zero
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'Initial smoothing is selected from the global estimate of Silverman (1986). '
@@ -797,7 +799,7 @@ program GPKDE
   ! 1: read advance parameters
   read(simUnit, '(a)', iostat=iostatus) line
   advancedOptions = .false.
-  if ( iostatus.lt.0 ) then
+  if ( iostatus/=0 ) then
     ! Not given, take as zero
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'Will not interpret advanced options.'
@@ -831,7 +833,7 @@ program GPKDE
   if ( advancedOptions ) then
    ! Any advanced option ?  
    read(simUnit, '(a)', iostat=iostatus) line
-   if ( iostatus.lt.0 ) then
+   if ( iostatus/=0 ) then
     ! If advanced options were expected but none was given, stop.
     if ( logUnit.gt.0 ) then 
       write(logUnit,'(a)') 'No advanced options were given. Stop.'
@@ -902,7 +904,7 @@ program GPKDE
 
     ! Continue to isotropicThreshold
     read(simUnit, '(a)', iostat=iostatus) line
-    if ( iostatus.lt.0 ) then
+    if ( iostatus/=0 ) then
      if ( logUnit.gt.0 ) then 
        write(logUnit,'(a)') 'No further advanced options were given. Continue.'
      end if
@@ -922,7 +924,7 @@ program GPKDE
 
      ! Continue to useGlobalSmoothing
      read(simUnit, '(a)', iostat=iostatus) line
-     if ( iostatus.lt.0 ) then
+     if ( iostatus/=0 ) then
        if ( logUnit.gt.0 ) then 
          write(logUnit,'(a)') 'No further advanced options were given. Continue.'
        end if
