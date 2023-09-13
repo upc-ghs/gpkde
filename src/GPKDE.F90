@@ -1084,7 +1084,17 @@ program GPKDE
 
   ! Compute density
   if ( logUnit .gt. 0 ) then
+#ifdef _OPENMP
+    ! Report special message for parallel reconstruction
+    if ( parallel ) then
+      write(logUnit,'(a)') 'Will perform density reconstruction in parallel.'
+      write(logUnit,'(a,I4)') 'Number of threads:', ompNumThreads
+    else
+      write(logUnit,'(a)') 'Will perform density reconstruction.'
+    end if
+#else
     write(logUnit,'(a)') 'Will perform density reconstruction.'
+#endif
     flush(logUnit)
   end if
   call system_clock(clockCountStart, clockCountRate, clockCountMax)
