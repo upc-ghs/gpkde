@@ -5,7 +5,8 @@ module HistogramModule
   !  - Count weighted elements 
   !------------------------------------------------------------------------------
   use PrecisionModule, only : fp
-  use ConstantsModule, only : fONE, fZERO
+  use ConstantsModule, only : fZERO, fONE, fTWO, fTHREE
+  use iso_c_binding
   !------------------------------------------------------------------------------
   implicit none
 
@@ -49,14 +50,34 @@ module HistogramModule
     procedure :: ComputeCountsAndWeights          => prComputeCountsAndWeights
     procedure :: ComputeEffectiveCountsAndWeights => prComputeEffectiveCountsAndWeights
     procedure :: ComputeActiveBinIds              => prComputeActiveBinIds
+    procedure :: ComputeActiveBinIdsSliced        => prComputeActiveBinIdsSliced
+    procedure :: EstimateBinSizeFD                => prEstimateBinSizeFD
+    procedure :: EstimateBinSizeScott             => prEstimateBinSizeScott
   end type 
+
+
+  interface
+    subroutine prSortDblArray1D( array, elem_count, elem_size, compare) bind(C,name="qsort")
+      !--------------------------------------------------------------------------------------------- 
+      ! Interface sort to standard C library qsort. 
+      ! Adapted from:
+      ! https://stackoverflow.com/questions/20941575/sorting-in-fortran-undefined-reference-to-qsort
+      !--------------------------------------------------------------------------------------------- 
+      import
+      real(c_double),intent(inout) :: array(*)
+      integer(c_size_t),value      :: elem_count
+      integer(c_size_t),value      :: elem_size
+      type(c_funptr),value         :: compare !int(*compare)(const void *, const void *)
+    end subroutine prSortDblArray1D 
+  end interface
+
 
 ! HistogramModule contains
 contains
 
   subroutine prInitialize( this, & 
         domainGridSize, binSize, & 
-    dimensionMask, domainOrigin, & 
+                   domainOrigin, & 
               adaptGridToCoords  )
     !------------------------------------------------------------------------------
     !
@@ -67,8 +88,6 @@ contains
     class(HistogramType), target                 :: this
     integer , dimension(3), intent(in)           :: domainGridSize
     real(fp), dimension(3), intent(in)           :: binSize
-    integer , dimension(3), intent(in), optional :: dimensionMask
-    integer , dimension(3)                       :: locDimensionMask
     real(fp), dimension(3), intent(in), optional :: domainOrigin
     logical ,               intent(in), optional :: adaptGridToCoords
     integer :: nd, dcount
@@ -80,24 +99,20 @@ contains
       stop 
     end if 
 
-    ! Stop if any nBins .lt. 1
-    if ( any( domainGridSize .lt. 1 ) ) then 
-      write(*,*)'Error: while initializing Histogram, some domainGridSize .lt. 1. Stop.'
-      stop
-    end if
-
-    ! dimensionMask
-    if( present(dimensionMask) ) then 
-      locDimensionMask = dimensionMask
-    else
-      locDimensionMask = (/1,1,1/)
-    end if
-
     ! Allocate grid with nBins ? 
     if( present(adaptGridToCoords) ) then 
       this%adaptGridToCoords = adaptGridToCoords
     else
       this%adaptGridToCoords = .false.
+    end if
+
+    ! Requires domain if not adapting to grid
+    if( .not. this%adaptGridToCoords ) then 
+      ! Stop if any nBins .lt. 1
+      if ( any( domainGridSize .lt. 1 ) ) then 
+        write(*,*)'Error: while initializing Histogram, some domainGridSize .lt. 1. Stop.'
+        stop
+      end if
     end if
 
     ! Assign dim properties
@@ -126,20 +141,21 @@ contains
     if ( present( domainOrigin ) ) then 
       this%domainOrigin = domainOrigin
     else 
-      this%domainOrigin = 0 
+      this%domainOrigin = fZERO 
     end if
 
     ! Initialize variables
     this%domainGridSize = domainGridSize
     this%binSize        = binSize
     this%binVolume      = product( binSize, mask=(binSize.gt.fZERO) ) 
-    this%binDistance    = ( this%binVolume )**(fONE/this%nDim)
+    this%binDistance    = ( this%binVolume )**(fONE/real(this%nDim,fp))
 
     ! Allocate and initialize histogram counts, 
     ! if not adapting to the particle distribution follows the domain grid. 
     if ( .not. this%adaptGridToCoords ) then 
+      if ( allocated( this%counts ) ) deallocate( this%counts ) 
       allocate( this%counts( domainGridSize(1), domainGridSize(2), domainGridSize(3) ) )
-      this%counts   = 0
+      this%counts   = fZERO
       this%origin   => this%domainOrigin
       this%nBins    => this%domainGridSize
       this%gridSize = this%domainGridSize
@@ -505,6 +521,191 @@ contains
 
 
   end subroutine prComputeActiveBinIds
+
+
+  subroutine prComputeActiveBinIdsSliced( this, slicedDimension, sliceIndex )
+  !------------------------------------------------------------------------------
+  !
+  !------------------------------------------------------------------------------
+  ! Specifications 
+  !------------------------------------------------------------------------------
+  implicit none 
+  class(HistogramType) :: this
+  integer, intent(in)  :: slicedDimension
+  integer, intent(in)  :: sliceIndex
+  integer              :: ix, iy, iz
+  integer              :: icount = 1 
+  !------------------------------------------------------------------------------
+
+    ! Reset icount
+    icount = 1
+
+    if ( ( slicedDimension.lt.1 ).or.( slicedDimension.gt.3 ) ) then 
+      write(*,*)'Error: while computing sliced active bins, invalid sliced dimension.'
+      stop 
+    end if
+    if ( ( sliceIndex.le.0 ).or.( sliceIndex.gt.this%nBins(slicedDimension) ) ) then 
+      write(*,*)'Error: while computing sliced active bins, invalid slice index.'
+      stop 
+    end if
+
+    ! Compute active bins on a slice
+    select case(slicedDimension)
+    case(3)
+      this%nActiveBins = count( this%counts(:,:,sliceIndex)/=fZERO )
+      ! Reallocate activeBinIds to new size 
+      if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
+      allocate( this%activeBinIds( 3, this%nActiveBins ) )
+      ! Following column-major nesting
+      do iy = 1, this%nBins(2)
+        do ix = 1, this%nBins(1)
+          if ( this%counts( ix, iy, sliceIndex ) .eq. fZERO ) cycle
+          this%activeBinIds( :, icount ) = [ ix, iy, 1 ]
+          icount = icount + 1
+        end do
+      end do
+    case(2)
+      this%nActiveBins = count( this%counts(:,sliceIndex,:)/=fZERO )
+      ! Reallocate activeBinIds to new size 
+      if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
+      allocate( this%activeBinIds( 3, this%nActiveBins ) )
+      ! Following column-major nesting
+      do iz = 1, this%nBins(3)
+        do ix = 1, this%nBins(1)
+          if ( this%counts( ix, sliceIndex, iz ) .eq. fZERO ) cycle
+          this%activeBinIds( :, icount ) = [ ix, 1, iz ]
+          icount = icount + 1
+        end do
+      end do
+    case(1)
+      this%nActiveBins = count( this%counts(sliceIndex,:,:)/=fZERO )
+      ! Reallocate activeBinIds to new size 
+      if ( allocated( this%activeBinIds ) )  deallocate( this%activeBinIds )
+      allocate( this%activeBinIds( 3, this%nActiveBins ) )
+      ! Following column-major nesting
+      do iz = 1, this%nBins(3)
+        do iy = 1, this%nBins(2)
+          if ( this%counts( sliceIndex, iy, iz ) .eq. fZERO ) cycle
+          this%activeBinIds( :, icount ) = [ 1, iy, iz ]
+          icount = icount + 1
+        end do
+      end do
+    end select
+
+
+  end subroutine prComputeActiveBinIdsSliced
+
+
+  subroutine prEstimateBinSizeScott( this, dataPoints, binSize ) 
+  !------------------------------------------------------------------------------
+  !
+  !------------------------------------------------------------------------------
+  ! Specifications 
+  !------------------------------------------------------------------------------
+  implicit none 
+  class(HistogramType) :: this
+  real(fp), dimension(:,:), intent(in)  :: dataPoints ! (npoints, 3)
+  real(fp), dimension(3), intent(inout) :: binSize    ! for 3D but now only use first
+  real(fp) :: avg, var
+  integer  :: nPoints
+  integer, dimension(2) :: nPointsShape
+  integer  :: n 
+  !------------------------------------------------------------------------------
+  
+    binSize = fZERO 
+    nPointsShape = shape(dataPoints) 
+    nPoints = nPointsShape(1)
+
+    avg = sum(dataPoints(:,1))/real(nPoints,fp)
+    var = fZERO
+ 
+    do n =1, nPoints
+      var = var + (dataPoints(n,1) - avg)**2d0
+    end do 
+    var = var/real(nPoints,fp)
+
+    binSize(1) = 3.49*sqrt(var)/( (real(nPoints,fp))**(fONE/fTHREE) )
+
+
+  end subroutine prEstimateBinSizeScott
+
+
+  subroutine prEstimateBinSizeFD( this, dataPoints, binSize ) 
+  !------------------------------------------------------------------------------
+  ! Freedman Diaconis
+  !------------------------------------------------------------------------------
+  ! Specifications 
+  !------------------------------------------------------------------------------
+  use iso_c_binding
+  implicit none 
+  class(HistogramType) :: this
+  real(fp), dimension(:,:), intent(in) :: dataPoints ! (npoints, 3)
+  real(fp), dimension(3), intent(inout) :: binSize    ! for 3D but now only use first
+  !real(fp) :: avg, var
+  integer  :: nPoints
+  integer, dimension(2) :: nPointsShape
+  !integer  :: n 
+  real(fp), dimension(:), allocatable :: array
+  integer  :: residue
+  real(fp) :: residuefp
+  real(fp) :: Q1, Q3, IQR
+  !------------------------------------------------------------------------------
+    
+    binSize = fZERO
+    nPointsShape = shape(dataPoints) 
+    nPoints = nPointsShape(1)
+    if ( allocated(array) ) deallocate( array ) 
+    allocate( array(nPoints) )
+    array(:) = dataPoints(:,1)
+
+    ! Preprocessor flags for type selection !
+    call prSortDblArray1D( array, int(nPoints,c_size_t), int(fp,c_size_t), c_funloc( comparedbl ) ) 
+
+    residue = modulo( nPoints, 2 )
+    if ( residue .eq. 0 ) then
+      ! check the number of elements in half the list is even
+      ! if it is, the median if Q1 is the average between n/4 and n/4+1 
+      residuefp = modulo( real(nPoints,fp)/fTWO, fTWO)
+      if ( residuefp.eq.0 ) then
+        Q1 = ( array(int(nPoints/4)) + array(int(nPoints/4)+1) )/fTWO
+        Q3 = ( array(int(nPoints/2) + int(nPoints/4)) + array(int(nPoints/2) +int(nPoints/4)+1) )/fTWO
+      else
+      ! if odd, the median is the center value      
+        Q1 = array(int(nPoints/4)+1)
+        Q3 = array(nPoints/2+int(nPoints/4)+1)
+      end if 
+    else
+      ! if the length of the original list is odd..
+      ! need to verify the same as before but for nPoints - 1. 
+      residuefp = modulo( real((nPoints-1),fp)/fTWO, fTWO)
+      if ( residuefp.eq.0 ) then
+        Q1 = ( array(int((nPoints-1)/4)) + array(int((nPoints-1)/4)+1) )/fTWO
+        Q3 = ( array(int(nPoints/2) + 1 + int((nPoints-1)/4)     ) + &
+               array(int(nPoints/2) + 1 + int((nPoints-1)/4) + 1 ) )/fTWO
+      else
+      ! if odd, the median is the center value      
+        Q1 = array( int((nPoints-1)/4) + 1 )
+        Q3 = array( int(nPoints/2) + 1 + int((nPoints-1)/4) + 1 )
+      end if 
+    end if
+    
+    ! The interquartile range
+    IQR = Q3-Q1 
+
+    ! The estimated bin size
+    binSize(1) = fTWO*IQR/(real(nPoints,fp)**(fONE/fTHREE))
+
+
+  end subroutine prEstimateBinSizeFD
+
+
+  integer(c_int) function comparedbl( a, b ) bind(C)
+    use iso_c_binding
+    real(c_double) a, b
+    if ( a .lt. b ) comparedbl = -1
+    if ( a .eq. b ) comparedbl = 0
+    if ( a .gt. b ) comparedbl = 1
+  end function comparedbl
 
 
 end module HistogramModule
