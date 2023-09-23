@@ -3716,7 +3716,13 @@ contains
     if ( present( outputFileName ) ) then 
       this%outputFileName = outputFileName
     else
-      this%outputFileName = defaultOutputFileName
+      if ( present( outputFileUnit ) ) then 
+        ! get filename from output unit if given
+        inquire( unit=outputFileUnit, name=this%outputFileName )
+      else
+        ! default
+        this%outputFileName = defaultOutputFileName
+      end if 
     end if
     if ( present( persistentKernelDatabase ) ) then
       persistKDB = persistentKernelDatabase
