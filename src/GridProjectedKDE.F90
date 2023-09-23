@@ -103,6 +103,7 @@ module GridProjectedKDEModule
     real(fp)               :: borderFraction
     logical                :: slicedReconstruction 
     integer                :: slicedDimension
+    logical                :: forceAutomaticBinSize 
 
     ! Variables
     real(fp), dimension(:,:,:), pointer :: densityEstimateGrid => null()
@@ -351,6 +352,7 @@ contains
                 domainSize, binSize, domainOrigin, &
                 adaptGridToCoords, borderFraction, & 
             slicedReconstruction, slicedDimension, &
+                            forceAutomaticBinSize, & 
                         initialSmoothingSelection, & 
          initialSmoothing, initialSmoothingFactor, &
          nOptimizationLoops, databaseOptimization, &
@@ -383,6 +385,8 @@ contains
     ! Sliced reconstruction
     logical               , intent(in), optional :: slicedReconstruction
     integer               , intent(in), optional :: slicedDimension
+    ! Flag for automatic bin size 
+    logical               , intent(in), optional :: forceAutomaticBinSize
     ! Initial smoothing
     real(fp), dimension(3), intent(in), optional :: initialSmoothing
     real(fp)              , intent(in), optional :: initialSmoothingFactor
@@ -442,6 +446,13 @@ contains
       this%adaptGridToCoords = defaultAdaptGridToCoords
     end if
 
+    ! forceAutomaticBinSize
+    if ( present(forceAutomaticBinSize) ) then
+      this%forceAutomaticBinSize = forceAutomaticBinSize
+    else
+      this%forceAutomaticBinSize = .false.
+    end if
+
     ! borderFraction
     if ( present(borderFraction) ) then
       this%borderFraction = borderFraction
@@ -475,32 +486,34 @@ contains
     end if  
 
     ! binSize 
-    if ( present( binSize ).and.(.not.all(this%domainSize.eq.fZERO)) ) then 
-      ! Stop if all bin sizes are zero
-      if ( all( binSize .lt. fZERO ) ) then 
-        write(*,*) 'Error: while initializing GPKDE, all binSizes are .lt. 0. Stop.'
-        stop 
-      end if 
-      ! Initialize reconstruction grid parameters 
-      where( binSize .ne. fZERO ) 
-        this%domainGridSize = int( this%domainSize/binSize + 0.5 )
-      elsewhere
-        this%domainGridSize = 1
-      end where
-      ! Stop if any the domainGridSize .lt. 1
-      if ( any( this%domainGridSize .lt. 1 ) ) then 
-        write(*,*) 'Error: while initializing GPKDE, some domainGridSize .lt. 1. Stop.'
-        stop 
-      end if
-      this%binSize = binSize
-    else if ( present( binSize ) ) then 
-      ! Assign and relay init to UpdateBinSize
-      ! Stop if all bin sizes are zero
-      if ( all( binSize .lt. fZERO ) ) then 
-        write(*,*) 'Error: while initializing GPKDE, all binSizes are .lt. 0. Stop.'
-        stop 
-      end if 
-      this%binSize = binSize
+    if ( .not.this%forceAutomaticBinSize ) then 
+     if ( present( binSize ).and.(.not.all(this%domainSize.eq.fZERO)) ) then 
+       ! Stop if all bin sizes are zero
+       if ( all( binSize .lt. fZERO ) ) then 
+         write(*,*) 'Error: while initializing GPKDE, all binSizes are .lt. 0. Stop.'
+         stop 
+       end if 
+       ! Initialize reconstruction grid parameters 
+       where( binSize .ne. fZERO ) 
+         this%domainGridSize = int( this%domainSize/binSize + 0.5 )
+       elsewhere
+         this%domainGridSize = 1
+       end where
+       ! Stop if any the domainGridSize .lt. 1
+       if ( any( this%domainGridSize .lt. 1 ) ) then 
+         write(*,*) 'Error: while initializing GPKDE, some domainGridSize .lt. 1. Stop.'
+         stop 
+       end if
+       this%binSize = binSize
+     else if ( present( binSize ) ) then 
+       ! Assign and relay init to UpdateBinSize
+       ! Stop if all bin sizes are zero
+       if ( all( binSize .lt. fZERO ) ) then 
+         write(*,*) 'Error: while initializing GPKDE, all binSizes are .lt. 0. Stop.'
+         stop 
+       end if 
+       this%binSize = binSize
+     end if 
     end if 
 
     ! domainOrigin
@@ -553,6 +566,7 @@ contains
     end if 
 
     ! Bin size related 
+    if ( .not.this%forceAutomaticBinSize ) then 
     if ( present( binSize ).and.(.not.all(this%domainSize.eq.fZERO)) ) then 
 
       ! Depending on domainGridSize, is the number of dimensions of the GPDKE
@@ -638,6 +652,7 @@ contains
         end if 
       end do
 
+    end if 
     end if 
 
     ! nOptimizationLoops
@@ -760,6 +775,7 @@ contains
     end if 
 
     ! Bin size related, and domain size 
+    if ( .not. this%forceAutomaticBinSize ) then 
     if ( present( binSize ).and.(.not.all(this%domainSize.eq.fZERO)) ) then 
 
       ! Determine kernel bounding  
@@ -832,6 +848,7 @@ contains
       end select
 
     end if 
+    end if 
 
     ! Process advanced parameters !
      
@@ -893,60 +910,68 @@ contains
 
     ! Need more reports for roughnesses and eventually min/max kernel sizes
 
-    ! Related to bin and domain size 
-    if ( present( binSize ).and.(.not.all(this%domainSize.eq.fZERO)) ) then 
+    ! Related to bin and domain size
+    if ( .not. this%forceAutomaticBinSize ) then  
+     if ( present( binSize ).and.(.not.all(this%domainSize.eq.fZERO)) ) then 
+       ! Logging
+       if ( this%reportToOutUnit ) then 
+         write( this%outFileUnit, '(3X,A)') 'Grid parameters'
+         write( this%outFileUnit, '(3X,A)') '---------------'
+         outfmt = '(3X,A,3(1X,es18.9e3))'
+         write( this%outFileUnit, outfmt) '- binSize            :', this%binSize
+         write( this%outFileUnit, outfmt) '- domainSize         :', this%domainSize
+         write( this%outFileUnit, outfmt) '- domainOrigin       :', this%domainOrigin
+         outfmt = '(3X,A,3(1X,I9))'
+         write( this%outFileUnit, outfmt) '- domainGridSize     :', this%domainGridSize
+         write( this%outFileUnit, '(3X,A)') '---------------'
+         write( this%outFileUnit, '(3X,A)')      'Dimensionality for reconstruction is determined from domain grid size.'
+         if (this%slicedReconstruction ) then 
+         write( this%outFileUnit, '(3X,A,I2,A)') 'Will perform sliced reconstruction in ', nDim, ' dimensions. '
+         else
+         write( this%outFileUnit, '(3X,A,I2,A)') 'Will perform reconstruction in ', nDim, ' dimensions.'
+         end if
+         if ( this%initialSmoothingSelection.ge.1 ) then 
+         outfmt = '(3X,A,3(1X,es18.9e3))'
+         write( this%outFileUnit, outfmt) '- initialSmoothing   :', this%initialSmoothing
+         end if 
+       end if  
 
-      ! Logging
-      if ( this%reportToOutUnit ) then 
-        write( this%outFileUnit, '(3X,A)') 'Grid parameters'
-        write( this%outFileUnit, '(3X,A)') '---------------'
-        outfmt = '(3X,A,3(1X,es18.9e3))'
-        write( this%outFileUnit, outfmt) '- binSize            :', this%binSize
-        write( this%outFileUnit, outfmt) '- domainSize         :', this%domainSize
-        write( this%outFileUnit, outfmt) '- domainOrigin       :', this%domainOrigin
-        outfmt = '(3X,A,3(1X,I9))'
-        write( this%outFileUnit, outfmt) '- domainGridSize     :', this%domainGridSize
-        write( this%outFileUnit, '(3X,A)') '---------------'
-        write( this%outFileUnit, '(3X,A)')      'Dimensionality for reconstruction is determined from domain grid size.'
-        if (this%slicedReconstruction ) then 
-        write( this%outFileUnit, '(3X,A,I2,A)') 'Will perform sliced reconstruction in ', nDim, ' dimensions. '
-        else
-        write( this%outFileUnit, '(3X,A,I2,A)') 'Will perform reconstruction in ', nDim, ' dimensions.'
-        end if
-        if ( this%initialSmoothingSelection.ge.1 ) then 
-        outfmt = '(3X,A,3(1X,es18.9e3))'
-        write( this%outFileUnit, outfmt) '- initialSmoothing   :', this%initialSmoothing
-        end if 
-      end if  
+       ! Initialize kernel database
+       if ( this%databaseOptimization ) then
+         call this%InitializeKernelDatabaseFlat( this%minHOverDelta(1), &
+                                                 this%maxHOverDelta(1), &
+                                               this%deltaHOverDelta(1), &
+                                                 this%logKernelDatabase  )
+         ! Pointers for SetKernel
+         this%SetKernel => prSetKernelFromDatabase
+         this%SetKernelSigma => prSetKernelSigmaFromDatabase
+       else
+         ! Pointers for SetKernel
+         this%SetKernel => prSetKernelBrute
+         this%SetKernelSigma => prSetKernelSigmaBrute
+       end if 
 
-      ! Initialize kernel database
-      if ( this%databaseOptimization ) then
-        call this%InitializeKernelDatabaseFlat( this%minHOverDelta(1), &
-                                                this%maxHOverDelta(1), &
-                                              this%deltaHOverDelta(1), &
-                                                this%logKernelDatabase  )
-        ! Pointers for SetKernel
-        this%SetKernel => prSetKernelFromDatabase
-        this%SetKernelSigma => prSetKernelSigmaFromDatabase
-      else
-        ! Pointers for SetKernel
-        this%SetKernel => prSetKernelBrute
-        this%SetKernelSigma => prSetKernelSigmaBrute
-      end if 
+       ! Initialize net roughness function
+       call this%InitializeNetRoughnessFunction( nDim )
 
-      ! Initialize net roughness function
-      call this%InitializeNetRoughnessFunction( nDim )
-
-      ! Report intialization
-      if ( this%reportToOutUnit ) then 
-        write( this%outFileUnit, '(A)' ) ' GPKDE is initialized  '
-        write( this%outFileUnit, '(A)' ) '-----------------------'
-        write( this%outFileUnit,  *    )
-        flush( this%outFileUnit ) 
-      end if
-    
+       ! Report intialization
+       if ( this%reportToOutUnit ) then 
+         write( this%outFileUnit, '(A)' ) ' GPKDE is initialized  '
+         write( this%outFileUnit, '(A)' ) '-----------------------'
+         write( this%outFileUnit,  *    )
+         flush( this%outFileUnit ) 
+       end if
+     
+     else
+       ! Report intialization
+       if ( this%reportToOutUnit ) then 
+         write( this%outFileUnit, '(A)' ) ' GPKDE is initialized without a predefined grid, defined later. '
+         write( this%outFileUnit, '(A)' ) '----------------------------------------------------------------'
+         write( this%outFileUnit,  *    )
+         flush( this%outFileUnit ) 
+       end if
+     end if 
     else
-
       ! Report intialization
       if ( this%reportToOutUnit ) then 
         write( this%outFileUnit, '(A)' ) ' GPKDE is initialized without a predefined grid, defined later. '
@@ -954,8 +979,8 @@ contains
         write( this%outFileUnit,  *    )
         flush( this%outFileUnit ) 
       end if
-
     end if 
+
 
     ! Done
 
@@ -3646,7 +3671,7 @@ contains
     real(fp)              :: locRelativeErrorConvergence
     character(len=16)     :: timeChar
     character(len=16)     :: spcChar
-    integer               :: nd
+    integer               :: nd, dimId
     ! For determination of sub grid
     real(fp), dimension(3) :: minCoords
     real(fp), dimension(3) :: minSubGridCoords
@@ -3779,8 +3804,63 @@ contains
     end if
 
     ! Now it needs to process the bin size. 
-    ! Only for 1D reconstruction !
-    if ( present( histogramBinFormat ) ) then 
+    if ( .not. this%forceAutomaticBinSize ) then 
+      if ( present( histogramBinFormat ) ) then 
+        if ( present( binSizeFraction ) ) then
+          if ( (binSizeFraction.le.fZERO).or.(binSizeFraction.gt.fONE) ) then
+            write(*,*) 'Error: bin size fraction should be between 0 and 1. Stop.' 
+            stop
+          end if 
+          locBinSizeFraction = binSizeFraction 
+        else
+          locBinSizeFraction = fONE
+        end if 
+        select case( histogramBinFormat ) 
+        ! compute from data based on Scott's rule
+        case (0)
+          call this%histogram%EstimateBinSizeScott( dataPoints, this%binSize )
+          this%binSize = locBinSizeFraction*this%binSize
+          call this%UpdateBinSize( this%binSize ) 
+        ! compute from data based on Freedman-Diaconis rule
+        ! Only for 1D reconstruction !
+        case (1)
+          if ( count(this%domainSize /= fZERO ) .gt. 1 ) then 
+           write(*,*) 'Error: automatic bin selection with Freedman-Diaconis only is available for 1D domains. Stop.'
+           stop
+          end if 
+          dimId = maxloc(this%domainSize, dim=1, mask=(this%domainSize.gt.fZERO ) )
+          call this%histogram%EstimateBinSizeFD( dataPoints, this%binSize, dimId )
+          this%binSize = locBinSizeFraction*this%binSize
+          call this%UpdateBinSize( this%binSize ) 
+        case default
+          ! Verify that they were defined
+          if ( .not. this%adaptGridToCoords ) then 
+            if ( all(this%binSize.le.fZERO) ) then  
+              write(*,*) 'Error: bin sizes were not defined. Stop.'
+              stop
+            end if
+          else
+            call this%UpdateBinSize( this%binSize ) 
+          end if
+        end select
+      else
+        ! Something to verify that it was set
+        ! and so on... 
+        if ( .not. this%adaptGridToCoords ) then 
+          if ( all(this%binSize.le.fZERO) ) then  
+            write(*,*) 'Error: bin sizes were not defined. Stop.'
+            stop
+          end if
+        else
+          call this%UpdateBinSize( this%binSize ) 
+        end if
+      end if 
+    else
+      ! If forced, require the histogram bin format
+      if ( .not.  present( histogramBinFormat ) ) then 
+       write(*,*) 'Error: forcing automatic bin size selection but no selection method was given. Stop.'
+       stop
+      end if 
       if ( present( binSizeFraction ) ) then
         if ( (binSizeFraction.le.fZERO).or.(binSizeFraction.gt.fONE) ) then
           write(*,*) 'Error: bin size fraction should be between 0 and 1. Stop.' 
@@ -3797,32 +3877,21 @@ contains
         this%binSize = locBinSizeFraction*this%binSize
         call this%UpdateBinSize( this%binSize ) 
       ! compute from data based on Freedman-Diaconis rule
+      ! Only for 1D reconstruction !
       case (1)
-        call this%histogram%EstimateBinSizeFD( dataPoints, this%binSize )
+        if ( count(this%domainSize /= fZERO ) .gt. 1 ) then 
+         write(*,*) 'Error: automatic bin selection with Freedman-Diaconis only is available for 1D domains. Stop.'
+         stop
+        end if
+        dimId = maxloc(this%domainSize, dim=1, mask=(this%domainSize.gt.fZERO ) )
+        call this%histogram%EstimateBinSizeFD( dataPoints, this%binSize, dimId )
         this%binSize = locBinSizeFraction*this%binSize
         call this%UpdateBinSize( this%binSize ) 
       case default
-        ! Verify that they were defined
-        if ( .not. this%adaptGridToCoords ) then 
-          if ( all(this%binSize.le.fZERO) ) then  
-            write(*,*) 'Error: bin sizes were not defined. Stop.'
-            stop
-          end if
-        else
-          call this%UpdateBinSize( this%binSize ) 
-        end if
+        ! Verify valid method 
+        write(*,*) 'Error: while forcing automatic bin size selection, method is not valid. Stop.'
+        stop
       end select
-    else
-      ! Something to verify that it was set
-      ! and so on... 
-      if ( .not. this%adaptGridToCoords ) then 
-        if ( all(this%binSize.le.fZERO) ) then  
-          write(*,*) 'Error: bin sizes were not defined. Stop.'
-          stop
-        end if
-      else
-        call this%UpdateBinSize( this%binSize ) 
-      end if
     end if 
     
 
@@ -4220,36 +4289,8 @@ contains
     if ( present( generateVectorCoordinates ) ) then 
       if ( generateVectorCoordinates ) then
         call this%GenerateVectorCoordinates()
-        !do nd=1,3
-        !  if ( this%dimensionMask(nd).eq.1 ) then
-        !    select case(nd)
-        !    case(1)
-        !      if ( allocated( this%coordinatesX ) ) deallocate( this%coordinatesX )
-        !      allocate( this%coordinatesX(this%nBins(nd)) )
-        !      do m = 1, this%nBins(nd)
-        !         idbin = m+this%deltaBinsOrigin(nd)
-        !         this%coordinatesX(m) = (real(idbin,fp) + 0.5_fp)*this%binSize(nd) + this%domainOrigin(nd)
-        !      end do 
-        !    case(2)
-        !      if ( allocated( this%coordinatesY ) ) deallocate( this%coordinatesY )
-        !      allocate( this%coordinatesY(this%nBins(nd)) )
-        !      do m = 1, this%nBins(nd)
-        !         idbin = m+this%deltaBinsOrigin(nd)
-        !         this%coordinatesY(m) = (real(idbin,fp) + 0.5_fp)*this%binSize(nd) + this%domainOrigin(nd)
-        !      end do 
-        !    case(3)
-        !      if ( allocated( this%coordinatesZ ) ) deallocate( this%coordinatesZ )
-        !      allocate( this%coordinatesZ(this%nBins(nd)) )
-        !      do m = 1, this%nBins(nd)
-        !         idbin = m+this%deltaBinsOrigin(nd)
-        !         this%coordinatesZ(m) = (real(idbin,fp) + 0.5_fp)*this%binSize(nd) + this%domainOrigin(nd)
-        !      end do 
-        !    end select 
-        !  end if 
-        !end do 
       end if
     end if 
-
 
     ! Assign histogram density accordingly, for exporting
     ! data on a scale consistent with density
@@ -4963,8 +5004,11 @@ contains
           ! Break
           exit
         end if
-        ! Relative change in averaged ALMISE convergence
-        if ( ( m.gt.1 ) ) then
+        ! Relative change in averaged ALMISE convergence.
+        ! Handle certain cases where the error metric seems 
+        ! to consistently alternate between characteristic values.
+        ! Enable this criteria only after a threshold number of loops.
+        if ( ( m.gt.5 ) ) then
           if (&
             abs( errorALMISECumsumOld/real(m-1,fp) - errorALMISECumsum/real(m,fp) )/&
                  errorALMISECumsumOld/real(m-1,fp) .lt. errorMetricConvergence ) then 
