@@ -54,6 +54,8 @@ program GPKDE
   real(fp), dimension(3) :: domainOrigin
   logical                :: adaptToCoords
   real(fp)               :: borderFraction = 0.05_fp
+  logical                :: slicedReconstruction
+  integer                :: slicedDimension = 0
   ! kernels
   real(fp), dimension(3) :: initialSmoothing
   real(fp), dimension(3) :: kernelParams
@@ -351,11 +353,8 @@ program GPKDE
     call ustop('Data file does not have entries. Stop.')
   end if 
 
-  ! Before loading the data, read the 
-  ! reconstruction parameters and perform 
-  ! some health checks to throw out fast 
-  ! in case of any inconsistencies.
-
+  ! Before loading the data, read the reconstruction parameters and perform some 
+  ! health checks before initialization in order to fail fast in case of inconsistencies.
 
   ! Read the outputFile
   read(simUnit, '(a)') line
@@ -424,11 +423,12 @@ program GPKDE
   end if 
 
 
-  ! Read grid parameters
+  ! Read grid parameters !
   if ( logUnit .gt. 0 ) then 
     write( logUnit, '(a)') 'Will read reconstruction grid parameters. '
     flush(logUnit) 
-  end if 
+  end if
+
   ! domainOrigin
   read(simUnit, '(a)') line
   icol = 1
@@ -438,9 +438,30 @@ program GPKDE
   domainOrigin(2) = r
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   domainOrigin(3) = r
-  
+ 
+  ! sliced dimension
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  ! 0: do not slice domain
+  ! 1,2,3: slice domain in the given dimension
+  slicedDimension = 0
+  slicedReconstruction = .false.
+  if ( n .ne. 0 ) then
+    select case(n) 
+    case(1,2,3)
+      if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a,I2)') 'Will try sliced reconstruction, considering the slicing in dimension ', n 
+      end if 
+      slicedDimension = n 
+      slicedReconstruction = .true.
+    case default
+      if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'The given valu for sliced dimension is not valid. Will default to normal reconstruction.' 
+      end if 
+    end select
+  end if 
 
-  ! Read domainSize
+
+  ! domainSize
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -488,7 +509,7 @@ program GPKDE
   end if
 
 
-  ! Read binSize
+  ! binSize
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -528,7 +549,10 @@ program GPKDE
   end if 
 
 
-  ! Read the max number of optimization loops
+  ! Read optimization parameters !
+
+
+  ! Max number of optimization loops
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
@@ -1030,6 +1054,8 @@ program GPKDE
       effectiveWeightFormat     = effectiveWeightFormat,    & 
       boundKernelSizeFormat     = boundKernelSizeFormat,    & 
       isotropicThreshold        = isotropicThreshold,       & 
+      slicedReconstruction      = slicedReconstruction,     & 
+      slicedDimension           = slicedDimension,          & 
       outFileName               = logFile                   &
     )
   else
@@ -1053,7 +1079,9 @@ program GPKDE
       minRelativeRoughness      = minRelativeRoughness,     &
       effectiveWeightFormat     = effectiveWeightFormat,    & 
       boundKernelSizeFormat     = boundKernelSizeFormat,    & 
-      isotropicThreshold        = isotropicThreshold        & 
+      isotropicThreshold        = isotropicThreshold,       & 
+      slicedReconstruction      = slicedReconstruction,     & 
+      slicedDimension           = slicedDimension           & 
     )
   end if
 

@@ -908,7 +908,11 @@ contains
         write( this%outFileUnit, outfmt) '- domainGridSize     :', this%domainGridSize
         write( this%outFileUnit, '(3X,A)') '---------------'
         write( this%outFileUnit, '(3X,A)')      'Dimensionality for reconstruction is determined from domain grid size.'
+        if (this%slicedReconstruction ) then 
+        write( this%outFileUnit, '(3X,A,I2,A)') 'Will perform sliced reconstruction in ', nDim, ' dimensions. '
+        else
         write( this%outFileUnit, '(3X,A,I2,A)') 'Will perform reconstruction in ', nDim, ' dimensions.'
+        end if
         if ( this%initialSmoothingSelection.ge.1 ) then 
         outfmt = '(3X,A,3(1X,es18.9e3))'
         write( this%outFileUnit, outfmt) '- initialSmoothing   :', this%initialSmoothing
@@ -3973,18 +3977,19 @@ contains
      if ( this%reportToOutUnit ) then
       write(this%outFileUnit, *  )
       write(this%outFileUnit, '(A)' ) 'Warning: GPKDE module  '
-      write(this%outFileUnit, '(A)' ) 'Standard deviation is zero. Will continue and lets see what happens.'
+      write(this%outFileUnit, '(A)' ) 'Standard deviation is zero. Default to initial smoothing factor times bin distance.'
       write(this%outFileUnit, *  )
      end if
-    else
-     if ( this%reportToOutUnit ) then
-      write(this%outFileUnit, *  )
-      write(this%outFileUnit, '(1X,A)' ) 'Data points info'
-      write(this%outFileUnit, '(3X,A,3(1X,es18.9e3))'     ) 'Mean coordinates                 :', this%meanCoords
-      write(this%outFileUnit, '(3X,A,3(1X,es18.9e3))'     ) 'Std. dev. coordinates            :', this%stdCoords
-      write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Std. sigma scale                 :', this%stdSigmaScale
-      write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Global smoothing scale Silverman :', this%hSigmaScale
-     end if
+     this%hSigmaScale = defaultInitialSmoothingFactor*this%histogram%binDistance
+    end if
+
+    if ( this%reportToOutUnit ) then
+     write(this%outFileUnit, *  )
+     write(this%outFileUnit, '(1X,A)' ) 'Data points info'
+     write(this%outFileUnit, '(3X,A,3(1X,es18.9e3))'     ) 'Mean coordinates                 :', this%meanCoords
+     write(this%outFileUnit, '(3X,A,3(1X,es18.9e3))'     ) 'Std. dev. coordinates            :', this%stdCoords
+     write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Std. sigma scale                 :', this%stdSigmaScale
+     write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Global smoothing scale Silverman :', this%hSigmaScale
     end if
 
     ! Assign min roughness based on specified format

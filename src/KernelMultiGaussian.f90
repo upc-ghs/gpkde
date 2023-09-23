@@ -38,6 +38,7 @@ module KernelMultiGaussianModule
     procedure, non_overridable :: ResetMatrix                  => prResetMatrix
     procedure, non_overridable :: ResetMatrixOld               => prResetMatrixOld
     procedure, non_overridable :: ComputeSpansBounded          => prComputeSpansBounded
+    procedure, non_overridable :: ComputeSpansUnbounded        => prComputeSpansUnbounded
     procedure, non_overridable :: ComputeSpansBoundedTranspose => prComputeSpansBoundedTranspose
     procedure, non_overridable :: GenerateZeroPositiveGrid     => prGenerateZeroPositiveGrid
     procedure, non_overridable :: UnfoldZeroPositiveMatrix     => prUnfoldZeroPositiveMatrix
@@ -264,6 +265,41 @@ contains
     end if 
 
   end subroutine prComputeSpansBounded
+
+
+  subroutine prComputeSpansUnbounded( this, gridIndexes, gridShape, &
+                                 xGridSpan, yGridSpan, zGridSpan, &
+                           xKernelSpan, yKernelSpan, zKernelSpan  )
+    !------------------------------------------------------------------------------
+    ! Calculate both grid and kernel spans. 
+    ! Does not considers kernel reflection or boundary analysis
+    !------------------------------------------------------------------------------
+    ! Specifications 
+    !------------------------------------------------------------------------------
+    implicit none
+    class( KernelType )                  :: this
+    integer, dimension(3), intent(in)    :: gridShape
+    integer, dimension(3), intent(in)    :: gridIndexes
+    integer, dimension(2), intent(inout) :: xGridSpan, yGridSpan, zGridSpan
+    integer, dimension(2), intent(inout) :: xKernelSpan, yKernelSpan, zKernelSpan
+    !------------------------------------------------------------------------------
+
+    ! Spans in grid (ORIGINAL) 
+    xGridSpan(1) = max( gridIndexes(1) - this%matrixPositiveShape(1), 1)
+    xGridSpan(2) = min( gridIndexes(1) + this%matrixPositiveShape(1), gridShape(1) )
+    yGridSpan(1) = max( gridIndexes(2) - this%matrixPositiveShape(2), 1)
+    yGridSpan(2) = min( gridIndexes(2) + this%matrixPositiveShape(2), gridShape(2) )
+    zGridSpan(1) = max( gridIndexes(3) - this%matrixPositiveShape(3), 1)
+    zGridSpan(2) = min( gridIndexes(3) + this%matrixPositiveShape(3), gridShape(3) )
+
+    ! Spans in kernel matrix
+    xKernelSpan = xGridSpan + this%matrixPositiveShape(1) - gridIndexes(1) + 1
+    yKernelSpan = yGridSpan + this%matrixPositiveShape(2) - gridIndexes(2) + 1
+    zKernelSpan = zGridSpan + this%matrixPositiveShape(3) - gridIndexes(3) + 1
+
+
+  end subroutine prComputeSpansUnbounded
+
 
 
   subroutine prKernelReflection( this, gridIndexes, gridShape,  &
