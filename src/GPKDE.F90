@@ -7,7 +7,7 @@ program GPKDE
   use UTL8MODULE, only            : urword, ustop, u8rdcom
   use CompilerVersion, only       : get_compiler_txt
   use PrecisionModule, only       : fp
-  use ConstantsModule, only       : fZERO, fONE
+  use ConstantsModule, only       : fZERO, fONE, fTWO
 #ifdef _OPENMP
   use omp_lib ! OpenMP
 #endif
@@ -561,7 +561,7 @@ program GPKDE
     ! Read binFactor
     if ( automaticBin .gt. 0 ) then 
      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
-     if ((r.le.fZERO).or.(r.gt.fONE)) then
+     if ((r.le.fZERO).or.(r.gt.fTWO)) then
       if ( logUnit .gt. 0 ) then  
       write(logUnit,'(a)') "Default to unitary bin factor. "
       end if
@@ -571,8 +571,9 @@ program GPKDE
       write(logUnit,'(a,es18.9e3)') 'Bin factor for automatic selection is set to: ', binFactor
       end if
      end if
-     !! Disable bin size
+     ! Ignore given bin size
      binSize = fZERO
+     ! Force automatic bin selection
      forceAutomaticBinSize = .true.
     end if
   end if 

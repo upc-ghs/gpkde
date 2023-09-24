@@ -39,8 +39,8 @@ module GridProjectedKDEModule
   integer  , parameter :: defaultBoundKernelSizeFormat           = 0
   real(fp) , parameter :: defaultIsotropicThreshold              = 0.85_fp
   logical  , parameter :: defaultUseGlobalSmoothing              = .false.
-  real(fp) , parameter :: defaultMinSizeFactor                   = 1.2_fp
-  real(fp) , parameter :: defaultMaxSizeFactor                   = 0.5_fp 
+  real(fp) , parameter :: defaultMinSizeFactor                   = 1.2_fp 
+  real(fp) , parameter :: defaultMaxSizeFactor                   = 0.9_fp 
   real(fp) , parameter :: defaultBorderFraction                  = 0.05_fp
   real(fp) , parameter :: defaultMaxSigmaGrowth                  = 1.5_fp
   character(len=*), parameter :: defaultOutputFileName           = 'gpkde.out'
@@ -3813,8 +3813,8 @@ contains
     if ( .not. this%forceAutomaticBinSize ) then 
       if ( present( histogramBinFormat ) ) then 
         if ( present( binSizeFraction ) ) then
-          if ( (binSizeFraction.le.fZERO).or.(binSizeFraction.gt.fONE) ) then
-            write(*,*) 'Error: bin size fraction should be between 0 and 1. Stop.' 
+          if ( (binSizeFraction.le.fZERO).or.(binSizeFraction.gt.fTWO) ) then
+            write(*,*) 'Error: bin size fraction should be between 0 and 2. Stop.' 
             stop
           end if 
           locBinSizeFraction = binSizeFraction 
