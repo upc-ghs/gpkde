@@ -29,7 +29,7 @@ module GridProjectedKDEModule
   real(fp) , parameter :: defaultRelativeErrorConvergence        = 0.02_fp
   real(fp) , parameter :: defaultRelaxedRelativeErrorConvergence = 0.05_fp
   integer  , parameter :: defaultInitialSmoothingSelection       = 0
-  real(fp) , parameter :: defaultInitialSmoothingFactor          = 5.0_fp
+  real(fp) , parameter :: defaultInitialSmoothingFactor          = 2.0_fp
   real(fp) , parameter :: defaultInitialSigmaFactor              = 2.0_fp
   logical  , parameter :: defaultAdaptGridToCoords               = .false. 
   real(fp) , parameter :: defaultMinRelativeRoughness            = 1.0e-3_fp
@@ -44,6 +44,7 @@ module GridProjectedKDEModule
   real(fp) , parameter :: defaultBorderFraction                  = 0.05_fp
   real(fp) , parameter :: defaultMaxSigmaGrowth                  = 1.5_fp
   character(len=*), parameter :: defaultOutputFileName           = 'gpkde.out'
+  integer  , parameter :: defaultNLoopsEnableAvgError            = 7
 
   ! Module variables defined after initialization
   integer               :: nDim
@@ -141,6 +142,8 @@ module GridProjectedKDEModule
 
     ! Protocol for selection of initial smoothing
     integer :: initialSmoothingSelection
+    ! Apply size factor while using automatic bandwidth selection 
+    logical :: applyInitialSmoothingFactor = .false.
     ! Min roughness format
     integer :: minRoughnessFormat
 
@@ -629,6 +632,13 @@ contains
       select case(this%initialSmoothingSelection) 
       case(0)
         ! Choose from global estimate of Silverman (1986)
+        ! If an initial smoothing factor was given, then apply it only if non-zero
+        this%applyInitialSmoothingFactor = .false.
+        if ( present( initialSmoothingFactor ) ) then 
+         if ( this%initialSmoothingFactor .gt. fZERO ) then 
+           this%applyInitialSmoothingFactor = .true.
+         end if
+        end if 
         continue
       case(1)
         if ( present( initialSmoothingFactor ) ) then 
@@ -4046,7 +4056,7 @@ contains
     end do 
     this%stdSigmaScale = product( this%stdCoords, mask=(this%dimensionMask.eq.1))
     this%stdSigmaScale = this%stdSigmaScale**(fONE/fNDim)
-    ! Selects hSigmaScale based on nPoints instead of nEffective
+    ! Selects hSigmaScale based on nPoints instead of nEffective (maybe nEffective makes more sense?)
     this%hSigmaScale   = this%stdSigmaScale*( fFOUR/((fNDim + fTWO)*this%histogram%nPoints) )**(fONE/(fNDim+fFOUR))
     if( this%stdSigmaScale .eq. fZERO ) then 
      if ( this%reportToOutUnit ) then
@@ -4055,7 +4065,9 @@ contains
       write(this%outFileUnit, '(A)' ) 'Standard deviation is zero. Default to initial smoothing factor times bin distance.'
       write(this%outFileUnit, *  )
      end if
+     ! Notice the default initialSmoothingFactor
      this%hSigmaScale = defaultInitialSmoothingFactor*this%histogram%binDistance
+     if (this%applyInitialSmoothingFactor) this%applyInitialSmoothingFactor = .false.
     end if
 
     if ( this%reportToOutUnit ) then
@@ -4065,6 +4077,9 @@ contains
      write(this%outFileUnit, '(3X,A,3(1X,es18.9e3))'     ) 'Std. dev. coordinates            :', this%stdCoords
      write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Std. sigma scale                 :', this%stdSigmaScale
      write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Global smoothing scale Silverman :', this%hSigmaScale
+     if (this%applyInitialSmoothingFactor ) then 
+     write(this%outFileUnit, '(3X,A,1(1X,es18.9e3))'     ) 'Apply initial smoothing factor   :', this%initialSmoothingFactor
+     end if
     end if
 
     ! Assign min roughness based on specified format
@@ -4111,6 +4126,8 @@ contains
     ! Assign distribution statistics as initial smoothing, Silverman (1986)
     if ( this%initialSmoothingSelection .eq. 0 ) then 
       this%initialSmoothing(:) = this%hSigmaScale
+      if ( this%applyInitialSmoothingFactor ) &
+        this%initialSmoothing = this%initialSmoothing*this%initialSmoothingFactor 
       do nd=1,3
         if ( this%dimensionMask(nd) .eq. 0 ) then 
           this%initialSmoothing(nd) = fZERO
@@ -5014,7 +5031,7 @@ contains
         ! Handle certain cases where the error metric seems 
         ! to consistently alternate between characteristic values.
         ! Enable this criteria only after a threshold number of loops.
-        if ( ( m.gt.5 ) ) then
+        if ( ( m.gt.defaultNLoopsEnableAvgError ) ) then
           if (&
             abs( errorALMISECumsumOld/real(m-1,fp) - errorALMISECumsum/real(m,fp) )/&
                  errorALMISECumsumOld/real(m-1,fp) .lt. errorMetricConvergence ) then 

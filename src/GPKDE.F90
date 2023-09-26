@@ -838,8 +838,18 @@ program GPKDE
         write(logUnit,'(a)') 'Initial smoothing is selected from the global estimate of Silverman (1986). '
       end if
       initialSmoothing(:) = fZERO
-      initialSmoothingFactor = fONE
       initialSmoothingSelection = n 
+      ! Try to read an initial smoothing factor
+      call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+      ! Ignore if .le. 0, assign 0 
+      if ( r .le. fZERO ) then 
+        initialSmoothingFactor = fZERO
+      else
+        if ( (logUnit.gt.0) ) then 
+         write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set to: ', r
+        end if
+        initialSmoothingFactor = r
+      end if
     case(1)
       if ( logUnit.gt.0 ) then 
         write(logUnit,'(a)') 'Initial smoothing specified as a factor multiplying characteristic bin size.'
@@ -847,11 +857,18 @@ program GPKDE
       call urword(line, icol, istart, istop, 3, n, r, 0, 0)
       initialSmoothing(:) = fZERO
       initialSmoothingFactor = r
-      if ( (logUnit.gt.0).and.(initialSmoothingFactor.gt.fZERO) ) then 
-        write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set to: ', initialSmoothingFactor
-      end if
-      if ( initialSmoothingFactor .le. fZERO ) then 
+      ! Throw error if .lt. 0, assign default if .eq. 0 
+      if ( initialSmoothingFactor .lt. fZERO ) then 
         call ustop('Invalid initial smoothing factor, it should greater than zero. Stop.')
+      else if ( initialSmoothingFactor .eq. fZERO ) then 
+        if ( (logUnit.gt.0) ) then 
+         write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set by default to: ', initialSmoothingFactor
+        end if
+        initialSmoothingFactor = fTWO
+      else
+        if ( (logUnit.gt.0) ) then 
+          write(logUnit,'(a,es18.9e3)') 'Initial smoothing factor is set to: ', initialSmoothingFactor
+        end if
       end if 
       initialSmoothingSelection = n 
     case(2)
