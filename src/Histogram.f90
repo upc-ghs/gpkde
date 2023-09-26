@@ -133,7 +133,7 @@ contains
     this%domainGridSize = domainGridSize
     this%binSize        = binSize
     this%binVolume      = product( binSize, mask=(binSize.gt.fZERO) ) 
-    this%binDistance    = ( this%binVolume )**(fONE/this%nDim)
+    this%binDistance    = ( this%binVolume )**(fONE/real(this%nDim,fp))
 
     ! Allocate and initialize histogram counts, 
     ! if not adapting to the particle distribution follows the domain grid. 
