@@ -477,7 +477,7 @@ contains
       call prKernelReflection( this, gridIndexes, gridShape, &
                             xGridSpan, yGridSpan, zGridSpan, &
                       xKernelSpan, yKernelSpan, zKernelSpan, &
-                             isBoundary, boundLoc, boundDir  )
+                                       isBoundary, boundLoc  )
     end if 
 
 
