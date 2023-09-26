@@ -1,7 +1,7 @@
 sources = files(
   'Precision.F90',
   'Constants.f90',
-  'Histogram.f90',
+  'Histogram.F90',
   'KernelMultiGaussian.f90',
   'GridCell.f90', 
   'GridProjectedKDE.F90',

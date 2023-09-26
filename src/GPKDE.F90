@@ -7,7 +7,7 @@ program GPKDE
   use UTL8MODULE, only            : urword, ustop, u8rdcom
   use CompilerVersion, only       : get_compiler_txt
   use PrecisionModule, only       : fp
-  use ConstantsModule, only       : fZERO, fONE
+  use ConstantsModule, only       : fZERO, fONE, fTWO
 #ifdef _OPENMP
   use omp_lib ! OpenMP
 #endif
@@ -54,6 +54,12 @@ program GPKDE
   real(fp), dimension(3) :: domainOrigin
   logical                :: adaptToCoords
   real(fp)               :: borderFraction = 0.05_fp
+  logical                :: slicedReconstruction
+  integer                :: slicedDimension = 0
+  integer                :: automaticBin = 0
+  integer                :: histogramBinFormat
+  real(fp)               :: binFactor = 1.0_fp
+  logical                :: forceAutomaticBinSize
   ! kernels
   real(fp), dimension(3) :: initialSmoothing
   real(fp), dimension(3) :: kernelParams
@@ -351,11 +357,8 @@ program GPKDE
     call ustop('Data file does not have entries. Stop.')
   end if 
 
-  ! Before loading the data, read the 
-  ! reconstruction parameters and perform 
-  ! some health checks to throw out fast 
-  ! in case of any inconsistencies.
-
+  ! Before loading the data, read the reconstruction parameters and perform some 
+  ! health checks before initialization in order to fail fast in case of inconsistencies.
 
   ! Read the outputFile
   read(simUnit, '(a)') line
@@ -424,11 +427,12 @@ program GPKDE
   end if 
 
 
-  ! Read grid parameters
+  ! Read grid parameters !
   if ( logUnit .gt. 0 ) then 
     write( logUnit, '(a)') 'Will read reconstruction grid parameters. '
     flush(logUnit) 
-  end if 
+  end if
+
   ! domainOrigin
   read(simUnit, '(a)') line
   icol = 1
@@ -438,9 +442,30 @@ program GPKDE
   domainOrigin(2) = r
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   domainOrigin(3) = r
-  
+ 
+  ! sliced dimension
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  ! 0: do not slice domain
+  ! 1,2,3: slice domain in the given dimension
+  slicedDimension = 0
+  slicedReconstruction = .false.
+  if ( n .ne. 0 ) then
+    select case(n) 
+    case(1,2,3)
+      if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a,I2)') 'Will try sliced reconstruction, considering the slicing in dimension ', n 
+      end if 
+      slicedDimension = n 
+      slicedReconstruction = .true.
+    case default
+      if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') 'The given valu for sliced dimension is not valid. Will default to normal reconstruction.' 
+      end if 
+    end select
+  end if 
 
-  ! Read domainSize
+
+  ! domainSize
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -488,7 +513,7 @@ program GPKDE
   end if
 
 
-  ! Read binSize
+  ! binSize
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -497,19 +522,77 @@ program GPKDE
   binSize(2) = r
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   binSize(3) = r
+
+  ! automaticBin      
+  ! 0: use the already read binSize
+  ! 1: Scott's rule for multidimensional binSize selection
+  ! 2: Freedman-Diaconis, only for 1-D reconstruction
+  forceAutomaticBinSize = .false.
+  call urword(line, icol, istart, istop, 2, n, r, 0, 0)
+  if ( n.gt.0 ) then 
+    if ( n.gt.2 ) then 
+     if ( logUnit .gt. 0 ) then  
+     write(logUnit,'(a)') 'Invalid value for automaticBin option, it should 0, 1 or 2, will default to 0: given binSize.'
+     end if
+     automaticBin = 0
+    else
+     select case(n) 
+     case(1)
+      if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') "Selected automatic bin size selection with multidimensional Scott's rule."
+      end if
+      automaticBin       = n
+      histogramBinFormat = 0
+     case(2)
+      if ( logUnit .gt. 0 ) then  
+       write(logUnit,'(a)') "Selected automatic bin size selection with Freedman-Diaconis rule, will verify 1D domainSize."
+      end if
+      if ( count(domainSize /= fZERO) .gt. 1 ) then 
+        if ( logUnit .gt. 0 ) then  
+        write(logUnit,'(a)') "Freedman-Diaconis bin selection is only available for 1D domain. Stop."
+        end if
+        call ustop("Freedman-Diaconis bin selection is only available for 1D domain. Stop.")
+      else
+        automaticBin = n
+        histogramBinFormat = 1
+      end if  
+     end select
+    end if
+    ! Read binFactor
+    if ( automaticBin .gt. 0 ) then 
+     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
+     if ((r.le.fZERO).or.(r.gt.fTWO)) then
+      if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a)') "Default to unitary bin factor. "
+      end if
+     else
+      binFactor = r 
+      if ( logUnit .gt. 0 ) then  
+      write(logUnit,'(a,es18.9e3)') 'Bin factor for automatic selection is set to: ', binFactor
+      end if
+     end if
+     ! Ignore given bin size
+     binSize = fZERO
+     ! Force automatic bin selection
+     forceAutomaticBinSize = .true.
+    end if
+  end if 
+
   ! Health control
-  if ( any(binSize.lt.fZERO) ) then
-    if ( logUnit .gt. 0 ) then  
-      write(logUnit,'(a)') 'One of the bin sizes is negative. They should be positive. Stop.'
+  if ( automaticBin.eq. 0 ) then 
+    if ( any(binSize.lt.fZERO) ) then
+      if ( logUnit .gt. 0 ) then  
+        write(logUnit,'(a)') 'One of the bin sizes is negative. They should be positive. Stop.'
+      end if 
+      call ustop('One of the bin sizes is negative. They should be positive. Stop.')
     end if 
-    call ustop('One of the bin sizes is negative. They should be positive. Stop.')
-  end if 
-  if ( all(binSize.lt.fZERO) ) then
-    if ( logUnit .gt. 0 ) then  
-      write(logUnit,'(a)') 'All bin sizes are less than zero. They should be positive. Stop.'
+    if ( all(binSize.lt.fZERO) ) then
+      if ( logUnit .gt. 0 ) then  
+        write(logUnit,'(a)') 'All bin sizes are less than zero. They should be positive. Stop.'
+      end if 
+      call ustop('All bin sizes are less than zero. They should be positive. Stop.')
     end if 
-    call ustop('All bin sizes are less than zero. They should be positive. Stop.')
-  end if 
+  end if
   if ( any(domainSize.lt.fZERO) ) then
     if ( logUnit .gt. 0 ) then  
       write(logUnit,'(a)') 'One of the domain sizes is negative. They should be positive. Stop.'
@@ -528,7 +611,10 @@ program GPKDE
   end if 
 
 
-  ! Read the max number of optimization loops
+  ! Read optimization parameters !
+
+
+  ! Max number of optimization loops
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
@@ -1030,6 +1116,9 @@ program GPKDE
       effectiveWeightFormat     = effectiveWeightFormat,    & 
       boundKernelSizeFormat     = boundKernelSizeFormat,    & 
       isotropicThreshold        = isotropicThreshold,       & 
+      slicedReconstruction      = slicedReconstruction,     & 
+      slicedDimension           = slicedDimension,          & 
+      forceAutomaticBinSize     = forceAutomaticBinSize,    & 
       outFileName               = logFile                   &
     )
   else
@@ -1053,7 +1142,10 @@ program GPKDE
       minRelativeRoughness      = minRelativeRoughness,     &
       effectiveWeightFormat     = effectiveWeightFormat,    & 
       boundKernelSizeFormat     = boundKernelSizeFormat,    & 
-      isotropicThreshold        = isotropicThreshold        & 
+      isotropicThreshold        = isotropicThreshold,       & 
+      slicedReconstruction      = slicedReconstruction,     & 
+      slicedDimension           = slicedDimension,          & 
+      forceAutomaticBinSize     = forceAutomaticBinSize     & 
     )
   end if
 
@@ -1114,7 +1206,9 @@ program GPKDE
      skipErrorConvergence   = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence,  &
      exportOptimizationVariables = exportOptimizationVariables,  &
-     persistentKernelDatabase = .false. &
+     persistentKernelDatabase = .false.,      &
+     histogramBinFormat = histogramBinFormat, & 
+     binSizeFraction = binFactor              &
     )
   case(1,3,5,7)
     ! Weighted reconstruction
@@ -1131,7 +1225,9 @@ program GPKDE
      skipErrorConvergence = skipErrorConvergence, &
      relativeErrorConvergence = relativeErrorConvergence, &
      exportOptimizationVariables = exportOptimizationVariables, &
-     persistentKernelDatabase = .false. &
+     persistentKernelDatabase = .false.,      &
+     histogramBinFormat = histogramBinFormat, & 
+     binSizeFraction = binFactor              &
     )
   end select
   call system_clock(clockCountStop, clockCountRate, clockCountMax)
