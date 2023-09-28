@@ -53,25 +53,25 @@ program GPKDE
   real(fp), dimension(3) :: binSize     
   real(fp), dimension(3) :: domainOrigin
   logical                :: adaptToCoords
-  real(fp)               :: borderFraction = 0.05_fp
+  real(fp)               :: borderFraction
   logical                :: slicedReconstruction
-  integer                :: slicedDimension = 0
-  integer                :: automaticBin = 0
+  integer                :: slicedDimension
+  integer                :: automaticBin
   integer                :: histogramBinFormat
-  real(fp)               :: binFactor = 1.0_fp
+  real(fp)               :: binFactor
   logical                :: forceAutomaticBinSize
   ! kernels
   real(fp), dimension(3) :: initialSmoothing
   real(fp), dimension(3) :: kernelParams
   ! advanced options, some with default values
-  integer     :: minRoughnessFormat = 0
+  integer     :: minRoughnessFormat 
   real(fp)    :: minRelativeRoughness
   real(fp)    :: minRoughnessLengthScale
   real(fp)    :: minRoughness
-  integer     :: effectiveWeightFormat  = 0
-  integer     :: boundKernelSizeFormat  = 0
-  real(fp)    :: isotropicThreshold     = 0.9_fp
-  logical     :: useGlobalSmoothing     = .false.
+  integer     :: effectiveWeightFormat
+  integer     :: boundKernelSizeFormat
+  real(fp)    :: isotropicThreshold 
+  logical     :: useGlobalSmoothing
   !-----------------------------------------------
   simUnit    = 111
   logUnit    = 911
@@ -258,6 +258,7 @@ program GPKDE
 
 
   ! Looks for an effective weight format in case input format is only (x,y,z,w)
+  effectiveWeightFormat = 0 ! default
   if (& 
     (inputDataFormat.eq.1) .or. &
     (inputDataFormat.eq.3) .or. &
@@ -480,7 +481,7 @@ program GPKDE
   ! 0: follow domain size 
   ! 1: adapt to given data coordinates
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  adaptToCoords = .false.
+  adaptToCoords = .false. ! default
   if ( n .eq. 0 ) then 
     adaptToCoords = .false.
     if ( logUnit .gt. 0 ) then  
@@ -493,7 +494,8 @@ program GPKDE
     end if 
   end if 
   ! If adapting, try to read a border fraction
-  if ( adaptToCoords ) then 
+  borderFraction =  0.05_fp ! default
+  if ( adaptToCoords ) then
     call urword(line, icol, istart, istop, 3, n, r, 0, 0)
     if ( r.ne.fZERO ) then
       ! If a value was given, it should be greater than zero
@@ -512,7 +514,6 @@ program GPKDE
     end if 
   end if
 
-
   ! binSize
   read(simUnit, '(a)') line
   icol = 1
@@ -528,6 +529,9 @@ program GPKDE
   ! 1: Scott's rule for multidimensional binSize selection
   ! 2: Freedman-Diaconis, only for 1-D reconstruction
   forceAutomaticBinSize = .false.
+  histogramBinFormat    = -1 ! default
+  automaticBin          =  0 ! default
+  binFactor             =  1.0_fp
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   if ( n.gt.0 ) then 
     if ( n.gt.2 ) then 
@@ -576,6 +580,7 @@ program GPKDE
      ! Force automatic bin selection
      forceAutomaticBinSize = .true.
     end if
+    flush(logUnit) 
   end if 
 
   ! Health control
@@ -705,6 +710,7 @@ program GPKDE
   ! 0: limit based on domain and bin size
   ! 1: user give limit values
   ! 2: unbounded
+  boundKernelSizeFormat = 0 ! default
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   select case(n)
   case(0)
@@ -948,6 +954,7 @@ program GPKDE
     ! 1: User provides minRelativeRoughness and a characteristic length scale
     ! 2: User provides the minRoughness
     ! 3: Unbounded, computes all values .gt. 0
+    minRoughnessFormat = 3 ! default
     icol = 1
     call urword(line, icol, istart, istop, 2, n, r, 0, 0)
     select case(n)
@@ -1006,6 +1013,7 @@ program GPKDE
     end select
 
     ! Continue to isotropicThreshold
+    isotropicThreshold = 0.9_fp ! default
     read(simUnit, '(a)', iostat=iostatus) line
     if ( iostatus/=0 ) then
      if ( logUnit.gt.0 ) then 
@@ -1026,6 +1034,7 @@ program GPKDE
      end if
 
      ! Continue to useGlobalSmoothing
+     useGlobalSmoothing = .false. ! default
      read(simUnit, '(a)', iostat=iostatus) line
      if ( iostatus/=0 ) then
        if ( logUnit.gt.0 ) then 
