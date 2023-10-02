@@ -3694,9 +3694,9 @@ contains
     integer , dimension(3) :: subGridOriginIndexes
     integer , dimension(3) :: subGridLimitIndexes
     ! sliced reconstruction
-    real(fp), dimension(:,:,:), pointer :: slicedDensity
-    integer                             :: sliceId
-    integer                             :: activeBins
+    real(fp), dimension(:,:,:), allocatable :: slicedDensity
+    integer                :: sliceId
+    integer                :: activeBins
     ! clock
     real(fp)               :: elapsedTime
     integer                :: clockCountStart, clockCountStop
@@ -4167,6 +4167,8 @@ contains
       ! during reconstruction (e.g. roughness)
       ! Histogram nBins remains with the original size.
       this%nBins(this%slicedDimension) = 1
+      if ( allocated( slicedDensity ) ) deallocate( slicedDensity ) 
+      allocate( slicedDensity(this%nBins(1), this%nBins(2), this%nBins(3)) )
 
       ! Loop over slices
       do sliceId=1,this%histogram%nBins(this%slicedDimension)
@@ -4201,17 +4203,14 @@ contains
         ! sliced given as a range to preserve matrix rank.
         select case(this%slicedDimension) 
         case(1)
-          slicedDensity => densityGrid(sliceId:sliceId,:,:)
           this%histogramCounts => this%histogram%counts(sliceId:sliceId,:,:)
           if ( allocated( this%histogram%wcounts ) )&
             this%histogramWCounts => this%histogram%wcounts(sliceId:sliceId,:,:)
         case(2)
-          slicedDensity => densityGrid(:,sliceId:sliceId,:)
           this%histogramCounts => this%histogram%counts(:,sliceId:sliceId,:)
           if ( allocated( this%histogram%wcounts ) )&
             this%histogramWCounts => this%histogram%wcounts(:,sliceId:sliceId,:)
         case(3)
-          slicedDensity => densityGrid(:,:,sliceId:sliceId)
           this%histogramCounts => this%histogram%counts(:,:,sliceId:sliceId)
           if ( allocated( this%histogram%wcounts ) )&
             this%histogramWCounts => this%histogram%wcounts(:,:,sliceId:sliceId)
@@ -4224,7 +4223,20 @@ contains
                 nOptimizationLoops=localNOptimizationLoops,                &
                 exportOptimizationVariables=locExportOptimizationVariables,&
                 skipErrorConvergence=locSkipErrorConvergence,              & 
-                relativeErrorConvergence=locRelativeErrorConvergence ) 
+                relativeErrorConvergence=locRelativeErrorConvergence )
+        ! Transfer slicedDensity to densityGrid. 
+        ! The transfer process has to be like this for compatibility
+        ! with OMP. The input density to ComputeDensityOptimization 
+        ! needs to be allocatable. A pointer to the slice was tried before,
+        ! causing issues with parallel reductions.  
+        select case(this%slicedDimension) 
+        case(1)
+          densityGrid(sliceId:sliceId,:,:) = slicedDensity
+        case(2)
+          densityGrid(:,sliceId:sliceId,:) = slicedDensity
+        case(3)
+          densityGrid(:,:,sliceId:sliceId) = slicedDensity
+        end select
         call system_clock(clockCountStop, clockCountRate, clockCountMax)
         if ( this%reportToOutUnit ) then 
           elapsedTime = dble(clockCountStop - clockCountStart) / dble(clockCountRate)
@@ -4235,8 +4247,8 @@ contains
         end if 
 
       end do 
-      ! Restore nBins to its former glory
-      ! It is employed downstream in function exporting data
+      ! Restore nBins to its former glory.
+      ! It is employed downstream in the function exporting data
       this%nBins = this%histogram%gridSize
 
     else
@@ -4270,8 +4282,9 @@ contains
 
     end if ! slicedReconstruction
 
+    ! deallocate
+    if ( allocated( slicedDensity ) ) deallocate( slicedDensity )
     ! Release pointers
-    if ( associated( slicedDensity ) ) slicedDensity => null()
     if ( associated( this%histogramCounts ) ) this%histogramCounts => null()
     if ( associated( this%histogramWCounts ) ) this%histogramWCounts => null()
 
@@ -4409,8 +4422,7 @@ contains
   implicit none
   ! input
   class( GridProjectedKDEType ), target:: this
-  real(fp), dimension(:,:,:), intent(inout) :: densityEstimateGrid
-  !real(fp), dimension(:,:,:), allocatable, intent(inout) :: densityEstimateGrid
+  real(fp), dimension(:,:,:), allocatable, intent(inout) :: densityEstimateGrid
   integer , intent(in), optional :: nOptimizationLoops
   logical , intent(in), optional :: exportOptimizationVariables
   logical , intent(in), optional :: skipErrorConvergence
