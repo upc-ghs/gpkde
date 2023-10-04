@@ -70,11 +70,14 @@
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
 		<File RelativePath="..\src\compilerversion.fpp"/>
 		<File RelativePath="..\src\Constants.f90"/>
-		<File RelativePath="..\src\GPKDE.F90"/>
+		<File RelativePath="..\src\GPKDE.F90">
+			<FileConfiguration Name="Release|x64">
+				<Tool Name="VFFortranCompilerTool" PreprocessorDefinitions="REAL32"/></FileConfiguration></File>
 		<File RelativePath="..\src\GridCell.f90"/>
 		<File RelativePath="..\src\GridProjectedKDE.F90"/>
-		<File RelativePath="..\src\Histogram.f90"/>
+		<File RelativePath="..\src\Histogram.F90"/>
 		<File RelativePath="..\src\KernelMultiGaussian.f90"/>
+		<File RelativePath="..\src\meson.build"/>
 		<File RelativePath="..\src\openspec.f90"/>
 		<File RelativePath="..\src\openspec.inc"/>
 		<File RelativePath="..\src\Precision.F90"/>
