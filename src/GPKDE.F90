@@ -240,6 +240,7 @@ program GPKDE
 
 
   ! Looks for a uniform weight in case input format is only (x,y,z)
+  uniformMass = fONE
   if (&
     (inputDataFormat.eq.0) .or. &
     (inputDataFormat.eq.2) .or. &
@@ -258,7 +259,7 @@ program GPKDE
 
 
   ! Looks for an effective weight format in case input format is only (x,y,z,w)
-  effectiveWeightFormat = 0 ! default
+  effectiveWeightFormat = 0 
   if (& 
     (inputDataFormat.eq.1) .or. &
     (inputDataFormat.eq.3) .or. &
@@ -435,6 +436,7 @@ program GPKDE
   end if
 
   ! domainOrigin
+  domainOrigin(:) = fZERO
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -465,8 +467,8 @@ program GPKDE
     end select
   end if 
 
-
   ! domainSize
+  domainSize(:) = fZERO
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -476,12 +478,11 @@ program GPKDE
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
   domainSize(3) = r
 
-
   ! Read whether grids allocation for reconstruction should
   ! 0: follow domain size 
   ! 1: adapt to given data coordinates
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
-  adaptToCoords = .false. ! default
+  adaptToCoords  = .false.  ! default
   if ( n .eq. 0 ) then 
     adaptToCoords = .false.
     if ( logUnit .gt. 0 ) then  
@@ -515,6 +516,7 @@ program GPKDE
   end if
 
   ! binSize
+  binSize(:) = fZERO
   read(simUnit, '(a)') line
   icol = 1
   call urword(line, icol, istart, istop, 3, n, r, 0, 0)
@@ -531,7 +533,7 @@ program GPKDE
   forceAutomaticBinSize = .false.
   histogramBinFormat    = -1 ! default
   automaticBin          =  0 ! default
-  binFactor             =  1.0_fp
+  binFactor             =  fONE
   call urword(line, icol, istart, istop, 2, n, r, 0, 0)
   if ( n.gt.0 ) then 
     if ( n.gt.2 ) then 
@@ -826,6 +828,9 @@ program GPKDE
   ! 0: automatic, based on Silverman (1986) global estimate
   ! 1: user provides a factor scaling the characteristic bin size
   ! 2: user provides the initial smoothing array
+  initialSmoothing(:)       = fZERO
+  initialSmoothingFactor    = fONE
+  initialSmoothingSelection = 0 
   read(simUnit, '(a)', iostat=iostatus) line
   if ( iostatus/=0 ) then
     ! Not given, take as zero
@@ -906,8 +911,8 @@ program GPKDE
   ! Advanced options
   ! 0: does not interpret advance options
   ! 1: read advance parameters
-  read(simUnit, '(a)', iostat=iostatus) line
   advancedOptions = .false.
+  read(simUnit, '(a)', iostat=iostatus) line
   if ( iostatus/=0 ) then
     ! Not given, take as zero
     if ( logUnit.gt.0 ) then 
@@ -939,6 +944,12 @@ program GPKDE
 
 
   ! Intepretation of advanced options
+  minRoughnessFormat      = 3       
+  minRelativeRoughness    = fZERO   
+  minRoughness            = fZERO
+  minRoughnessLengthScale = fZERO
+  useGlobalSmoothing      = .false. 
+  isotropicThreshold      = 0.9_fp  
   if ( advancedOptions ) then
    ! Any advanced option ?  
    read(simUnit, '(a)', iostat=iostatus) line
@@ -954,7 +965,6 @@ program GPKDE
     ! 1: User provides minRelativeRoughness and a characteristic length scale
     ! 2: User provides the minRoughness
     ! 3: Unbounded, computes all values .gt. 0
-    minRoughnessFormat = 3 ! default
     icol = 1
     call urword(line, icol, istart, istop, 2, n, r, 0, 0)
     select case(n)
@@ -1013,7 +1023,6 @@ program GPKDE
     end select
 
     ! Continue to isotropicThreshold
-    isotropicThreshold = 0.9_fp ! default
     read(simUnit, '(a)', iostat=iostatus) line
     if ( iostatus/=0 ) then
      if ( logUnit.gt.0 ) then 
@@ -1034,7 +1043,6 @@ program GPKDE
      end if
 
      ! Continue to useGlobalSmoothing
-     useGlobalSmoothing = .false. ! default
      read(simUnit, '(a)', iostat=iostatus) line
      if ( iostatus/=0 ) then
        if ( logUnit.gt.0 ) then 
@@ -1076,14 +1084,14 @@ program GPKDE
   case(0,4)
     ! x,y,z 
     allocate( dataCarrier( nlines, 3 ) )
-    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = fZERO
     do id = 1, nlines
       read(dataUnit,*) dataCarrier( id, 1:ndimcols )
     end do
   case(1,5)
     ! x,y,z,m 
     allocate( dataCarrier( nlines, 3 ) )
-    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = fZERO
     allocate( weightsCarrier( nlines ) )
     do id = 1, nlines
       read(dataUnit,*) dataCarrier( id, 1:ndimcols ), weightsCarrier(id)
@@ -1091,14 +1099,14 @@ program GPKDE
   case(2,6)
     ! x,y,z (binary) 
     allocate( dataCarrier( nlines, 3 ) )
-    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = fZERO
     do id = 1, nlines
       read(dataUnit) (dataCarrier( id, idd ), idd=1,ndimcols)
     end do
   case(3,7)
     ! x,y,z,m (binary) 
     allocate( dataCarrier( nlines, 3 ) )
-    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = 0d0
+    if ( ndimcols .ne. 3 ) dataCarrier(:,:) = fZERO
     allocate( weightsCarrier( nlines ) )
     do id = 1, nlines
       read(dataUnit) (dataCarrier( id, idd ), idd=1,ndimcols)
