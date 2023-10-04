@@ -99,6 +99,9 @@ A set of possible use cases of the reconstruction module are included as example
 ## License
 MIT License
 
+## References
+[Pérez-Illanes R., Fernàndez-Garcia, D., 2023, A Parallel Fortran Code for Grid Projected Concentration Reconstruction from Multidimensional Particle Distributions, Submitted.](https://github.com/upc-ghs/gpkde.git)
+
 ## Resources
 * [gfortran](https://gcc.gnu.org/wiki/GFortran)
 * [OpenMP](https://www.openmp.org/)
