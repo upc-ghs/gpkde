@@ -37,6 +37,8 @@ program GPKDE
   integer            :: initialSmoothingSelection 
   logical            :: exportOptimizationVariables
   real(fp)           :: uniformMass
+  integer            :: effectiveWeightFormat
+  integer            :: boundKernelSizeFormat
   logical            :: advancedOptions
   ! urword
   character(len=200) :: line
@@ -63,15 +65,13 @@ program GPKDE
   ! kernels
   real(fp), dimension(3) :: initialSmoothing
   real(fp), dimension(3) :: kernelParams
-  ! advanced options, some with default values
-  integer     :: minRoughnessFormat 
-  real(fp)    :: minRelativeRoughness
-  real(fp)    :: minRoughnessLengthScale
-  real(fp)    :: minRoughness
-  integer     :: effectiveWeightFormat
-  integer     :: boundKernelSizeFormat
-  real(fp)    :: isotropicThreshold 
-  logical     :: useGlobalSmoothing
+  ! advanced options
+  integer  :: minRoughnessFormat 
+  real(fp) :: minRelativeRoughness
+  real(fp) :: minRoughnessLengthScale
+  real(fp) :: minRoughness
+  real(fp) :: isotropicThreshold 
+  logical  :: useGlobalSmoothing
   !-----------------------------------------------
   simUnit    = 111
   logUnit    = 911
