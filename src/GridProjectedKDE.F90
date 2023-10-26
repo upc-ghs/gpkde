@@ -562,6 +562,7 @@ contains
     else
       this%initialSmoothingFactor = defaultInitialSmoothingFactor
     end if 
+
     ! initialSmoothingArray
     this%initialSmoothingArray = fZERO
     if ( present( initialSmoothing ) ) then
@@ -635,7 +636,7 @@ contains
         ! If an initial smoothing factor was given, then apply it only if non-zero
         this%applyInitialSmoothingFactor = .false.
         if ( present( initialSmoothingFactor ) ) then 
-         if ( this%initialSmoothingFactor .gt. fZERO ) then 
+         if ( (this%initialSmoothingFactor.gt.fZERO).and.(this%initialSmoothingFactor.ne.fONE) ) then 
            this%applyInitialSmoothingFactor = .true.
          end if
         end if 
