@@ -34,7 +34,7 @@ jobs:
           compiler: gcc
           version: ${{ env.GCC_V }}     
       - name: Micromamba
-        uses: mamba-org/setup-micromamba@main
+        uses: mamba-org/provision-with-micromamba@main
         with:
           cache-downloads: true
           cache-env: true
@@ -65,7 +65,7 @@ jobs:
           compiler: gcc
           version: ${{ env.GCC_V }}     
       - name: Micromamba
-        uses: mamba-org/setup-micromamba@main
+        uses: mamba-org/provision-with-micromamba@main
         with:
           environment-file: gpkde/environment.yml
           cache-downloads: true
@@ -104,7 +104,7 @@ jobs:
           compiler: gcc
           version: ${{ matrix.GCC_V }}
       - name: Micromamba
-        uses: mamba-org/setup-micromamba@main
+        uses: mamba-org/provision-with-micromamba@main
         with:
           environment-file: gpkde/environment.yml
           cache-downloads: true
@@ -135,7 +135,7 @@ jobs:
         with:
           path: gpkde
       - name: Setup Micromamba
-        uses: mamba-org/setup-micromamba@main
+        uses: mamba-org/provision-with-micromamba@main
         with:
           environment-file: gpkde/environment.yml
           cache-downloads: true
