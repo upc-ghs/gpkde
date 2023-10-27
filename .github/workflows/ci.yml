@@ -34,7 +34,7 @@ jobs:
           compiler: gcc
           version: ${{ env.GCC_V }}     
       - name: Micromamba
-        uses: mamba-org/provision-with-micromamba@main
+        uses: mamba-org/setup-micromamba
         with:
           cache-downloads: true
           cache-env: true
@@ -65,7 +65,7 @@ jobs:
           compiler: gcc
           version: ${{ env.GCC_V }}     
       - name: Micromamba
-        uses: mamba-org/provision-with-micromamba@main
+        uses: mamba-org/setup-micromamba
         with:
           environment-file: gpkde/environment.yml
           cache-downloads: true
@@ -104,7 +104,7 @@ jobs:
           compiler: gcc
           version: ${{ matrix.GCC_V }}
       - name: Micromamba
-        uses: mamba-org/provision-with-micromamba@main
+        uses: mamba-org/setup-micromamba
         with:
           environment-file: gpkde/environment.yml
           cache-downloads: true
@@ -116,51 +116,51 @@ jobs:
           meson install -C builddir
           meson test --verbose --no-rebuild -C builddir
 
-#  build_ifort:
-#    name: Build IFORT multi-platform
-#    needs:
-#      - build
-#      - smoke_test
-#    runs-on: ${{ matrix.os }}
-#    strategy:
-#      fail-fast: false
-#      matrix:
-#        os: [ ubuntu-latest, macos-latest, windows-latest ]
-#    defaults:
-#      run:
-#        shell: bash -l {0}
-#    steps:
-#      - name: Checkout gpkde
-#        uses: actions/checkout@v3
-#        with:
-#          path: gpkde
-#      - name: Setup Micromamba
-#        uses: mamba-org/provision-with-micromamba@main
-#        with:
-#          environment-file: gpkde/environment.yml
-#          cache-downloads: true
-#          cache-env: true
-#      - name: Setup Intel Fortran
-#        uses: modflowpy/install-intelfortran-action@v1
-#      - name: Fix Micromamba path (Windows)
-#        if: runner.os == 'Windows'
-#        shell: pwsh
-#        run: |
-#          # https://github.com/modflowpy/install-intelfortran-action#conda-scripts
-#          $mamba_bin = "C:\Users\runneradmin\micromamba-root\envs\gpkde\Scripts"
-#          echo $mamba_bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-#      - name: Build gpkde
-#        if: runner.os != 'Windows'
-#        working-directory: gpkde
-#        run: |
-#          meson setup builddir -Dwarning_level=0 -Ddebug=false --prefix=$(pwd) --libdir=bin
-#          meson install -C builddir
-#          meson test --verbose --no-rebuild -C builddir
-#      - name: Build gpkde (Windows)
-#        if: runner.os == 'Windows'
-#        working-directory: gpkde
-#        shell: pwsh
-#        run: |
-#          meson setup builddir -Dwarning_level=0 -Ddebug=false --prefix=$(pwd) --libdir=bin
-#          meson install -C builddir
-#          meson test --verbose --no-rebuild -C builddir
+  build_ifort:
+    name: Build IFORT multi-platform
+    needs:
+      - build
+      - smoke_test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - name: Checkout gpkde
+        uses: actions/checkout@v3
+        with:
+          path: gpkde
+      - name: Setup Micromamba
+        uses: mamba-org/setup-micromamba
+        with:
+          environment-file: gpkde/environment.yml
+          cache-downloads: true
+          cache-env: true
+      - name: Setup Intel Fortran
+        uses: modflowpy/install-intelfortran-action@v1
+      - name: Fix Micromamba path (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # https://github.com/modflowpy/install-intelfortran-action#conda-scripts
+          $mamba_bin = "C:\Users\runneradmin\micromamba-root\envs\gpkde\Scripts"
+          echo $mamba_bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Build gpkde
+        if: runner.os != 'Windows'
+        working-directory: gpkde
+        run: |
+          meson setup builddir -Dwarning_level=0 -Ddebug=false --prefix=$(pwd) --libdir=bin
+          meson install -C builddir
+          meson test --verbose --no-rebuild -C builddir
+      - name: Build gpkde (Windows)
+        if: runner.os == 'Windows'
+        working-directory: gpkde
+        shell: pwsh
+        run: |
+          meson setup builddir -Dwarning_level=0 -Ddebug=false --prefix=$(pwd) --libdir=bin
+          meson install -C builddir
+          meson test --verbose --no-rebuild -C builddir
