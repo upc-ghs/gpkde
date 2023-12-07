@@ -3927,7 +3927,7 @@ contains
         subGridNBins         = subGridLimitIndexes - subGridOriginIndexes ! it shall verify at least 1 ?
         subGridSize          = subGridNBins*this%binSize
       end where
-      subGridOrigin = subGridOriginIndexes*this%binSize
+      subGridOrigin = subGridOriginIndexes*this%binSize + this%domainOrigin
 
       ! Some health control and eventually reporting
       if ( any(subGridNBins.gt.this%domainGridSize) ) then
