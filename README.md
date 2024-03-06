@@ -100,7 +100,7 @@ A set of possible use cases of the reconstruction module are included as example
 MIT License
 
 ## References
-[Pérez-Illanes R., Fernàndez-Garcia, D., 2023, A General Purpose Parallel Fortran Code for Grid Projected Concentration Reconstruction from Multidimensional Particle Distributions, Submitted.](https://github.com/upc-ghs/gpkde.git)
+[Pérez-Illanes R., Fernàndez-Garcia, D., 2024, A General Purpose Parallel Fortran Code for Grid Projected Concentration Reconstruction from Multidimensional Particle Distributions, Environmental Modelling & Software, doi: 10.1016/j.envsoft.2024.106008.](https://doi.org/10.1016/j.envsoft.2024.106008)
 
 ## Resources
 * [gfortran](https://gcc.gnu.org/wiki/GFortran)
